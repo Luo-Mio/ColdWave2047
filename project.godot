@@ -8,18 +8,13 @@
 
 config_version=5
 
-"äººå®¶è·¯é¢ç¤ºæ²¡ææç§å®å¨ä½ç½®æä½ config_version"=5
 
 [application]
 
 config/name="测试001"
-run/main_scene="uid://by7lhdyb6761r"
+run/main_scene="uid://23bxsmk7brqo"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
-
-[autoload]
-
-GridData="*res://script/grid_data.gd"
 
 [display]
 
@@ -57,3 +52,7 @@ move_right={
 
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+
+[autoload]
+
+GridData="*res://script/grid_data.gd"
