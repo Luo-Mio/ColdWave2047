@@ -10,8 +10,8 @@ extends CharacterBody2D
 
 var current_anim: String = "walkSouth"
 var sort_key: float = 0.0        # 排序主键(所在格基底 y)
-var layer_no: int = 999          # 排序次键:物体永远后画
-var _last_sort_key: float = -INF # 防抖:只有换格才重排
+var layer_no: int = 1000         # 排序次键(实体,不参与同格实体比较)
+var foot_y: float = 0.0          # 精确脚底屏幕 y(同格实体间比较用)
 
 
 func _ready() -> void:
@@ -21,7 +21,7 @@ func _ready() -> void:
 
 
 func _physics_process(_delta: float) -> void:
-	# ---------- 1. 输入 ----------
+	# ---------- 1. 输入(屏幕方向:W上 S下 A左 D右) ----------
 	var input_dir := Vector2.ZERO
 	if Input.is_action_pressed("move_right"):
 		input_dir.x += 1.0
@@ -33,21 +33,28 @@ func _physics_process(_delta: float) -> void:
 		input_dir.y -= 1.0
 	input_dir = input_dir.normalized()
 
-	# ---------- 2. 平面移动(节点位置 = 平面逻辑位置) ----------
-	velocity = input_dir * move_speed
+	# ---------- 2. 移动(屏幕十字;对角对齐格子边) ----------
+	var move_dir := input_dir
+	if input_dir.x != 0.0 and input_dir.y != 0.0:
+		# 对角:吸附到最近的等距格子边方向(斜率 ±0.5,即 2:1)
+		move_dir = Vector2(
+			signf(input_dir.x) * 16.0,
+			signf(input_dir.y) * 8.0
+		).normalized()
+	velocity = move_dir * move_speed
 	move_and_slide()
 
 	# ---------- 3. 高度加成(瞬时,无过渡) ----------
 	# 查角色脚下格子的最高层,精灵直接偏移到该层高度
 	var cell := GridData.world_to_cell(global_position)
-	print("所在格=", cell, " 行=", cell.x + cell.y)
+	# print("所在格=", cell, " 行=", cell.x + cell.y)   # 调试用,已注释
 	var floor := GridData.get_highest_floor(cell)
 	animated_sprite.position.y = GridData.get_floor_pixel_offset(floor) + foot_offset
 
 	# ---------- 4. 更新排序键(只有换格子才重排) ----------
 	_update_sort_key()
 
-	# ---------- 5. 动画 ----------
+	# ---------- 5. 动画(用输入方向判断) ----------
 	if input_dir != Vector2.ZERO:
 		var anim := _get_walk_anim(input_dir)
 		if anim != current_anim:
@@ -62,12 +69,14 @@ func _update_sort_key() -> void:
 	if GridData.layers.is_empty():
 		return
 	var cell := GridData.world_to_cell(global_position)
-	sort_key = GridData.cell_to_sort_key(cell)
-	if sort_key != _last_sort_key:
-		_last_sort_key = sort_key
+	var new_key := GridData.cell_to_sort_key(cell)
+	var new_foot := global_position.y + GridData.get_floor_pixel_offset(GridData.get_highest_floor(cell))
+	if new_key != sort_key or new_foot != foot_y:
+		sort_key = new_key
+		foot_y = new_foot
 		var parent_sort := get_parent()
-		if parent_sort and parent_sort.has_method("sort_now"):
-			parent_sort.sort_now()
+		if parent_sort and parent_sort.has_method("insert_sort"):
+			parent_sort.insert_sort(self)
 
 
 func _get_walk_anim(dir: Vector2) -> String:
@@ -81,3 +90,11 @@ func _get_walk_anim(dir: Vector2) -> String:
 	else:
 		anim += "South"
 	return anim
+
+# 获取角色当前视觉脚底的世界坐标（支持楼层高度变化）
+func get_visual_foot_position() -> Vector2:
+	var cell := GridData.world_to_cell(global_position)
+	var floor := GridData.get_highest_floor(cell)
+	# 脚底 Y = 角色自身平面 Y + 楼层抬高偏移
+	var foot_y_pos := global_position.y + GridData.get_floor_pixel_offset(floor)
+	return Vector2(global_position.x, foot_y_pos)

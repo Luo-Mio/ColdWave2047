@@ -1,0 +1,43 @@
+[gd_scene format=3 uid="uid://jfn7of5p6he0"]
+
+[ext_resource type="Texture2D" uid="uid://bcwfy0tha30o5" path="res://resources/tree/AutumnTree/AutumnTree.png" id="1_dcgk5"]
+[ext_resource type="Script" uid="uid://bo2ylqltst5ij" path="res://script/entities/objects/object_base.gd" id="1_lutej"]
+[ext_resource type="Texture2D" uid="uid://ccnd37afaj3nu" path="res://resources/tree/AutumnTree/AutumnTreeTrunk.png" id="2_aotr1"]
+[ext_resource type="Shader" uid="uid://cm6timcwebens" path="res://script/shaders/xray.gdshader" id="2_s8eqp"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_aotr1"]
+shader = ExtResource("2_s8eqp")
+shader_parameter/rx = 45.0000017575
+shader_parameter/ry = 30.000001045
+shader_parameter/target_alpha = 0.650000030875
+shader_parameter/feather = 1.0
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_qvu5t"]
+shader = ExtResource("2_s8eqp")
+shader_parameter/rx = 90.000003895
+shader_parameter/ry = 60.00000247
+shader_parameter/target_alpha = 0.0
+shader_parameter/feather = 1.0
+
+[node name="Node2D" type="Node2D" unique_id=686197970]
+script = ExtResource("1_lutej")
+
+[node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
+texture_filter = 1
+material = SubResource("ShaderMaterial_aotr1")
+position = Vector2(-1, -30)
+texture = ExtResource("2_aotr1")
+
+[node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
+texture_filter = 1
+material = SubResource("ShaderMaterial_qvu5t")
+position = Vector2(-1, -30)
+texture = ExtResource("1_dcgk5")
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(5, 0, 0, 5, -5, 0, 0, -5)

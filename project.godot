@@ -8,6 +8,8 @@
 
 config_version=5
 
+"äººå®¶è·¯é¢ç¤ºæ²¡ææç§å®å¨ä½ç½®æä½ config_version"=5
+"ï»¿config_version"=5
 
 [application]
 
@@ -15,6 +17,10 @@ config/name="测试001"
 run/main_scene="uid://23bxsmk7brqo"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
+
+[autoload]
+
+GridData="*res://script/core/grid_data.gd"
 
 [display]
 
@@ -44,6 +50,12 @@ move_right={
 ]
 }
 
+[layer_names]
+
+2d_physics/layer_1="地形"
+2d_physics/layer_2="物体"
+2d_physics/layer_3="角色"
+
 [physics]
 
 3d/physics_engine="Jolt Physics"
@@ -53,6 +65,13 @@ move_right={
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
 
-[autoload]
+[shader_globals]
 
-GridData="*res://script/grid_data.gd"
+player_screen_pos={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+player_world_pos={
+"type": "vec2",
+"value": Vector2(0, 0)
+}

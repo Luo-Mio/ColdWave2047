@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b7c5qb03k04wg"]
 
-[ext_resource type="Script" uid="uid://dtf4i254omkic" path="res://script/mainchara.gd" id="1_0nnbn"]
+[ext_resource type="Script" uid="uid://dtf4i254omkic" path="res://script/entities/player/main_chara.gd" id="1_0nnbn"]
 [ext_resource type="Texture2D" uid="uid://ngnduc36vmbt" path="res://resources/character/texture/W.png" id="1_atro3"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
@@ -138,10 +138,10 @@ animations = [{
 "speed": 10.0
 }]
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_0nnbn"]
-radius = 7.0
-
 [node name="CharacterBody2D" type="CharacterBody2D" unique_id=240145075]
+collision_layer = 4
+collision_mask = 6
+motion_mode = 1
 script = ExtResource("1_0nnbn")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=733103301]
@@ -153,10 +153,10 @@ editor_draw_drag_margin = true
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=489997908]
 texture_filter = 1
-position = Vector2(0, -8)
+position = Vector2(0, -9)
 sprite_frames = SubResource("SpriteFrames_lfxu0")
 animation = &"walkWest"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1498517353]
-position = Vector2(0, -1)
-shape = SubResource("CircleShape2D_0nnbn")
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1635535632]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(5, 0, 0, 5, -5, 0, 0, -5)
