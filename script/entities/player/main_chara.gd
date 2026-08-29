@@ -95,6 +95,6 @@ func _get_walk_anim(dir: Vector2) -> String:
 func get_visual_foot_position() -> Vector2:
 	var cell := GridData.world_to_cell(global_position)
 	var floor := GridData.get_highest_floor(cell)
-	# 脚底 Y = 角色自身平面 Y + 楼层抬高偏移
-	var foot_y_pos := global_position.y + GridData.get_floor_pixel_offset(floor)
+	# 脚底 Y = 角色自身平面 Y + 楼层抬高偏移 - 8px（往上抬高 8 像素）
+	var foot_y_pos := global_position.y + GridData.get_floor_pixel_offset(floor) - 6.0
 	return Vector2(global_position.x, foot_y_pos)

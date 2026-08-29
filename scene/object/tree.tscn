@@ -5,26 +5,26 @@
 [ext_resource type="Texture2D" uid="uid://ccnd37afaj3nu" path="res://resources/tree/AutumnTree/AutumnTreeTrunk.png" id="2_aotr1"]
 [ext_resource type="Shader" uid="uid://cm6timcwebens" path="res://script/shaders/xray.gdshader" id="2_s8eqp"]
 
-[sub_resource type="ShaderMaterial" id="ShaderMaterial_aotr1"]
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_a1rck"]
 shader = ExtResource("2_s8eqp")
-shader_parameter/rx = 45.0000017575
-shader_parameter/ry = 30.000001045
-shader_parameter/target_alpha = 0.650000030875
+shader_parameter/rx = 5.0000000475
+shader_parameter/ry = 6.000000095
 shader_parameter/feather = 1.0
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_qvu5t"]
 shader = ExtResource("2_s8eqp")
 shader_parameter/rx = 90.000003895
 shader_parameter/ry = 60.00000247
-shader_parameter/target_alpha = 0.0
 shader_parameter/feather = 1.0
 
 [node name="Node2D" type="Node2D" unique_id=686197970]
 script = ExtResource("1_lutej")
+enable_random_jitter = true
+jitter_size = Vector2(8, 6)
 
 [node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
 texture_filter = 1
-material = SubResource("ShaderMaterial_aotr1")
+material = SubResource("ShaderMaterial_a1rck")
 position = Vector2(-1, -30)
 texture = ExtResource("2_aotr1")
 
@@ -40,4 +40,4 @@ collision_mask = 0
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
 scale = Vector2(1, 0.5)
-polygon = PackedVector2Array(5, 0, 0, 5, -5, 0, 0, -5)
+polygon = PackedVector2Array(3, 0, 0, 3, -4, 0, 0, -3)

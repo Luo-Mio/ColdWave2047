@@ -159,4 +159,4 @@ animation = &"walkWest"
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1635535632]
 scale = Vector2(1, 0.5)
-polygon = PackedVector2Array(5, 0, 0, 5, -5, 0, 0, -5)
+polygon = PackedVector2Array(4, 0, 0, 4, -4, 0, 0, -4)

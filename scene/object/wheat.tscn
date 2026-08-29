@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://lkhe5gnqubbr"]
+
+[ext_resource type="Script" uid="uid://bo2ylqltst5ij" path="res://script/entities/objects/object_base.gd" id="1_bejiv"]
+[ext_resource type="Texture2D" uid="uid://depox8miel2em" path="res://resources/Plant/wheat/wheat.png" id="2_ar023"]
+
+[node name="wheat" type="Node2D" unique_id=806792723]
+script = ExtResource("1_bejiv")
+grid_size = Vector2i(1, 1)
+enable_random_jitter = true
+jitter_size = Vector2(4, 2)
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1036024556]
+texture_filter = 1
+texture = ExtResource("2_ar023")
+offset = Vector2(0, -12)
