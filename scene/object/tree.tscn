@@ -10,12 +10,14 @@ shader = ExtResource("2_s8eqp")
 shader_parameter/rx = 5.0000000475
 shader_parameter/ry = 6.000000095
 shader_parameter/feather = 1.0
+shader_parameter/max_transparency = 0.85
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_qvu5t"]
 shader = ExtResource("2_s8eqp")
 shader_parameter/rx = 90.000003895
 shader_parameter/ry = 60.00000247
 shader_parameter/feather = 1.0
+shader_parameter/max_transparency = 1.0
 
 [node name="Node2D" type="Node2D" unique_id=686197970]
 script = ExtResource("1_lutej")

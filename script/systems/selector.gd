@@ -2,7 +2,7 @@
 extends Node2D
 
 @export var player_path: NodePath          # 指向玩家节点
-@export var interaction_range: int = 1     # 几何范围半径 (1 = 对称 3x3 菱形 9格, 2 = 对称 5x5 菱形 25格)
+@export var interaction_range: int = 2     # 几何范围半径 (1 = 对称 3x3 菱形 9格, 2 = 对称 5x5 菱形 25格)
 
 var target_cell: Vector2i = Vector2i(-99999, -99999)      # 当前选中的大格
 var target_sub_cell: Vector2i = Vector2i(0, 0)            # 当前选中的微格 (0~3, 0~3)

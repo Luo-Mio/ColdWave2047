@@ -5,6 +5,7 @@ global uniform vec2 player_world_pos;
 uniform float rx : hint_range(4.0, 400.0) = 85.0;
 uniform float ry : hint_range(4.0, 400.0) = 55.0;
 uniform float feather : hint_range(0.01, 1.0) = 0.8;
+uniform float max_transparency : hint_range(0.0, 1.0) = 0.85; // 0.0=完全实心, 1.0=中心完全镂空透明
 
 // 4x4 经典 Bayer 像素抖动矩阵
 const mat4 bayer = mat4(
@@ -36,8 +37,8 @@ void fragment() {
         int y = int(FRAGCOORD.y) % 4;
         float dither_threshold = bayer[x][y];
 
-        // 越靠近中心，被剔除的像素越多；多层树木叠加时镂空点完全重合，绝不叠加变暗！
-        if (mask * 0.85 > dither_threshold) {
+        // 越靠近中心，被剔除的像素越多（受 max_transparency 控制强度）
+        if (mask * max_transparency > dither_threshold) {
             discard;
         }
     }

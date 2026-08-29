@@ -16,10 +16,14 @@ extends Node
 	set(v):
 		target_alpha = v
 		if material: material.set_shader_parameter("target_alpha", target_alpha)
-@export var feather: float = 0.8:
+@export var feather: float = 1.0: # 透视边缘羽化 (0.0=硬边, 0.5=柔边, 1.0=极柔)
 	set(v):
 		feather = v
 		if material: material.set_shader_parameter("feather", feather)
+@export var max_transparency: float = 0.2: # 透明透视强度 (0.0=不透, 0.5=半透, 1.0=完全透空)
+	set(v):
+		max_transparency = v
+		if material: material.set_shader_parameter("max_transparency", max_transparency)
 @export var min_height_diff: int = 3   # 最小触发高度差（3层）
 
 var material: ShaderMaterial
@@ -39,8 +43,8 @@ func _ready() -> void:
 	material.shader = load("res://script/shaders/xray.gdshader")
 	material.set_shader_parameter("rx", rx)
 	material.set_shader_parameter("ry", ry)
-	material.set_shader_parameter("target_alpha", target_alpha)
 	material.set_shader_parameter("feather", feather)
+	material.set_shader_parameter("max_transparency", max_transparency)
 
 # 动态刷新高墙透视
 func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
