@@ -30,15 +30,6 @@ func _ready() -> void:
 		var ry := jitter_size.y * 0.5
 		jitter = _get_random_diamond_offset(rx, ry)
 
-	# 2. 自动给树冠挂透视 shader（有 Canopy 节点才挂）
-	var canopy := get_node_or_null("Canopy") as Sprite2D
-	if canopy == null:
-		canopy = get_node_or_null("Sprite2D") as Sprite2D
-	if canopy and canopy.material == null:
-		var mat := ShaderMaterial.new()
-		mat.shader = load("res://script/shaders/xray.gdshader")
-		canopy.material = mat
-
 	# 3. 碰撞体高度修正（如果有）
 	var collision_node := get_node_or_null("StaticBody2D")
 	if collision_node:

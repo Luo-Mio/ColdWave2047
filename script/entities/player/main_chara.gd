@@ -5,8 +5,12 @@ extends CharacterBody2D
 
 # 瓷砖锚点在视觉底面,角色要站在顶面 → 额外上移 8px
 @export var foot_offset: float = -8.0
-
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
+@onready var camera: Camera2D = get_node_or_null("Camera2D")
+# 可在检查器实时微调的摄像机速度曲线参数
+@export_group("摄像机速度曲线与跟随")
+@export var enable_camera_height_smooth: bool = true # 是否开启高度平滑缓动
+@export var camera_speed: float = 8.0                # 跟随速度（数值越大越紧凑，数值越小越柔和）
 
 var current_anim: String = "walkSouth"
 var sort_key: float = 0.0        # 排序主键(所在格基底 y)
@@ -44,12 +48,18 @@ func _physics_process(_delta: float) -> void:
 	velocity = move_dir * move_speed
 	move_and_slide()
 
-	# ---------- 3. 高度加成(瞬时,无过渡) ----------
-	# 查角色脚下格子的最高层,精灵直接偏移到该层高度
+	# ---------- 3. 高度加成与摄像机阻尼速度曲线 ----------
 	var cell := GridData.world_to_cell(global_position)
-	# print("所在格=", cell, " 行=", cell.x + cell.y)   # 调试用,已注释
 	var floor := GridData.get_highest_floor(cell)
 	animated_sprite.position.y = GridData.get_floor_pixel_offset(floor) + foot_offset
+
+	if camera:
+		var target_camera_y := animated_sprite.position.y
+		if enable_camera_height_smooth:
+			# 指数衰减阻尼曲线（Ease-Out：快速响应、柔和减速靠拢）
+			camera.position.y = lerpf(camera.position.y, target_camera_y, 1.0 - exp(-camera_speed * _delta))
+		else:
+			camera.position.y = target_camera_y
 
 	# ---------- 4. 更新排序键(只有换格子才重排) ----------
 	_update_sort_key()

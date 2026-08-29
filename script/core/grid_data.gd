@@ -7,7 +7,7 @@ const FLOOR_HEIGHT: float = 8.0   # 每层视觉高度差
 var grid: Dictionary = {}
 var layers: Array[TileMapLayer] = []
 var tile_cells: Dictionary = {}
-
+var highest_floor: Dictionary = {}
 # 2. 物体与农作物占用表
 # 大物体占用表(4x4整格,如树木): key = cell_key(cell), value = 物体节点
 var objects_at: Dictionary = {}
@@ -19,10 +19,13 @@ func build_from_layers(layer_nodes: Array[TileMapLayer]) -> void:
 	layers = layer_nodes
 	grid.clear()
 	tile_cells.clear()
+	highest_floor.clear() # ← 清空缓存
 	for z in layers.size():
 		for cell in layers[z].get_used_cells():
+			var k := cell_key(cell)
 			grid[Vector3i(cell.x, cell.y, z)] = true
-			tile_cells[cell_key(cell)] = true
+			tile_cells[k] = true
+			highest_floor[k] = maxi(highest_floor.get(k, 0), z) # ← 记录该格最高层
 
 # 世界坐标 → 大格子坐标
 func world_to_cell(world_pos: Vector2) -> Vector2i:
@@ -64,13 +67,10 @@ func cell_to_sort_key(cell: Vector2i) -> float:
 	var col := float(cell.x - cell.y)
 	return row * half_h - col * 0.001
 
-# 某格最高楼层
+# 某格最高楼层（O(1) 瞬时查询，零循环零垃圾）
 func get_highest_floor(cell: Vector2i) -> int:
-	for z in range(layers.size() - 1, -1, -1):
-		if grid.has(Vector3i(cell.x, cell.y, z)):
-			return z
-	return 0
-
+	return highest_floor.get(cell_key(cell), 0)
+	
 # 楼层号 → Y 像素偏移
 func get_floor_pixel_offset(floor: int) -> float:
 	return -float(floor + 1) * FLOOR_HEIGHT
@@ -89,18 +89,26 @@ func sub_slot_key(cell: Vector2i, sub_pos: Vector2i) -> int:
 # 砖块增删
 func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 	var key := Vector3i(cell.x, cell.y, z)
+	var ck := cell_key(cell)
 	if exists:
 		grid[key] = true
-		tile_cells[cell_key(cell)] = true
+		tile_cells[ck] = true
+		highest_floor[ck] = maxi(highest_floor.get(ck, 0), z)
 	else:
 		grid.erase(key)
-		var still_has := false
-		for zz in layers.size():
+		# 拆除时重新计算该格的最高楼层
+		var max_z := 0
+		var has_any := false
+		for zz in range(z, -1, -1):
 			if grid.has(Vector3i(cell.x, cell.y, zz)):
-				still_has = true
+				max_z = zz
+				has_any = true
 				break
-		if not still_has:
-			tile_cells.erase(cell_key(cell))
+		if has_any:
+			highest_floor[ck] = max_z
+		else:
+			highest_floor.erase(ck)
+			tile_cells.erase(ck)
 
 # === 物体与农作物多槽位占用系统 ===
 

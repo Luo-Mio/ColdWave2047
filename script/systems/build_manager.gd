@@ -26,8 +26,6 @@ func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, se
 # 放置瓷砖
 func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer]) -> void:
 	var z := GridData.get_highest_floor(cell) + 1
-	if z >= tile_layers.size():
-		return
 	var cell_layer := get_or_create_cell_layer(z, cell, sort_world, tile_layers)
 	cell_layer.set_cell(cell, 0, tile_atlas, 0)
 	GridData.set_tile(cell, z, true)
@@ -94,8 +92,10 @@ func get_or_create_cell_layer(z: int, cell: Vector2i, sort_world: Node2D, tile_l
 
 	cell_layer = cell_script.new()
 	cell_layer.name = key
-	cell_layer.tile_set = tile_layers[z].tile_set
-	cell_layer.position = tile_layers[z].position
+	# 统一使用第 0 层的 TileSet 材质图集
+	cell_layer.tile_set = tile_layers[0].tile_set
+	# 【核心】：纯数学计算该层 Y 坐标偏移（每高 1 层往上移 8 像素，无限支持！）
+	cell_layer.position = Vector2(0.0, -float(z) * 8.0)
 	cell_layer.y_sort_enabled = true
 	cell_layer.collision_enabled = false
 	cell_layer.set("sort_key", GridData.cell_to_sort_key(cell))
