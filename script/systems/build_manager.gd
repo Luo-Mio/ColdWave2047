@@ -4,6 +4,7 @@ class_name BuildManager
 extends Node
 
 var cell_script: GDScript = preload("res://script/core/row_layer.gd")
+var dirt_scene: PackedScene = preload("res://scene/object/dirt.tscn")
 
 # 放置物品（瓷砖或物体）
 func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer]) -> void:
@@ -25,6 +26,10 @@ func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, se
 
 # 放置瓷砖
 func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer]) -> void:
+	# 【新增拦截】：如果本格种有小麦（哪怕只有1株）或种有大树，严禁在其上方叠放瓷砖！
+	if GridData.is_slot_occupied(cell, Vector2i.ZERO, Vector2i(4, 4)):
+		return
+
 	var z := GridData.get_highest_floor(cell) + 1
 	var cell_layer := get_or_create_cell_layer(z, cell, sort_world, tile_layers)
 	cell_layer.set_cell(cell, 0, tile_atlas, 0)
@@ -72,6 +77,13 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 	var z := GridData.get_highest_floor(cell)
 	if z <= 0:
 		return
+
+	# 【核心规则】：先预先检查周围 8 格是否有合法的落脚点（层差 <= 2）
+	var valid_neighbors := _get_valid_drop_neighbors(cell, z)
+	if valid_neighbors.is_empty():
+		# 周围 8 格全部是深渊虚空或悬崖层差 > 2，严禁挖掘！
+		return
+
 	var key := "cell_z%d_%d_%d" % [z, cell.x, cell.y]
 	var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
 	if cell_layer:
@@ -81,6 +93,10 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 			cell_layer.queue_free()
 		else:
 			sort_world.call("sort_now")
+
+		# 在合法的邻居格内自由抛射散落 3 堆泥土
+		_spawn_dirt_drops(valid_neighbors, sort_world)
+
 		selector.call("force_update")
 
 # 查找或创建格级图层
@@ -102,3 +118,74 @@ func get_or_create_cell_layer(z: int, cell: Vector2i, sort_world: Node2D, tile_l
 	cell_layer.set("layer_no", z)
 	sort_world.add_child(cell_layer)
 	return cell_layer
+	
+# 精准获取 2.5D 等距网格紧邻的 8 个物理相邻格（严格区分奇偶行）
+func _get_surrounding_cells(cell: Vector2i) -> Array[Vector2i]:
+	var is_odd := (absi(cell.y) % 2 == 1)
+	if is_odd:
+		return [
+			Vector2i(cell.x, cell.y - 2),     # 正北 (North)
+			Vector2i(cell.x, cell.y + 2),     # 正南 (South)
+			Vector2i(cell.x - 1, cell.y),     # 正西 (West)
+			Vector2i(cell.x + 1, cell.y),     # 正东 (East)
+			Vector2i(cell.x, cell.y - 1),     # 西北 (North-West)
+			Vector2i(cell.x + 1, cell.y - 1), # 东北 (North-East)
+			Vector2i(cell.x, cell.y + 1),     # 西南 (South-West)
+			Vector2i(cell.x + 1, cell.y + 1)  # 东南 (South-East)
+		]
+	else:
+		return [
+			Vector2i(cell.x, cell.y - 2),     # 正北 (North)
+			Vector2i(cell.x, cell.y + 2),     # 正南 (South)
+			Vector2i(cell.x - 1, cell.y),     # 正西 (West)
+			Vector2i(cell.x + 1, cell.y),     # 正东 (East)
+			Vector2i(cell.x - 1, cell.y - 1), # 西北 (North-West)
+			Vector2i(cell.x, cell.y - 1),     # 东北 (North-East)
+			Vector2i(cell.x - 1, cell.y + 1), # 西南 (South-West)
+			Vector2i(cell.x, cell.y + 1)      # 东南 (South-East)
+		]
+
+# 收集周围 8 格中合法的邻居格子（有地面 且 高于本格不多于2层）
+func _get_valid_drop_neighbors(center_cell: Vector2i, from_z: int) -> Array[Vector2i]:
+	var surrounding := _get_surrounding_cells(center_cell)
+	var valids: Array[Vector2i] = []
+	
+	for n_cell in surrounding:
+		if not GridData.has_any_tile(n_cell):
+			continue
+		var n_z := GridData.get_highest_floor(n_cell)
+		# 【单向拟真落差】：邻居高度 - 本格高度 <= 2
+		if (n_z - from_z) <= 2:
+			valids.append(n_cell)
+			
+	return valids
+
+# 在合法邻居格内自由随机散落 3 堆泥土（脱离微格拘束）
+func _spawn_dirt_drops(valid_neighbors: Array[Vector2i], sort_world: Node2D) -> void:
+	if dirt_scene == null or valid_neighbors.is_empty():
+		return
+
+	for i in range(2):
+		# 从合法邻居中随机挑一个格子
+		var target_cell: Vector2i = valid_neighbors.pick_random()
+		var target_floor := GridData.get_highest_floor(target_cell)
+
+		# 在 32x16 菱形范围内随机生成一个自由偏移点
+		var rx := 12.0
+		var ry := 6.0
+		var rand_offset := Vector2.ZERO
+		while true:
+			var pt := Vector2(randf_range(-rx, rx), randf_range(-ry, ry)).round()
+			if (abs(pt.x) / rx) + (abs(pt.y) / ry) <= 1.0:
+				rand_offset = pt
+				break
+
+		var dirt := dirt_scene.instantiate() as Node2D
+		# 自由掉落物：不再注册进 4x4 微格系统
+		dirt.set("floor_level", target_floor)
+		var cell_world := GridData.cell_to_world(target_cell)
+		dirt.set("base_position", cell_world + rand_offset)
+
+		sort_world.add_child(dirt)
+
+	sort_world.call("sort_now")

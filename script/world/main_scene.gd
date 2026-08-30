@@ -3,24 +3,28 @@ extends Node2D
 
 const BuildManagerScript := preload("res://script/systems/build_manager.gd")
 const WallXRayScript := preload("res://script/systems/wall_xray.gd")
+const AirWallScript := preload("res://script/systems/air_wall.gd") # ← 【新增】
 
 var tile_layers: Array[TileMapLayer] = []
 var _last_player_cell: Vector2i = Vector2i(-99999, -99999)
-
 var build_manager: BuildManager
 var wall_xray: WallXRayManager
+var air_wall: StaticBody2D # ← 【新增】
 
 @onready var sort_world: Node2D = $sortworld
 @onready var selector: Node2D = $selector
 @onready var hotbar_node: Node = find_child("hotbar")
 
 func _ready() -> void:
-	# 1. 自动实例化并挂载子管理器组件（无需在场景面板手动添加）
+	# 1. 自动实例化并挂载子管理器组件
 	build_manager = BuildManagerScript.new()
 	add_child(build_manager)
 
 	wall_xray = WallXRayScript.new()
 	add_child(wall_xray)
+
+	air_wall = AirWallScript.new()
+	add_child(air_wall)
 
 	# 2. 收集并按 Y 坐标排序原始层
 	tile_layers = []
@@ -41,7 +45,10 @@ func _ready() -> void:
 	for layer in tile_layers:
 		layer.visible = false
 
-	# 6. 初始排序
+	# 6. 【正确位置】：必须在第 3 步 GridData 构建完之后，再生成空气墙！
+	air_wall.rebuild_walls()
+
+	# 7. 初始排序
 	sort_world.call("sort_now")
 
 # 拆分图层

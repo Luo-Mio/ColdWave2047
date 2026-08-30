@@ -1,0 +1,14 @@
+[gd_scene format=3 uid="uid://d2c1deva3kl4l"]
+
+[ext_resource type="Script" uid="uid://bo2ylqltst5ij" path="res://script/entities/objects/object_base.gd" id="1_e4b5i"]
+[ext_resource type="Texture2D" uid="uid://bdtrs0pwwhvv2" path="res://resources/object/dirt.png" id="2_yadpp"]
+
+[node name="dirt" type="Node2D" unique_id=435790979]
+script = ExtResource("1_e4b5i")
+grid_size = Vector2i(1, 1)
+enable_random_jitter = true
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1407338272]
+texture_filter = 1
+texture = ExtResource("2_yadpp")
+offset = Vector2(0, -5)
