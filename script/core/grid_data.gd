@@ -179,3 +179,19 @@ func get_cell_sub_occupancies(cell: Vector2i) -> Array[bool]:
 # 兼容旧接口
 func has_object(cell: Vector2i) -> bool:
 	return is_slot_occupied(cell, Vector2i.ZERO, Vector2i(4, 4))
+
+
+# 获取某格子上存在的所有物体（整格大树 + 所有微格植物，去重返回列表）
+func get_all_objects_at(cell: Vector2i) -> Array[Node]:
+	var list: Array[Node] = []
+	var ck := cell_key(cell)
+	if objects_at.has(ck):
+		list.append(objects_at[ck])
+	for y in 4:
+		for x in 4:
+			var k := sub_slot_key(cell, Vector2i(x, y))
+			if sub_objects_at.has(k):
+				var obj: Node = sub_objects_at[k]
+				if not list.has(obj):
+					list.append(obj)
+	return list

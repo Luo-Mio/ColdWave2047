@@ -60,30 +60,50 @@ func _place_object(cell: Vector2i, scene_path: String, sort_world: Node2D, sub_c
 	sort_world.call("insert_sort", obj)
 	GridData.register_object(cell, obj, sub_cell, size)
 
-# 右键智能破坏（最上层优先）
+# 右键智能破坏
 func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> void:
-	# 1. 优先破坏物体（如果是大树直接拆整格；如果是微作物，拆当前鼠标指着的微格）
+	# 1. 优先破坏鼠标精准指向的单个物体（如单独收割某株小麦）
 	var sub_cell: Vector2i = selector.get("target_sub_cell") if selector else Vector2i.ZERO
-	var obj := GridData.get_object_at(cell, sub_cell)
-	if obj:
-		var size: Vector2i = obj.get("grid_size") if obj.get("grid_size") != null else Vector2i(4, 4)
-		var sp: Vector2i = obj.get("sub_cell") if obj.get("sub_cell") != null else Vector2i.ZERO
+	var targeted_obj := GridData.get_object_at(cell, sub_cell)
+	if targeted_obj:
+		var size: Vector2i = targeted_obj.get("grid_size") if targeted_obj.get("grid_size") != null else Vector2i(4, 4)
+		var sp: Vector2i = targeted_obj.get("sub_cell") if targeted_obj.get("sub_cell") != null else Vector2i.ZERO
 		GridData.unregister_object(cell, sp, size)
-		obj.queue_free()
+
+		var drop_id: String = targeted_obj.get("drop_item_id") if targeted_obj.get("drop_item_id") != null else ""
+		var drop_cnt: int = targeted_obj.get("drop_count") if targeted_obj.get("drop_count") != null else 1
+		var obj_z: int = targeted_obj.get("floor_level") if targeted_obj.get("floor_level") != null else GridData.get_highest_floor(cell)
+		
+		targeted_obj.queue_free()
+
+		# 爆出该物体的掉落物
+		if drop_id != "":
+			var valid_neighbors := _get_valid_drop_neighbors(cell, obj_z)
+			if not valid_neighbors.is_empty():
+				_spawn_item_drops(drop_id, drop_cnt, cell, obj_z, valid_neighbors, sort_world)
+
 		selector.call("force_update")
 		return
 
-	# 2. 其次破坏最上层瓷砖（地面0层不拆）
+	# 2. 准备破坏最上层瓷砖（地面0层不拆）
 	var z := GridData.get_highest_floor(cell)
 	if z <= 0:
 		return
 
-	# 【核心规则】：先预先检查周围 8 格是否有合法的落脚点（层差 <= 2）
+	# 【安全审查】：检查地砖上方是否有坚固重型物体（如大树 break_with_tile == false）
+	var objects_on_tile: Array[Node] = GridData.get_all_objects_at(cell)
+	for obj in objects_on_tile:
+		var can_break: bool = obj.get("break_with_tile") if obj.get("break_with_tile") != null else true
+		if not can_break:
+			# 上方有大树/巨石等坚固结构，严禁直接挖地基！
+			return
+
+	# 检查周围是否有合法抛土落点
 	var valid_neighbors := _get_valid_drop_neighbors(cell, z)
 	if valid_neighbors.is_empty():
-		# 周围 8 格全部是深渊虚空或悬崖层差 > 2，严禁挖掘！
 		return
 
+	# 敲碎地砖
 	var key := "cell_z%d_%d_%d" % [z, cell.x, cell.y]
 	var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
 	if cell_layer:
@@ -94,8 +114,21 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 		else:
 			sort_world.call("sort_now")
 
-		# 在合法的邻居格内自由抛射散落 3 堆泥土
-		_spawn_dirt_drops(valid_neighbors, sort_world)
+		# 【连带瓦解】：地砖上的轻型植被（小麦）连带收割破坏，并爆出对应的小麦掉落物！
+		for plant in objects_on_tile:
+			var p_size: Vector2i = plant.get("grid_size") if plant.get("grid_size") != null else Vector2i(1, 1)
+			var p_sp: Vector2i = plant.get("sub_cell") if plant.get("sub_cell") != null else Vector2i.ZERO
+			var p_drop: String = plant.get("drop_item_id") if plant.get("drop_item_id") != null else ""
+			var p_cnt: int = plant.get("drop_count") if plant.get("drop_count") != null else 1
+			
+			GridData.unregister_object(cell, p_sp, p_size)
+			plant.queue_free()
+			
+			if p_drop != "":
+				_spawn_item_drops(p_drop, p_cnt, cell, z, valid_neighbors, sort_world)
+
+		# 抛出地砖自身的 3 堆泥土掉落物
+		_spawn_item_drops("dirt", 3, cell, z, valid_neighbors, sort_world)
 
 		selector.call("force_update")
 
@@ -160,17 +193,17 @@ func _get_valid_drop_neighbors(center_cell: Vector2i, from_z: int) -> Array[Vect
 			
 	return valids
 
-# 在合法邻居格内自由随机散落 3 堆泥土（脱离微格拘束）
-func _spawn_dirt_drops(valid_neighbors: Array[Vector2i], sort_world: Node2D) -> void:
-	if dirt_scene == null or valid_neighbors.is_empty():
+# 通用抛物线掉落物生成器（支持泥土、小麦、木头等任意物品）
+func _spawn_item_drops(item_id: String, count: int, broken_cell: Vector2i, broken_z: int, valid_neighbors: Array[Vector2i], sort_world: Node2D) -> void:
+	if dirt_scene == null or valid_neighbors.is_empty() or count <= 0:
 		return
 
-	for i in range(2):
-		# 从合法邻居中随机挑一个格子
+	var start_world_pos := GridData.cell_to_world(broken_cell) + Vector2(0.0, GridData.get_floor_pixel_offset(broken_z))
+
+	for i in range(count):
 		var target_cell: Vector2i = valid_neighbors.pick_random()
 		var target_floor := GridData.get_highest_floor(target_cell)
 
-		# 在 32x16 菱形范围内随机生成一个自由偏移点
 		var rx := 12.0
 		var ry := 6.0
 		var rand_offset := Vector2.ZERO
@@ -180,12 +213,18 @@ func _spawn_dirt_drops(valid_neighbors: Array[Vector2i], sort_world: Node2D) -> 
 				rand_offset = pt
 				break
 
-		var dirt := dirt_scene.instantiate() as Node2D
-		# 自由掉落物：不再注册进 4x4 微格系统
-		dirt.set("floor_level", target_floor)
-		var cell_world := GridData.cell_to_world(target_cell)
-		dirt.set("base_position", cell_world + rand_offset)
+		var item_obj := dirt_scene.instantiate() as Node2D
+		var target_world_pos := GridData.cell_to_world(target_cell) + rand_offset
 
-		sort_world.add_child(dirt)
+		sort_world.add_child(item_obj)
+
+		if item_obj.has_method("set_item_type"):
+			item_obj.call("set_item_type", item_id)
+
+		if item_obj.has_method("spawn_bounce"):
+			item_obj.call("spawn_bounce", start_world_pos, target_world_pos, target_floor)
+		else:
+			item_obj.set("floor_level", target_floor)
+			item_obj.set("base_position", target_world_pos)
 
 	sort_world.call("sort_now")

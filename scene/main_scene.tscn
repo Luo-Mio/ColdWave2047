@@ -302,7 +302,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -16)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAP//AAADAAAAAAADAAAAAAADAAAAAAAEAA0AAAADAAAAAAAFAA4AAAADAAAAAAABAAIAAAADAAAAAAAAAAMAAAADAAAAAAABAAQAAAADAAAAAAABAAUAAAADAAAAAAACAAQAAAADAAAAAAACAAMAAAADAAAAAAACAAIAAAADAAAAAAABAAEAAAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -310,7 +309,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -24)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAAEAA0AAAADAAAAAAAFAA4AAAADAAAAAAAAAAMAAAADAAAAAAABAAIAAAADAAAAAAABAAEAAAADAAAAAAACAAIAAAADAAAAAAACAAMAAAADAAAAAAACAAQAAAADAAAAAAABAAUAAAADAAAAAAABAAQAAAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -318,7 +316,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -32)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAAEAA0AAAADAAAAAAAFAA4AAAADAAAAAAABAAIAAAADAAAAAAABAAEAAAADAAAAAAACAAIAAAADAAAAAAACAAMAAAADAAAAAAACAAQAAAADAAAAAAABAAUAAAADAAAAAAABAAQAAAADAAAAAAAAAAMAAAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -326,7 +323,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -40)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAAEAA0AAAADAAAAAAAFAA4AAAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -334,7 +330,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -48)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -342,7 +337,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -56)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -350,7 +344,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -64)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -358,7 +351,6 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -72)
-tile_map_data = PackedByteArray("AAACAP//AAADAAAAAAADAAAAAAADAAAAAAADAP//AAADAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -371,7 +363,6 @@ script = ExtResource("3_4wnd8")
 
 [node name="CharacterBody2D" parent="sortworld" unique_id=240145075 instance=ExtResource("3_x5n27")]
 position = Vector2(129, 54)
-camera_speed = 16.0
 
 [node name="plantscene" type="Node" parent="." unique_id=676632468]
 

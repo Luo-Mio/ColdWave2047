@@ -23,6 +23,7 @@ shader_parameter/max_transparency = 1.0
 script = ExtResource("1_lutej")
 enable_random_jitter = true
 jitter_size = Vector2(8, 6)
+break_with_tile = false
 
 [node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
 texture_filter = 1

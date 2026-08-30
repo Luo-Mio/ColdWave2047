@@ -11,11 +11,14 @@ extends Node2D
 @export_group("网格尺寸与子格")
 @export var grid_size: Vector2i = Vector2i(4, 4)
 @export var sub_cell: Vector2i = Vector2i(0, 0) # 在大格内的具体子格坐标 (0~3, 0~3)
-
 # 随机抖动（花草/小麦建议开微小抖动，让麦田更自然）
 @export_group("随机抖动偏移")
 @export var enable_random_jitter: bool = false
 @export var jitter_size: Vector2 = Vector2(2.0, 1.0) # 小麦建议 2x1，大树建议 6x3
+@export_group("破坏与掉落属性")
+@export var break_with_tile: bool = true  # 是否随地砖被挖而连带瓦解（小麦/花草 = true，大树/巨石 = false）
+@export var drop_item_id: String = ""     # 自身被破坏时掉落的物品 ID（如 "wheat", "wood"）
+@export var drop_count: int = 1           # 掉落数量
 
 # 排序键
 var layer_no: int = 999
