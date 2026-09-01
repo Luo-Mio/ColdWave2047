@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bggwjpmomovnm"
-path="res://.godot/imported/boar_NE_idle_0.png-be6784d704a506949474dc02c12f30cf.ctex"
+uid="uid://ctg00xdmy43db"
+path="res://.godot/imported/dirt_tile.png-6707bac4a8ac046ab353a2f70a882aad.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/tiles/critters/boar/boar_NE_idle_0.png"
-dest_files=["res://.godot/imported/boar_NE_idle_0.png-be6784d704a506949474dc02c12f30cf.ctex"]
+source_file="res://resources/tiles/dirt_tile.png"
+dest_files=["res://.godot/imported/dirt_tile.png-6707bac4a8ac046ab353a2f70a882aad.ctex"]
 
 [params]
 

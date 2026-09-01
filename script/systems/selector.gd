@@ -50,7 +50,7 @@ func _rebuild_tile_cache(player: Node2D) -> void:
 
 			var cell_top := GridData.cell_to_world(cell) + Vector2(0.0, GridData.get_floor_pixel_offset(floor_val))
 			var delta := cell_top - player_ground_pos
-			var iso_dist: float = (absf(delta.x) / 32.0) + (absf(delta.y) / 16.0)
+			var iso_dist: float = (absf(delta.x) / 64.0) + (absf(delta.y) / 32.0) 
 			if iso_dist > float(interaction_range) + 0.15:
 				continue
 
@@ -82,7 +82,7 @@ func _update_mouse_selection() -> void:
 
 	for tile_data in _cached_tiles:
 		var rel: Vector2 = mouse_pos - tile_data["top"]
-		if (absf(rel.x) / 16.0) + (absf(rel.y) / 8.0) <= 1.0:
+		if (absf(rel.x) / 32.0) + (absf(rel.y) / 16.0) <= 1.0:
 			found_cell = tile_data["cell"]
 			found_sub = GridData.world_to_sub_cell(mouse_pos, found_cell)
 			break
@@ -116,11 +116,11 @@ func _draw() -> void:
 		var cell: Vector2i = tile_data["cell"]
 		var cell_top: Vector2 = tile_data["top"]
 
-		# 绘制 32x16 外边框
-		var p_top := cell_top + Vector2(0, -8)
-		var p_right := cell_top + Vector2(16, 0)
-		var p_bot := cell_top + Vector2(0, 8)
-		var p_left := cell_top + Vector2(-16, 0)
+		# 绘制 64x32 外边框
+		var p_top := cell_top + Vector2(0, -16)    # 原本是 -8
+		var p_right := cell_top + Vector2(32, 0)   # 原本是 16
+		var p_bot := cell_top + Vector2(0, 16)     # 原本是 8
+		var p_left := cell_top + Vector2(-32, 0)   # 原本是 -16
 		grid_lines.push_back(p_top); grid_lines.push_back(p_right)
 		grid_lines.push_back(p_right); grid_lines.push_back(p_bot)
 		grid_lines.push_back(p_bot); grid_lines.push_back(p_left)
@@ -154,27 +154,36 @@ func _draw() -> void:
 		var t_center := GridData.cell_to_world(target_cell) + Vector2(0.0, GridData.get_floor_pixel_offset(target_floor))
 
 		if is_micro_crop:
+			# 1. 1x1 微格高亮菱形 (16x8)
 			var sub_c := t_center + GridData.sub_cell_to_local_offset(target_sub_cell, Vector2i(1, 1))
 			var is_occ := GridData.is_slot_occupied(target_cell, target_sub_cell, Vector2i(1, 1))
 			var h_color := Color(1.0, 0.2, 0.2, 0.5) if is_occ else Color(0.2, 1.0, 0.4, 0.6)
 
 			var highlight_pts := PackedVector2Array([
-				sub_c + Vector2(0, -2), sub_c + Vector2(4, 0),
-				sub_c + Vector2(0, 2), sub_c + Vector2(-4, 0)
+				sub_c + Vector2(0, -4), sub_c + Vector2(8, 0),
+				sub_c + Vector2(0, 4), sub_c + Vector2(-8, 0)
 			])
 			draw_polygon(highlight_pts, PackedColorArray([h_color]))
 
 			var border_pts := PackedVector2Array([
-				sub_c + Vector2(0, -2), sub_c + Vector2(4, 0),
-				sub_c + Vector2(0, 2), sub_c + Vector2(-4, 0),
-				sub_c + Vector2(0, -2)
+				sub_c + Vector2(0, -4), sub_c + Vector2(8, 0),
+				sub_c + Vector2(0, 4), sub_c + Vector2(-8, 0),
+				sub_c + Vector2(0, -4)
 			])
 			draw_polyline(border_pts, Color(1.0, 1.0, 1.0, 0.9), 1.0)
 		else:
+			# 2. 4x4 整格 / 瓷砖高亮菱形 (64x32)（补回这一段！）
 			var is_full_occ := GridData.is_slot_occupied(target_cell, Vector2i.ZERO, Vector2i(4, 4))
 			var t_color := Color(1.0, 0.2, 0.2, 0.4) if is_full_occ else Color(1.0, 1.0, 0.0, 0.4)
 			var big_diamond := PackedVector2Array([
-				t_center + Vector2(0, -8), t_center + Vector2(16, 0),
-				t_center + Vector2(0, 8), t_center + Vector2(-16, 0)
+				t_center + Vector2(0, -16), t_center + Vector2(32, 0),
+				t_center + Vector2(0, 16), t_center + Vector2(-32, 0)
 			])
 			draw_polygon(big_diamond, PackedColorArray([t_color]))
+
+			var big_border := PackedVector2Array([
+				t_center + Vector2(0, -16), t_center + Vector2(32, 0),
+				t_center + Vector2(0, 16), t_center + Vector2(-32, 0),
+				t_center + Vector2(0, -16)
+			])
+			draw_polyline(big_border, Color(1.0, 1.0, 1.0, 0.9), 1.0)

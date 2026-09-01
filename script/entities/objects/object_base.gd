@@ -28,11 +28,12 @@ var foot_y: float = 0.0
 func _ready() -> void:
 	# 1. 严格锁定“整像素”随机微小偏移（仅作用于视觉显示，不破坏基准网格坐标）
 	var jitter := Vector2.ZERO
-	# 【核心】：大格基准 + (sub_x + sub_y) 微格对角线偏移（范围 0.5 ~ 7.0，大树居中为 4.0）
+	# 4x4 微格沿对角线的最大和为 4.0 + 4.0 = 8.0，精准映射为 0.0 ~ 15.0
 	var base_key := GridData.cell_to_sort_key(GridData.world_to_cell(base_position))
 	var center_u := float(sub_cell.x) + float(grid_size.x) * 0.5
 	var center_v := float(sub_cell.y) + float(grid_size.y) * 0.5
-	var sub_depth := ((center_u + center_v) / 4.0) * 3.5 # 映射在安全的微深度内
+	var sub_depth := ((center_u + center_v) / 8.0) * 15.0
+
 	if enable_random_jitter:
 		var rx := jitter_size.x * 0.5
 		var ry := jitter_size.y * 0.5

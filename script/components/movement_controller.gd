@@ -2,7 +2,7 @@
 class_name MovementController
 extends Node
 
-@export var move_speed: float = 60.0
+@export var move_speed: float = 80 # 适配 64x32 世界的极佳手感
 
 # 计算当前帧的移动速度向量
 func get_movement_velocity() -> Vector2:

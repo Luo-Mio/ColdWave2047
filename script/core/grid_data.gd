@@ -1,7 +1,7 @@
 # grid_data.gd —— 全局高度场与 4x4 微网格数据核心(Autoload 单例 GridData)
 extends Node
 
-const FLOOR_HEIGHT: float = 8.0   # 每层视觉高度差
+const FLOOR_HEIGHT: float = 16.0   # 每层视觉高度差
 
 # 1. 地形高度场数据
 var grid: Dictionary = {}
@@ -41,19 +41,19 @@ func cell_to_world(cell: Vector2i) -> Vector2:
 
 # 【4x4 微网格核心算法】给定大格内 (0~3, 0~3) 子格及物体大小，计算出世界相对偏移像素
 func sub_cell_to_local_offset(sub_cell: Vector2i, size: Vector2i = Vector2i(1, 1)) -> Vector2:
-	# 4x4 等距基向量：东南轴 (4, 2)，西南轴 (-4, 2)
 	var center_u := float(sub_cell.x) + float(size.x) * 0.5 - 2.0
 	var center_v := float(sub_cell.y) + float(size.y) * 0.5 - 2.0
-	var offset_x := (center_u - center_v) * 4.0
-	var offset_y := (center_u + center_v) * 2.0
-	return Vector2(offset_x, offset_y).round() # 100% 严格纯整数像素
+	# 64x32 对应的 4x4 微格基向量为 (8, 4) 与 (-8, 4)
+	var offset_x := (center_u - center_v) * 8.0  # 原本是 4.0
+	var offset_y := (center_u + center_v) * 4.0  # 原本是 2.0
+	return Vector2(offset_x, offset_y).round()
 
 # 给定鼠标世界坐标和大格，反算出鼠标当前指向 16 个小格中的哪一个 (0~3, 0~3)
 func world_to_sub_cell(world_pos: Vector2, cell: Vector2i) -> Vector2i:
 	var cell_center := cell_to_world(cell) + Vector2(0.0, get_floor_pixel_offset(get_highest_floor(cell)))
 	var rel := world_pos - cell_center
-	var u := (rel.x / 4.0 + rel.y / 2.0) * 0.5
-	var v := (rel.y / 2.0 - rel.x / 4.0) * 0.5
+	var u := (rel.x / 8.0 + rel.y / 4.0) * 0.5   # 4.0 改为 8.0, 2.0 改为 4.0
+	var v := (rel.y / 4.0 - rel.x / 8.0) * 0.5   # 2.0 改为 4.0, 4.0 改为 8.0
 	var sx := clampi(int(floor(u + 2.0)), 0, 3)
 	var sy := clampi(int(floor(v + 2.0)), 0, 3)
 	return Vector2i(sx, sy)

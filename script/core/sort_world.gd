@@ -14,20 +14,24 @@ func _less_than(a: Node, b: Node) -> bool:
 		return true
 	return a.layer_no < b.layer_no
 
-# 把单个动态节点插入到正确位置(静态砖已有序,二分查找 O(log N))
+# 把单个动态节点插入到正确位置（极速平稳的相邻位比对，零抖动）
 func insert_sort(node: Node) -> void:
 	if not ("sort_key" in node and "layer_no" in node):
 		return
-	var lo := 0
-	var hi := get_child_count()
-	while lo < hi:
-		var mid := (lo + hi) / 2
-		if _less_than(node, get_child(mid)):
-			hi = mid
-		else:
-			lo = mid + 1
-	if lo != node.get_index():                # 位置没变就不动,避免闪烁
-		move_child(node, lo)
+	var curr_idx := node.get_index()
+	var child_cnt := get_child_count()
+	
+	# 向前寻找插入点
+	var target_idx := curr_idx
+	while target_idx > 0 and _less_than(node, get_child(target_idx - 1)):
+		target_idx -= 1
+		
+	# 向后寻找插入点
+	while target_idx < child_cnt - 1 and _less_than(get_child(target_idx + 1), node):
+		target_idx += 1
+		
+	if target_idx != curr_idx:
+		move_child(node, target_idx)
 
 
 # 重新排序所有子节点

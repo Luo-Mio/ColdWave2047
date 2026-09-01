@@ -55,10 +55,10 @@ func _update_sort_key() -> void:
 	var current_cell := GridData.world_to_cell(global_position)
 	var base_key := GridData.cell_to_sort_key(current_cell)
 	
-	# 实时计算角色在当前菱形内的相对 Y 偏移，映射为连续的微深度（0.0 ~ 7.0）
+	# 64x32 菱形高度为 32px，在当前大格内平滑映射为连续微深度（0.0 ~ 15.0）
 	var cell_center := GridData.cell_to_world(current_cell)
-	var rel_y := clampf((global_position.y - cell_center.y) + 8.0, 0.0, 16.0)
-	var sub_depth := (rel_y / 16.0) * 7.0
+	var rel_y := clampf((global_position.y - cell_center.y) + 16.0, 0.0, 32.0)
+	var sub_depth := (rel_y / 32.0) * 15.0
 	
 	sort_key = base_key + sub_depth
 

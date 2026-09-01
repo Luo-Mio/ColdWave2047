@@ -143,8 +143,8 @@ func get_or_create_cell_layer(z: int, cell: Vector2i, sort_world: Node2D, tile_l
 	cell_layer.name = key
 	# 统一使用第 0 层的 TileSet 材质图集
 	cell_layer.tile_set = tile_layers[0].tile_set
-	# 【核心】：纯数学计算该层 Y 坐标偏移（每高 1 层往上移 8 像素，无限支持！）
-	cell_layer.position = Vector2(0.0, -float(z) * 8.0)
+# 每高 1 层往上移 16 像素
+	cell_layer.position = Vector2(0.0, -float(z) * 16.0) # 8.0 改为 16.0
 	cell_layer.y_sort_enabled = true
 	cell_layer.collision_enabled = false
 	cell_layer.set("sort_key", GridData.cell_to_sort_key(cell))
@@ -203,9 +203,9 @@ func _spawn_item_drops(item_id: String, count: int, broken_cell: Vector2i, broke
 	for i in range(count):
 		var target_cell: Vector2i = valid_neighbors.pick_random()
 		var target_floor := GridData.get_highest_floor(target_cell)
-
-		var rx := 12.0
-		var ry := 6.0
+		# 在 64x32 菱形范围内更宽广自然地散落
+		var rx := 24.0 # 原本是 12.0
+		var ry := 12.0 # 原本是 6.0
 		var rand_offset := Vector2.ZERO
 		while true:
 			var pt := Vector2(randf_range(-rx, rx), randf_range(-ry, ry)).round()

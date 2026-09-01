@@ -5,12 +5,11 @@ extends CanvasLayer
 enum ItemType { TILE, OBJECT }
 
 # 1. 配置 5 个槽位的物品数据
+# 配置物品栏槽位（清空旧瓷砖，换入当前 64x32 新瓷砖）
 var items: Array[Dictionary] = [
-	{ "type": ItemType.TILE,   "name": "草地砖",  "atlas": Vector2i(0, 0) },
-	{ "type": ItemType.TILE,   "name": "泥土砖",  "atlas": Vector2i(1, 0) },
-	{ "type": ItemType.TILE,   "name": "石块砖",  "atlas": Vector2i(2, 0) },
-	{ "type": ItemType.OBJECT, "name": "小麦",    "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
-	{ "type": ItemType.OBJECT, "name": "秋季树",  "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) }
+	{ "type": ItemType.TILE,   "name": "泥土砖", "atlas": Vector2i(0, 0) },
+	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
+	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) }
 ]
 
 # 当前选中的槽位索引（0 ~ 4）

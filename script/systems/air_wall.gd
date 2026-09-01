@@ -8,9 +8,9 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 	Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1)
 ]
 
-# 标准 32x16 菱形碰撞箱轮廓点
+# 标准 64x32 菱形碰撞箱轮廓点
 const DIAMOND_POINTS: PackedVector2Array = [
-	Vector2(0, -8), Vector2(16, 0), Vector2(0, 8), Vector2(-16, 0)
+	Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)
 ]
 
 func _ready() -> void:
