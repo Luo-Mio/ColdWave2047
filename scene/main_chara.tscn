@@ -155,7 +155,7 @@ editor_draw_drag_margin = true
 texture_filter = 1
 position = Vector2(0, -9)
 sprite_frames = SubResource("SpriteFrames_lfxu0")
-animation = &"walkWest"
+animation = &"walkEast"
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1635535632]
 scale = Vector2(1, 0.5)

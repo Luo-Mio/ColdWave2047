@@ -48,21 +48,27 @@ func _physics_process(delta: float) -> void:
 	var input_dir: Vector2 = movement.call("get_input_direction")
 	anim_controller.call("update_animation", input_dir, animated_sprite)
 
-	# 主角每帧刷新精确脚底 foot_y
 	foot_y = global_position.y
 	_update_sort_key()
-	# 1. 移动速度计算与物理滑动
 
 func _update_sort_key() -> void:
-	if height_tracker:
-		sort_key = height_tracker.call("get_sort_key", global_position)
+	var current_cell := GridData.world_to_cell(global_position)
+	var base_key := GridData.cell_to_sort_key(current_cell)
 	
+	# 实时计算角色在当前菱形内的相对 Y 偏移，映射为连续的微深度（0.0 ~ 7.0）
+	var cell_center := GridData.cell_to_world(current_cell)
+	var rel_y := clampf((global_position.y - cell_center.y) + 8.0, 0.0, 16.0)
+	var sub_depth := (rel_y / 16.0) * 7.0
+	
+	sort_key = base_key + sub_depth
+
 	var parent_sort := get_parent()
 	if parent_sort and parent_sort.has_method("insert_sort"):
 		parent_sort.call("insert_sort", self)
 
-# 供外部（如透视 Shader）获取角色的视觉脚底坐标
+	# 供全局 Shader（树干与高墙透视）获取角色的视觉身体/脸部世界坐标
 func get_visual_foot_position() -> Vector2:
-	if height_tracker:
-		return height_tracker.call("get_visual_foot_position", global_position)
+	if animated_sprite:
+		# animated_sprite.global_position 已包含真实楼层高度抬升，上移 6px 精准对齐脸部！
+		return animated_sprite.global_position + Vector2(0.0, 2.0)
 	return global_position

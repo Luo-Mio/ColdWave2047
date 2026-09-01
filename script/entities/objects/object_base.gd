@@ -28,6 +28,11 @@ var foot_y: float = 0.0
 func _ready() -> void:
 	# 1. 严格锁定“整像素”随机微小偏移（仅作用于视觉显示，不破坏基准网格坐标）
 	var jitter := Vector2.ZERO
+	# 【核心】：大格基准 + (sub_x + sub_y) 微格对角线偏移（范围 0.5 ~ 7.0，大树居中为 4.0）
+	var base_key := GridData.cell_to_sort_key(GridData.world_to_cell(base_position))
+	var center_u := float(sub_cell.x) + float(grid_size.x) * 0.5
+	var center_v := float(sub_cell.y) + float(grid_size.y) * 0.5
+	var sub_depth := ((center_u + center_v) / 4.0) * 3.5 # 映射在安全的微深度内
 	if enable_random_jitter:
 		var rx := jitter_size.x * 0.5
 		var ry := jitter_size.y * 0.5
@@ -38,10 +43,11 @@ func _ready() -> void:
 	if collision_node:
 		collision_node.position.y = float(floor_level + 1) * GridData.FLOOR_HEIGHT
 
-	# 4. 精确世界坐标（基准世界点 + 视觉随机微抖 + 楼层抬高）与排序键
+	# 4. 精确世界坐标与高精度微格排序键
 	global_position = base_position + jitter + Vector2(0.0, GridData.get_floor_pixel_offset(floor_level))
 	foot_y = global_position.y
-	sort_key = GridData.cell_to_sort_key(GridData.world_to_cell(base_position))
+
+	sort_key = base_key + sub_depth
 
 	# 5. 加入排序
 	var parent_sort := get_parent()
