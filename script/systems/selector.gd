@@ -11,6 +11,7 @@ var target_sub_cell: Vector2i = Vector2i(0, 0)            # 当前选中的微�
 var _last_target_cell: Vector2i = Vector2i(-99999, -99999)
 var _last_target_sub_cell: Vector2i = Vector2i(-1, -1)
 var _last_player_cell: Vector2i = Vector2i(-99999, -99999)
+var _last_item_key: String = ""
 var _cached_tiles: Array[Dictionary] = [] # 缓存当前周围有效格子的空间数据
 
 @onready var hotbar_node: Node = get_node_or_null("../hotbar")
@@ -26,6 +27,7 @@ func _process(_delta: float) -> void:
 func force_update() -> void:
 	_last_target_cell = Vector2i(-99999, -99999)
 	_last_player_cell = Vector2i(-99999, -99999)
+	_last_item_key = ""
 	_update_mouse_selection()
 	queue_redraw()
 
@@ -76,6 +78,15 @@ func _update_mouse_selection() -> void:
 		_last_player_cell = player_cell
 		_rebuild_tile_cache(player)
 
+	# 检查手持物品是否发生改变
+	var active_item: Dictionary = {}
+	if hotbar_node and hotbar_node.has_method("get_active_item"):
+		active_item = hotbar_node.call("get_active_item")
+	var current_item_key: String = str(active_item.get("type", -1)) + "_" + str(active_item.get("name", ""))
+	var item_changed := (current_item_key != _last_item_key)
+	if item_changed:
+		_last_item_key = current_item_key
+
 	var mouse_pos := get_global_mouse_position()
 	var found_cell := Vector2i(-99999, -99999)
 	var found_sub := Vector2i(0, 0)
@@ -92,6 +103,8 @@ func _update_mouse_selection() -> void:
 
 	# 【修复关键】：只要鼠标选区改变，或者【角色移动到了新格子 (player_moved)】，立刻重绘！
 	if target_cell != _last_target_cell or target_sub_cell != _last_target_sub_cell or player_moved:
+	# 只要选区改变、角色移动或切换了物品，立刻重绘！
+	if target_cell != _last_target_cell or target_sub_cell != _last_target_sub_cell or player_moved or item_changed:
 		_last_target_cell = target_cell
 		_last_target_sub_cell = target_sub_cell
 		queue_redraw()
@@ -105,6 +118,12 @@ func _draw() -> void:
 	var active_item: Dictionary = {}
 	if hotbar_node and hotbar_node.has_method("get_active_item"):
 		active_item = hotbar_node.call("get_active_item")
+
+	# 【核心规则】：只有当前手持可放置道具（0=TILE 瓷砖, 1=OBJECT 作物/树木）时才绘制网格！
+	var item_type: int = active_item.get("type", -1)
+	if item_type != 0 and item_type != 1:
+		return
+
 	var is_micro_crop: bool = (active_item.get("grid_size", Vector2i(4, 4)) == Vector2i(1, 1))
 
 	var grid_lines := PackedVector2Array()

@@ -1,15 +1,15 @@
 # hotbar.gd —— 底部物品栏控制器
 extends CanvasLayer
 
-# 定义物品类型枚举：瓷砖 或 独立场景物体
-enum ItemType { TILE, OBJECT }
+enum ItemType { TILE, OBJECT, WEAPON }
 
-# 1. 配置 5 个槽位的物品数据
-# 配置物品栏槽位（清空旧瓷砖，换入当前 64x32 新瓷砖）
 var items: Array[Dictionary] = [
-	{ "type": ItemType.TILE,   "name": "泥土砖", "atlas": Vector2i(0, 0) },
+	# 1 号位：木棍法杖（武器）
+	{ "type": ItemType.WEAPON, "name": "木棍法杖", "icon": "res://resources/object/weapon/stick/stick.png", "weapon_tex": "res://resources/object/weapon/stick/stick.png" },
+	# 2 号位：泥土砖（地砖）
+	{ "type": ItemType.TILE,   "name": "新泥土砖", "atlas": Vector2i(0, 0) },
+	# 3 号位：小麦（农作物）
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
-	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) }
 ]
 
 # 当前选中的槽位索引（0 ~ 4）
@@ -70,8 +70,8 @@ func _load_slot_icons() -> void:
 				atlas_tex.atlas = tile_source.texture
 				atlas_tex.region = tile_source.get_tile_texture_region(item_data["atlas"])
 				icon_rect.texture = atlas_tex
-		elif item_data["type"] == ItemType.OBJECT:
-			# 物体：直接加载指定的图标贴图
+		elif item_data["type"] == ItemType.OBJECT or item_data["type"] == ItemType.WEAPON:
+			# 物体与武器：直接加载指定的图标贴图
 			if item_data.has("icon"):
 				icon_rect.texture = load(item_data["icon"])
 

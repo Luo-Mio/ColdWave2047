@@ -1,26 +1,29 @@
-# animation_controller.gd —— 角色动画控制组件（精准适配 4 轴行走动画与待机定格）
+# animation_controller.gd —— 角色动画控制器（朝向严格锁定鼠标，支持平移倒退走）
 class_name AnimationController
 extends Node
 
 var current_anim: String = "walkSouth"
 
-# 根据输入方向更新动画
-func update_animation(input_dir: Vector2, sprite: AnimatedSprite2D) -> void:
+# 根据【鼠标瞄准方向】决定朝向，根据【WASD移动输入】决定播放/待机
+func update_animation(input_dir: Vector2, aim_dir: Vector2, sprite: AnimatedSprite2D) -> void:
 	if sprite == null:
 		return
 
+	# 1. 朝向永远由鼠标所在方位决定！
+	var facing_anim := _get_facing_anim(aim_dir)
+	current_anim = facing_anim
+
+	# 2. 如果玩家有 WASD 移动输入，播放行走动画（支持倒退走）；如果没有，定格在第一帧
 	if input_dir != Vector2.ZERO:
-		var anim := _get_walk_anim(input_dir)
-		if anim != current_anim or not sprite.is_playing():
-			current_anim = anim
+		if sprite.animation != current_anim or not sprite.is_playing():
 			sprite.play(current_anim)
 	else:
-		# 待机时定格在当前朝向的第一帧
 		sprite.stop()
+		sprite.animation = current_anim
 		sprite.frame = 0
 
-# 根据输入向量映射到现有 4 轴动画：walkEast, walkWest, walkNorth, walkSouth
-func _get_walk_anim(dir: Vector2) -> String:
+# 根据鼠标向量映射到 4 轴朝向：East, West, North, South
+func _get_facing_anim(dir: Vector2) -> String:
 	if absf(dir.x) > absf(dir.y):
 		return "walkEast" if dir.x > 0.0 else "walkWest"
 	else:

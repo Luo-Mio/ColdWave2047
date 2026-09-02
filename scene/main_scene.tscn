@@ -109,7 +109,6 @@ collision_visibility_mode = 1
 [node name="selector" type="Node2D" parent="." unique_id=2062074770]
 script = ExtResource("5_x5n27")
 player_path = NodePath("../sortworld/CharacterBody2D")
-interaction_range = null
 
 [node name="sortworld" type="Node2D" parent="." unique_id=2083341332]
 script = ExtResource("3_4wnd8")

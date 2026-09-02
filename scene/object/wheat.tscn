@@ -7,7 +7,7 @@
 script = ExtResource("1_bejiv")
 grid_size = Vector2i(1, 1)
 enable_random_jitter = true
-jitter_size = Vector2(4, 2)
+jitter_size = Vector2(8, 4)
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1036024556]
 texture_filter = 1

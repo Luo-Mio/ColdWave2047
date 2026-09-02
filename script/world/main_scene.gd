@@ -3,13 +3,14 @@ extends Node2D
 
 const BuildManagerScript := preload("res://script/systems/build_manager.gd")
 const WallXRayScript := preload("res://script/systems/wall_xray.gd")
-const AirWallScript := preload("res://script/systems/air_wall.gd") # ← 【新增】
+const AirWallScript := preload("res://script/systems/air_wall.gd")
+const MagicOrbScene := preload("res://scene/particle/magic_orb.tscn")
 
 var tile_layers: Array[TileMapLayer] = []
 var _last_player_cell: Vector2i = Vector2i(-99999, -99999)
 var build_manager: BuildManager
 var wall_xray: WallXRayManager
-var air_wall: StaticBody2D # ← 【新增】
+var air_wall: StaticBody2D
 
 @onready var sort_world: Node2D = $sortworld
 @onready var selector: Node2D = $selector
@@ -64,9 +65,34 @@ func _split_layers_into_rows() -> void:
 				layer.get_cell_alternative_tile(cell)
 			)
 
-# 鼠标输入交由 BuildManager 处理
+# 鼠标输入处理
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
+		var active_item: Dictionary = {}
+		if hotbar_node and hotbar_node.has_method("get_active_item"):
+			active_item = hotbar_node.call("get_active_item")
+
+		# 【武器模式】：只有手持法杖时，左键才发射魔法飞弹！
+		if active_item.get("type") == 2: # 2 = WEAPON
+			if event.button_index == MOUSE_BUTTON_LEFT:
+				var player: Node2D = get_node_or_null("sortworld/CharacterBody2D")
+				if player:
+					var player_ground: Vector2 = player.global_position # 角色在地面平面的真实基底坐标
+					var player_cell := GridData.world_to_cell(player_ground)
+					var p_floor := GridData.get_highest_floor(player_cell)
+					
+					# 胸口屏幕位置
+					var spawn_screen_pos := player_ground + Vector2(0.0, GridData.get_floor_pixel_offset(p_floor) - 8.0)
+					var mouse_pos := get_global_mouse_position()
+					var aim_dir := mouse_pos - spawn_screen_pos
+
+					if aim_dir.length_squared() > 1.0:
+						var orb := MagicOrbScene.instantiate() as Node2D
+						sort_world.add_child(orb)
+						orb.call("launch", aim_dir, player_ground, p_floor)
+			return # 武器模式下不触发地砖建造
+
+		# 【建造模式】：手持地砖或农作物时，左键放置，右键破坏！
 		var cell: Vector2i = selector.get("target_cell")
 		if cell == Vector2i(-99999, -99999):
 			return

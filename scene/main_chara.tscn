@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://dtf4i254omkic" path="res://script/entities/player/main_chara.gd" id="1_0nnbn"]
 [ext_resource type="Texture2D" uid="uid://ngnduc36vmbt" path="res://resources/character/texture/W.png" id="1_atro3"]
+[ext_resource type="Texture2D" uid="uid://0kfq54vngui" path="res://resources/object/weapon/stick/stick.png" id="3_p7jj5"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -156,6 +157,17 @@ texture_filter = 1
 position = Vector2(0, -9)
 sprite_frames = SubResource("SpriteFrames_lfxu0")
 animation = &"walkEast"
+
+[node name="hand" type="Node2D" parent="AnimatedSprite2D" unique_id=879731071]
+position = Vector2(0, 3)
+
+[node name="Sprite2D" type="Sprite2D" parent="AnimatedSprite2D/hand" unique_id=1474030172]
+texture_filter = 1
+position = Vector2(0, 2)
+rotation = 1.5707964
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("3_p7jj5")
+offset = Vector2(0, -8)
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1635535632]
 scale = Vector2(1, 0.5)

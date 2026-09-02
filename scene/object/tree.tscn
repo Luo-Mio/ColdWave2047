@@ -22,7 +22,7 @@ shader_parameter/max_transparency = 1.0
 [node name="Node2D" type="Node2D" unique_id=686197970]
 script = ExtResource("1_lutej")
 enable_random_jitter = true
-jitter_size = Vector2(8, 6)
+jitter_size = Vector2(16, 12)
 break_with_tile = false
 
 [node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
@@ -30,11 +30,12 @@ texture_filter = 1
 material = SubResource("ShaderMaterial_a1rck")
 position = Vector2(-1, -30)
 texture = ExtResource("2_aotr1")
+offset = Vector2(0, -30)
 
 [node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
 texture_filter = 1
 material = SubResource("ShaderMaterial_qvu5t")
-position = Vector2(-1, -30)
+position = Vector2(-1, -60)
 texture = ExtResource("1_dcgk5")
 
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]

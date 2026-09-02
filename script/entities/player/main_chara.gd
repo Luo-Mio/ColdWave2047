@@ -1,4 +1,4 @@
-# main_chara.gd —— 主角控制器（纯净组件装配版）
+# main_chara.gd —— 主角控制器（支持法杖 360° 瞄准与身体锁定鼠标）
 extends CharacterBody2D
 
 const MovementControllerScript := preload("res://script/components/movement_controller.gd")
@@ -8,6 +8,9 @@ const AnimationControllerScript := preload("res://script/components/animation_co
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 @onready var camera: Camera2D = get_node_or_null("Camera2D")
 
+@onready var hand_node: Node2D = find_child("hand", true, false)
+@onready var weapon_sprite: Sprite2D = find_child("Sprite2D", true, false)
+
 @onready var movement: Node = get_node_or_null("MovementController")
 @onready var height_tracker: Node = get_node_or_null("HeightTracker")
 @onready var anim_controller: Node = get_node_or_null("AnimationController")
@@ -15,8 +18,6 @@ const AnimationControllerScript := preload("res://script/components/animation_co
 var layer_no: int = 1000
 var sort_key: float = 0.0
 var foot_y: float = 0.0
-
-var _last_cell: Vector2i = Vector2i(-99999, -99999)
 
 func _ready() -> void:
 	if movement == null:
@@ -34,41 +35,85 @@ func _ready() -> void:
 	_update_sort_key()
 
 func _physics_process(delta: float) -> void:
+	# 1. 角色移动
 	velocity = movement.call("get_movement_velocity")
 	move_and_slide()
 
-	# 2. 楼层高度跟踪与摄像机平滑阻尼
+	# 2. 楼层高度跟踪
 	height_tracker.call("update_height", global_position, animated_sprite, camera, delta)
 
-	# 3. 更新脚底坐标并执行 2.5D 深度排序
-	foot_y = global_position.y
-	_update_sort_key()
+	# 3. 检查当前物品栏是否手持武器
+	var hotbar: Node = get_tree().root.find_child("hotbar", true, false)
+	var is_weapon_mode: bool = false
+	if hotbar and hotbar.has_method("get_active_item"):
+		var active_item: Dictionary = hotbar.call("get_active_item")
+		is_weapon_mode = (active_item.get("type") == 2) # 2 = WEAPON
+		if is_weapon_mode and active_item.has("weapon_tex") and weapon_sprite:
+			if weapon_sprite.texture == null or weapon_sprite.texture.resource_path != active_item["weapon_tex"]:
+				weapon_sprite.texture = load(active_item["weapon_tex"])
 
-	# 4. 驱动 4 向行走/待机定格动画
+	# 4. 计算鼠标瞄准方向
+	var chest_world_pos := global_position + (animated_sprite.position if animated_sprite else Vector2.ZERO)
+	var mouse_world_pos := get_global_mouse_position()
+	var aim_dir := mouse_world_pos - chest_world_pos
 	var input_dir: Vector2 = movement.call("get_input_direction")
-	anim_controller.call("update_animation", input_dir, animated_sprite)
 
-	foot_y = global_position.y
+	# 5. 驱动身体朝向与武器显示
+	if is_weapon_mode:
+		if hand_node:
+			hand_node.visible = true
+		anim_controller.call("update_animation", input_dir, aim_dir, animated_sprite)
+		_update_weapon_rotation(aim_dir)
+	else:
+		if hand_node:
+			hand_node.visible = false
+		anim_controller.call("update_animation", input_dir, input_dir, animated_sprite)
+
+	# 6. 深度排序
 	_update_sort_key()
+
+# 驱动法杖跟随鼠标
+func _update_weapon_rotation(aim_dir: Vector2) -> void:
+	if hand_node and weapon_sprite:
+		hand_node.rotation = aim_dir.angle()
+
+		# 向左瞄准时垂直翻转贴图，防止木棍倒立颠倒
+		var angle_rad := aim_dir.angle()
+		weapon_sprite.flip_v = (absf(angle_rad) > PI * 0.5)
+
+		# 朝上方（北）瞄准时把法杖放到角色背后，朝下方（南）瞄准时放在角色身前！
+		hand_node.show_behind_parent = (aim_dir.y < 0.0)
 
 func _update_sort_key() -> void:
 	var current_cell := GridData.world_to_cell(global_position)
 	var base_key := GridData.cell_to_sort_key(current_cell)
 	
-	# 64x32 菱形高度为 32px，在当前大格内平滑映射为连续微深度（0.0 ~ 15.0）
 	var cell_center := GridData.cell_to_world(current_cell)
 	var rel_y := clampf((global_position.y - cell_center.y) + 16.0, 0.0, 32.0)
 	var sub_depth := (rel_y / 32.0) * 15.0
 	
 	sort_key = base_key + sub_depth
+	foot_y = global_position.y
 
 	var parent_sort := get_parent()
 	if parent_sort and parent_sort.has_method("insert_sort"):
 		parent_sort.call("insert_sort", self)
 
-	# 供全局 Shader（树干与高墙透视）获取角色的视觉身体/脸部世界坐标
+# 供全局 Shader（树干与高墙透视）获取角色的视觉身体/脸部世界坐标
 func get_visual_foot_position() -> Vector2:
 	if animated_sprite:
-		# animated_sprite.global_position 已包含真实楼层高度抬升，上移 6px 精准对齐脸部！
 		return animated_sprite.global_position + Vector2(0.0, 2.0)
 	return global_position
+
+# 外部（如物品栏切换）调用此函数更新武器状态
+func update_held_item(item_data: Dictionary) -> void:
+	if item_data.is_empty() or item_data.get("type") != 2: # 2 = WEAPON
+		# 拿着地砖、小麦或空手：收起武器，隐藏手部
+		if hand_node:
+			hand_node.visible = false
+	else:
+		# 拿着武器：亮出武器并动态更换贴图！
+		if hand_node and weapon_sprite:
+			hand_node.visible = true
+			if item_data.has("weapon_tex"):
+				weapon_sprite.texture = load(item_data["weapon_tex"])
