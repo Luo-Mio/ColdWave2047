@@ -2,8 +2,8 @@
 class_name HeightTracker
 extends Node
 
-# 瓷砖锚点在视觉底面,角色站在顶面 → 额外上移 8px
-@export var foot_offset: float = -8.0
+# 32x32 角色贴图中心在 (0, -12)，确保角色脚底刚好落在碰撞体 (0, 0)
+@export var foot_offset: float = -12.0
 
 @export_group("摄像机高度阻尼曲线")
 @export var enable_camera_height_smooth: bool = true
@@ -17,6 +17,7 @@ func update_height(player_pos: Vector2, sprite: AnimatedSprite2D, camera: Camera
 	current_floor = GridData.get_highest_floor(cell)
 
 	if sprite:
+		# 楼层抬升 = 楼层标高 (-floor * 16px) + 身体贴图中心偏移 (-12px)
 		sprite.position.y = GridData.get_floor_pixel_offset(current_floor) + foot_offset
 
 	if camera and sprite:

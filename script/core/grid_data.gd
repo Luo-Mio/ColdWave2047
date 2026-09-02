@@ -37,7 +37,7 @@ func world_to_cell(world_pos: Vector2) -> Vector2i:
 func cell_to_world(cell: Vector2i) -> Vector2:
 	if layers.is_empty():
 		return Vector2.ZERO
-	return layers[0].map_to_local(cell)
+	return layers[0].map_to_local(cell) + layers[0].position
 
 # 【4x4 微网格核心算法】给定大格内 (0~3, 0~3) 子格及物体大小，计算出世界相对偏移像素
 func sub_cell_to_local_offset(sub_cell: Vector2i, size: Vector2i = Vector2i(1, 1)) -> Vector2:
@@ -71,9 +71,9 @@ func cell_to_sort_key(cell: Vector2i) -> float:
 func get_highest_floor(cell: Vector2i) -> int:
 	return highest_floor.get(cell_key(cell), 0)
 	
-# 楼层号 → Y 像素偏移
+# 楼层号 → Y 像素偏移 (0层=0px, 1层=-16px, 2层=-32px)
 func get_floor_pixel_offset(floor: int) -> float:
-	return -float(floor + 1) * FLOOR_HEIGHT
+	return -float(floor) * FLOOR_HEIGHT
 
 # 某格是否有砖
 func has_any_tile(cell: Vector2i) -> bool:

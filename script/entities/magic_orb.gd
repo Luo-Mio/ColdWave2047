@@ -1,60 +1,94 @@
-# magic_orb.gd —— 2.5D 地面基准精准排序魔法飞弹
+# magic_orb.gd —— 真实 3D 弹道与等距深度排序飞弹实体
 class_name MagicOrb
 extends Node2D
 
-@export var speed: float = 400.0   # 飞行速度 (像素/秒)
-var velocity: Vector2 = Vector2.ZERO
-var lifetime: float = 2.5          # 飞行寿命（秒）
+@export var speed: float = 420.0             # 飞行初速度 (像素/秒)
+@export var gravity: float = 0.0             # 3D 垂直重力下坠 (0 = 直线魔法流, >0 = 抛物线)
 
-# 2.5D 深度与高度追踪
-var ground_pos: Vector2 = Vector2.ZERO   # 飞弹在地面平面的投影位置
-var height_offset: float = -8.0         # 飞行悬浮高度 (胸口偏移)
-var floor_level: int = 0                # 所在楼层高度
+# 3D 物理状态
+var ground_pos: Vector2 = Vector2.ZERO       # 地面投影坐标 (像素)
+var height_px: float = 8.0                   # 垂直离地高度 (像素, 16px = 1层楼)
+var velocity_ground: Vector2 = Vector2.ZERO  # 地面平移速度
+var velocity_z: float = 0.0                  # 垂直爬升/下坠速度 (像素/秒)
+var lifetime: float = 2.5                    # 最大寿命 (秒)
 
+# 2.5D 深度排序属性
 var layer_no: int = 1000
 var sort_key: float = 0.0
 var foot_y: float = 0.0
 
-# 外部发射时调用
-func launch(dir: Vector2, start_ground_pos: Vector2, start_floor: int) -> void:
-	ground_pos = start_ground_pos
-	floor_level = start_floor
+# 3D 发射接口：接收 3D 单位瞄准向量、角色地面坐标与站立楼层
+func launch_3d(aim_3d: Vector3, start_ground: Vector2, start_floor: int) -> void:
+	ground_pos = start_ground
+	# 站在 start_floor 楼层时，飞弹从该楼层表面上方 +10 像素（胸口位置）出膛
+	height_px = float(start_floor) * 16.0 + 10.0
 	
-	var norm_dir := dir.normalized()
-	velocity = norm_dir * speed
-	rotation = norm_dir.angle()
+	# 1. 严格使用等距 3D 投影基底计算屏幕分量，确保与激光瞄准线 100% 同构重合！
+	var sx: float = (aim_3d.x - aim_3d.y) * 32.0
+	var sy_ground: float = (aim_3d.x + aim_3d.y) * 16.0
+	var sz: float = aim_3d.z * 16.0
 	
-	_update_visual_and_sorting()
+	var total_screen_vec := Vector2(sx, sy_ground - sz)
+	var scale_factor: float = speed / maxf(total_screen_vec.length(), 0.001)
+	
+	# 2. 地面平移速度向量 与 垂直爬升/俯冲速度
+	velocity_ground = Vector2(sx, sy_ground) * scale_factor
+	velocity_z = sz * scale_factor
+	
+	_update_3d_transform_and_sorting()
+
+# 兼容旧版 2D 接口
+func launch(dir_2d: Vector2, start_ground: Vector2, start_floor: int) -> void:
+	launch_3d(Vector3(dir_2d.x, dir_2d.y, 0.0).normalized(), start_ground, start_floor)
 
 func _physics_process(delta: float) -> void:
-	# 1. 地面投影平滑前进
-	ground_pos += velocity * delta
+	# 1. 3D 空间物理推进
+	ground_pos += velocity_ground * delta
+	height_px += velocity_z * delta
+	velocity_z -= gravity * delta
 
-	# 2. 实时更新屏幕空中位置与精准 2.5D 深度
-	_update_visual_and_sorting()
+	# 2. 更新 2.5D 屏幕位置与 3D 空间深度
+	_update_3d_transform_and_sorting()
 
-	# 3. 超时自动销毁
+	# 3. 地形高度与触地/撞墙检测
+	var current_cell := GridData.world_to_cell(ground_pos)
+	if GridData.has_any_tile(current_cell):
+		var terrain_floor := GridData.get_highest_floor(current_cell)
+		var terrain_surface_px := float(terrain_floor) * 16.0
+		# 只有当高度跌落进当前格子的地表表面以下时才判定为撞地销毁
+		if height_px <= terrain_surface_px - 2.0:
+			queue_free()
+			return
+
+	# 4. 超时销毁
 	lifetime -= delta
 	if lifetime <= 0.0:
 		queue_free()
 
-# 核心：用地面影子计算真实排序，用空中坐标渲染贴图
-func _update_visual_and_sorting() -> void:
-	# 1. 空中视觉位置 = 地面位置 + 楼层抬升 + 胸口悬浮高度
-	var floor_y_lift := GridData.get_floor_pixel_offset(floor_level)
-	global_position = ground_pos + Vector2(0.0, floor_y_lift + height_offset)
+# 核心：计算 3D 空间屏幕投影与 3D 视线深度
+func _update_3d_transform_and_sorting() -> void:
+	# 1. 屏幕视觉位置 = 地面位置 - 空中高度抬升 (向上为负 Y)
+	global_position = ground_pos - Vector2(0.0, height_px)
 	foot_y = ground_pos.y
 
-	# 2. 基于纯净的地面坐标计算 sort_key，绝不产生坐标跳变！
+	# 2. 飞弹自身朝向（始终沿着屏幕运动速度切线）
+	var screen_velocity := velocity_ground - Vector2(0.0, velocity_z)
+	if screen_velocity.length_squared() > 0.1:
+		rotation = screen_velocity.angle()
+
+	# 3. 黄金 3D 视线深度公式：
+	#    sort_key = (地面大格基准深度) + (格内微深度) + (3D空中高度加成！)
 	var current_cell := GridData.world_to_cell(ground_pos)
 	var base_key := GridData.cell_to_sort_key(current_cell)
 	var cell_center := GridData.cell_to_world(current_cell)
 	var rel_y := clampf((ground_pos.y - cell_center.y) + 16.0, 0.0, 32.0)
 	var sub_depth := (rel_y / 32.0) * 15.0
 	
-	sort_key = base_key + sub_depth
+	# 【最核心关键】：将垂直高度 height_px 转化为深度权重加成！
+	# 飞得越高，深度越大，稳稳呈现在大树和地砖的上层！
+	sort_key = base_key + sub_depth + height_px
 
-	# 3. 通知 sort_world 平稳排位
+	# 4. 通知 sort_world 动态排位
 	var parent_sort := get_parent()
 	if parent_sort and parent_sort.has_method("insert_sort"):
 		parent_sort.call("insert_sort", self)
