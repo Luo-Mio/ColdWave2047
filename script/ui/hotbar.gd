@@ -8,8 +8,10 @@ var items: Array[Dictionary] = [
 	{ "type": ItemType.WEAPON, "name": "木棍法杖", "icon": "res://resources/object/weapon/stick/stick.png", "weapon_tex": "res://resources/object/weapon/stick/stick.png" },
 	# 2 号位：泥土砖（地砖）
 	{ "type": ItemType.TILE,   "name": "新泥土砖", "atlas": Vector2i(0, 0) },
-	# 3 号位：小麦（农作物）
+	# 3 号位：小麦（农作物 1x1 微格）
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
+	# 4 号位：秋季大树（物体 4x4 整格）
+	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
 ]
 
 # 当前选中的槽位索引（0 ~ 4）

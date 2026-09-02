@@ -101,8 +101,6 @@ func _update_mouse_selection() -> void:
 	target_cell = found_cell
 	target_sub_cell = found_sub
 
-	# 【修复关键】：只要鼠标选区改变，或者【角色移动到了新格子 (player_moved)】，立刻重绘！
-	if target_cell != _last_target_cell or target_sub_cell != _last_target_sub_cell or player_moved:
 	# 只要选区改变、角色移动或切换了物品，立刻重绘！
 	if target_cell != _last_target_cell or target_sub_cell != _last_target_sub_cell or player_moved or item_changed:
 		_last_target_cell = target_cell
