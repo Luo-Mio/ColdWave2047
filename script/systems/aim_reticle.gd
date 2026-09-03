@@ -56,7 +56,7 @@ func _draw() -> void:
 	var r_dead: float = aim_controller.radius_deadzone
 	_draw_isometric_ellipse(ground_center, r_dead, r_dead * 0.5, deadzone_color, 1.0)
 
-	# 5. 在基准水平环上绘制方位角准心光标（严格与鼠标射线 100% 共线对齐，0 像素偏移！）
+	# 5. 在基准水平环上绘制方位角准心光标（严格与鼠标射线 100% 共线对齐）
 	var mouse_screen: Vector2 = get_global_mouse_position()
 	var delta_ground: Vector2 = mouse_screen - ground_center
 	var r_iso: float = sqrt(delta_ground.x * delta_ground.x + 4.0 * delta_ground.y * delta_ground.y)
@@ -67,21 +67,50 @@ func _draw() -> void:
 	else:
 		ring_cursor_pos = ground_center + Vector2(r0, 0.0)
 
+	# 绘制从地面中心到基准环准心的【地面基准射线】
+	draw_line(ground_center, ring_cursor_pos, Color(0.2, 0.9, 1.0, 0.35), 1.0)
 	draw_circle(ring_cursor_pos, 3.5, cursor_color)
 	draw_arc(ring_cursor_pos, 6.0, 0.0, TAU, 16, cursor_color, 1.0)
 
-	# 6. 绘制从胸口射出的 3D 激光瞄准虚线
+	# 6. 计算方向：无俯仰角基准方向 vs 3D 修正瞄准方向
+	var base_screen_dir: Vector2 = (ring_cursor_pos - ground_center).normalized()
 	var aim_screen_dir: Vector2 = aim_controller.get_screen_aim_direction()
 	var laser_len: float = 180.0
-	var laser_end: Vector2 = chest_origin + aim_screen_dir * laser_len
 	
-	# 绘制虚线激光
-	_draw_dashed_line(chest_origin, laser_end, laser_color, 1.5, 6.0, 4.0)
+	# 绘制从胸口射出的【水平基准瞄准线】(半透明青白虚线，θ = 0°)
+	var base_end: Vector2 = chest_origin + base_screen_dir * (laser_len * 0.85)
+	_draw_dashed_line(chest_origin, base_end, Color(0.3, 0.8, 1.0, 0.3), 1.0, 4.0, 4.0)
 
-	# 7. 激光端点光晕与俯仰角信息
+	# 绘制从胸口射出的【3D 修正激光瞄准线】(亮金黄虚线)
+	var laser_end: Vector2 = chest_origin + aim_screen_dir * laser_len
+	_draw_dashed_line(chest_origin, laser_end, laser_color, 1.8, 6.0, 3.5)
+
+	# 7. 夹角弧线与俯仰角数字 HUD 显示
 	var pitch_deg: float = aim_controller.get_pitch_degrees()
-	var end_color: Color = Color(1.0, 0.4, 0.4, 0.8) if pitch_deg < -5.0 else (Color(0.4, 1.0, 0.4, 0.8) if pitch_deg > 5.0 else cursor_color)
-	draw_circle(laser_end, 2.5, end_color)
+	var end_color: Color = Color(1.0, 0.4, 0.4, 0.9) if pitch_deg < -3.0 else (Color(0.2, 1.0, 0.5, 0.9) if pitch_deg > 3.0 else cursor_color)
+	draw_circle(laser_end, 3.0, end_color)
+
+	# 在两线夹角处绘制角度扇形弧与度数文字
+	var arc_radius: float = 52.0
+	var angle_base := base_screen_dir.angle()
+	var angle_laser := aim_screen_dir.angle()
+	
+	if absf(pitch_deg) >= 1.0:
+		var diff := wrapf(angle_laser - angle_base, -PI, PI)
+		var start_a := angle_base
+		var end_a := angle_base + diff
+		var min_a := minf(start_a, end_a)
+		var max_a := maxf(start_a, end_a)
+		
+		# 绘制夹角弧线
+		draw_arc(chest_origin, arc_radius, min_a, max_a, 16, end_color, 1.5)
+		
+		# 在夹角正中间绘制角度文字（例如 +24° 或 -18°）
+		var mid_a := (min_a + max_a) * 0.5
+		var text_pos := chest_origin + Vector2(cos(mid_a), sin(mid_a)) * (arc_radius + 16.0) + Vector2(-10.0, 4.0)
+		var text_str := "%+d°" % int(round(pitch_deg))
+		var default_font: Font = ThemeDB.fallback_font
+		draw_string(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_CENTER, -1, 11, end_color)
 
 # 绘制 2:1 等距椭圆辅助函数
 func _draw_isometric_ellipse(center: Vector2, rx: float, ry: float, color: Color, width: float) -> void:

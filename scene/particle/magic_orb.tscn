@@ -2,6 +2,23 @@
 
 [ext_resource type="Script" uid="uid://cm0k3uyptrgqv" path="res://script/entities/magic_orb.gd" id="1_magicorb"]
 
+[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_hjb8m"]
+particle_flag_disable_z = true
+emission_shape = 1
+emission_sphere_radius = 4.0
+angle_min = 1.0728835e-05
+angle_max = 1.0728835e-05
+direction = Vector3(-1, 0, 0)
+spread = 15.0
+orbit_velocity_min = 9.49949e-08
+orbit_velocity_max = 9.49949e-08
+radial_velocity_min = 5.9999776
+radial_velocity_max = 5.9999776
+gravity = Vector3(0, 0, 0)
+scale_min = 1.5
+scale_max = 2.5
+color = Color(0.43529412, 1, 0.92156863, 1)
+
 [sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_lfxu0"]
 lifetime_randomness = 0.4
 particle_flag_disable_z = true
@@ -20,36 +37,20 @@ radial_velocity_max = 4.9999776
 gravity = Vector3(0, 0, 0)
 scale_max = 2.0
 
-[sub_resource type="ParticleProcessMaterial" id="ParticleProcessMaterial_hjb8m"]
-particle_flag_disable_z = true
-emission_shape = 1
-emission_sphere_radius = 4.0
-angle_min = 1.0728835e-05
-angle_max = 1.0728835e-05
-direction = Vector3(-1, 0, 0)
-spread = 15.0
-orbit_velocity_min = 9.49949e-08
-orbit_velocity_max = 9.49949e-08
-radial_velocity_min = 5.9999776
-radial_velocity_max = 5.9999776
-gravity = Vector3(0, 0, 0)
-scale_min = 1.5
-scale_max = 2.5
-color = Color(0.43529412, 1, 0.92156863, 1)
-
 [node name="magicorb" type="Node2D" unique_id=583883174]
 script = ExtResource("1_magicorb")
-
-[node name="GPUParticles2D" type="GPUParticles2D" parent="." unique_id=554296242]
-amount = 15
-lifetime = 0.3
-interp_to_end = 0.272
-speed_scale = 0.5
-randomness = 1.0
-process_material = SubResource("ParticleProcessMaterial_lfxu0")
+gravity = 800.0
 
 [node name="GPUParticles2D2" type="GPUParticles2D" parent="." unique_id=1007068904]
 amount = 45
 lifetime = 0.25
 speed_scale = 10.0
 process_material = SubResource("ParticleProcessMaterial_hjb8m")
+
+[node name="GPUParticles2D" type="GPUParticles2D" parent="GPUParticles2D2" unique_id=554296242]
+amount = 15
+lifetime = 0.3
+interp_to_end = 0.272
+speed_scale = 0.5
+randomness = 1.0
+process_material = SubResource("ParticleProcessMaterial_lfxu0")

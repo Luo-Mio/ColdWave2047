@@ -7,6 +7,7 @@ const AirWallScript := preload("res://script/systems/air_wall.gd")
 const AimControllerScript := preload("res://script/components/aim_controller.gd")
 const AimReticleScript := preload("res://script/systems/aim_reticle.gd")
 const MagicOrbScene := preload("res://scene/particle/magic_orb.tscn")
+const LightOrbScene := preload("res://scene/particle/light.tscn")
 
 var tile_layers: Array[TileMapLayer] = []
 var _last_player_cell: Vector2i = Vector2i(-99999, -99999)
@@ -85,8 +86,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			active_item = hotbar_node.call("get_active_item")
 
 		# 【武器模式】：只有手持法杖时，左键才发射魔法飞弹！
+		# 【武器模式】：手持法杖时，左键发射 MagicOrb，右键发射 Light！
 		if active_item.get("type") == 2: # 2 = WEAPON
 			if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT:
 				var player: Node2D = get_node_or_null("sortworld/CharacterBody2D")
 				if player and aim_controller:
 					var player_ground: Vector2 = player.global_position # 角色在地面平面的真实基底坐标
@@ -96,6 +99,8 @@ func _unhandled_input(event: InputEvent) -> void:
 					var aim_3d: Vector3 = aim_controller.aim_vector_3d
 					if aim_3d.length_squared() > 0.01:
 						var orb := MagicOrbScene.instantiate() as Node2D
+						var scene_to_spawn: PackedScene = MagicOrbScene if event.button_index == MOUSE_BUTTON_LEFT else LightOrbScene
+						var orb := scene_to_spawn.instantiate() as Node2D
 						sort_world.add_child(orb)
 						orb.call("launch_3d", aim_3d, player_ground, p_floor)
 			return # 武器模式下不触发地砖建造

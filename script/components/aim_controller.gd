@@ -6,7 +6,7 @@ extends Node
 @export var radius_deadzone: float = 25.0    # 内圈死区半径 (像素)
 @export var radius_horizontal: float = 120.0 # 基准水平射击半径 (θ = 0°)
 @export var radius_max: float = 260.0        # 最大仰角半径
-@export var max_pitch_deg: float = 45.0      # 最大俯仰角 (±45度)
+@export var max_pitch_deg: float = 75      # 最大俯仰角 (±45度)
 
 # 当前计算状态
 var azimuth_rad: float = 0.0                 # 地面 360° 水平方位角 (0 ~ 2π)
