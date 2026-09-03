@@ -85,10 +85,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		if hotbar_node and hotbar_node.has_method("get_active_item"):
 			active_item = hotbar_node.call("get_active_item")
 
-		# 【武器模式】：只有手持法杖时，左键才发射魔法飞弹！
 		# 【武器模式】：手持法杖时，左键发射 MagicOrb，右键发射 Light！
 		if active_item.get("type") == 2: # 2 = WEAPON
-			if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT:
 				var player: Node2D = get_node_or_null("sortworld/CharacterBody2D")
 				if player and aim_controller:
@@ -98,7 +96,6 @@ func _unhandled_input(event: InputEvent) -> void:
 					
 					var aim_3d: Vector3 = aim_controller.aim_vector_3d
 					if aim_3d.length_squared() > 0.01:
-						var orb := MagicOrbScene.instantiate() as Node2D
 						var scene_to_spawn: PackedScene = MagicOrbScene if event.button_index == MOUSE_BUTTON_LEFT else LightOrbScene
 						var orb := scene_to_spawn.instantiate() as Node2D
 						sort_world.add_child(orb)

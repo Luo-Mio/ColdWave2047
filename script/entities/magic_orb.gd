@@ -23,17 +23,20 @@ func launch_3d(aim_3d: Vector3, start_ground: Vector2, start_floor: int) -> void
 	# 站在 start_floor 楼层时，飞弹从该楼层表面上方 +10 像素（胸口位置）出膛
 	height_px = float(start_floor) * 16.0 + 10.0
 	
-	# 1. 严格使用等距 3D 投影基底计算屏幕分量，确保与激光瞄准线 100% 同构重合！
-	var sx: float = (aim_3d.x - aim_3d.y) * 32.0
-	var sy_ground: float = (aim_3d.x + aim_3d.y) * 16.0
-	var sz: float = aim_3d.z * 16.0
+	# 1. 纯净 3D 物理速度分解
+	var horiz_length := sqrt(aim_3d.x * aim_3d.x + aim_3d.y * aim_3d.y)
+	var v_horiz := speed * horiz_length
+	velocity_z = aim_3d.z * speed
 	
-	var total_screen_vec := Vector2(sx, sy_ground - sz)
-	var scale_factor: float = speed / maxf(total_screen_vec.length(), 0.001)
-	
-	# 2. 地面平移速度向量 与 垂直爬升/俯冲速度
-	velocity_ground = Vector2(sx, sy_ground) * scale_factor
-	velocity_z = sz * scale_factor
+	# 2. 真实 2:1 等距地面速度分解 (X轴全速, Y轴压缩为 0.5 倍，形成严格 2:1 椭圆地面落点)
+	if horiz_length > 0.001:
+		var gx := aim_3d.x / horiz_length
+		var gy := aim_3d.y / horiz_length
+		var cos_a := (gx - gy) / sqrt(2.0)
+		var sin_a := (gx + gy) / sqrt(2.0)
+		velocity_ground = Vector2(cos_a, sin_a * 0.5) * v_horiz
+	else:
+		velocity_ground = Vector2.ZERO
 	
 	_update_3d_transform_and_sorting()
 
