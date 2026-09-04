@@ -140,13 +140,13 @@ animations = [{
 }]
 
 [node name="CharacterBody2D" type="CharacterBody2D" unique_id=240145075]
+scale = Vector2(2, 2)
 collision_layer = 4
 collision_mask = 6
 motion_mode = 1
 script = ExtResource("1_0nnbn")
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=733103301]
-zoom = Vector2(2, 2)
 process_callback = 0
 position_smoothing_enabled = true
 editor_draw_limits = true

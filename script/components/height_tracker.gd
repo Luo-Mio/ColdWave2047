@@ -16,9 +16,19 @@ func update_height(player_pos: Vector2, sprite: AnimatedSprite2D, camera: Camera
 	var cell := GridData.world_to_cell(player_pos)
 	current_floor = GridData.get_highest_floor(cell)
 
+	var parent_node := get_parent() as Node2D
+	var s_y := parent_node.scale.y if (parent_node and parent_node.scale.y != 0.0) else 1.0
+	var floor_offset := GridData.get_floor_pixel_offset(current_floor)
+
 	if sprite:
-		# 楼层抬升 = 楼层标高 (-floor * 16px) + 身体贴图中心偏移 (-12px)
-		sprite.position.y = GridData.get_floor_pixel_offset(current_floor) + foot_offset
+		# 换算局部缩放：消除 CharacterBody2D 设置 scale (如 2x) 带来的高度翻倍 Bug！
+		sprite.position.y = (floor_offset / s_y) + foot_offset
+
+	# 同步赋予角色碰撞箱楼层高度加成
+	if parent_node:
+		var col := parent_node.get_node_or_null("CollisionPolygon2D") as CollisionPolygon2D
+		if col:
+			col.position.y = floor_offset / s_y
 
 	if camera and sprite:
 		var target_camera_y := sprite.position.y

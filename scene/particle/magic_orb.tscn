@@ -39,6 +39,7 @@ scale_max = 2.0
 
 [node name="magicorb" type="Node2D" unique_id=583883174]
 script = ExtResource("1_magicorb")
+speed = 520.0
 gravity = 800.0
 
 [node name="GPUParticles2D2" type="GPUParticles2D" parent="." unique_id=1007068904]
