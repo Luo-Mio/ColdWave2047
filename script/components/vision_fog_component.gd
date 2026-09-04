@@ -20,7 +20,17 @@ extends Node
 
 @export_group("透视与全屏黑雾模式")
 # 是否在全屏渲染黑色迷雾覆盖层 (true = 开启半透明黑色阴影作为视觉辅助，false = 彻底取消地面阴影)
-@export var enable_black_fog_overlay: bool = true
+@export var enable_black_fog_overlay: bool = true:
+	set(v):
+		enable_black_fog_overlay = v
+		if is_instance_valid(fog_rect):
+			fog_rect.visible = enable_black_fog_overlay
+# 角色背后盲区是否渲染黑色半透明遮罩 (false = 关闭背后的黑色遮罩，保持地面原色；true = 背后呈现黑色阴影)
+@export var enable_rear_fog: bool = false:
+	set(v):
+		enable_rear_fog = v
+		if is_instance_valid(fog_drawer):
+			fog_drawer.queue_redraw()
 # 是否允许生物透过半透明树冠显现 (true = 屏幕内生物始终可见，可透过半透明树叶看清敌友)
 @export var show_creatures_through_canopy: bool = true
 
@@ -189,7 +199,7 @@ func _physics_process(delta: float) -> void:
 		# 脏标记智能重绘：仅当摄像机位移、角色位移、朝向旋转或阴影形状变动时才重绘，静止时 0 额外 CPU/GPU 消耗！
 		var facing_dir: Vector2 = entity.call("get_facing_direction") if entity.has_method("get_facing_direction") else Vector2.DOWN
 		var facing_angle: float = facing_dir.angle()
-		var rotated: bool = (vision_fov < 359.0) and absf(wrapf(facing_angle - _last_facing_angle, -PI, PI)) > 0.015
+		var rotated: bool = (enable_rear_fog and vision_fov < 359.0) and absf(wrapf(facing_angle - _last_facing_angle, -PI, PI)) > 0.015
 		var threshold_sq := move_threshold * move_threshold
 		var moved := player_pos.distance_squared_to(_last_draw_player_pos) > threshold_sq or cam_pos.distance_squared_to(_last_draw_pos) > threshold_sq
 		if is_instance_valid(fog_drawer) and (moved or quads_changed or rotated or _last_draw_pos == Vector2(-99999, -99999)):
@@ -545,15 +555,11 @@ func _on_fog_drawer_draw() -> void:
 	if entity.has_method("get_visual_foot_position"):
 		player_pos = entity.call("get_visual_foot_position")
 
-	# 1. 视口全屏填充为全黑 (R=0，代表默认背后盲区与视线外阴影)
-	fog_drawer.draw_rect(screen_rect, Color(0, 0, 0, 1))
+	if enable_rear_fog and vision_fov < 359.0:
+		# 1. 开启背后遮罩模式：视口全屏填充为全黑 (R=0，代表背后盲区为黑色半透明阴影)
+		fog_drawer.draw_rect(screen_rect, Color(0, 0, 0, 1))
 
-	# 2. 正向视锥点亮：以角色为中心，绘制视野扇形 (R=1)
-	if vision_fov >= 359.0:
-		# 360° 全景模式：全屏点亮
-		fog_drawer.draw_rect(screen_rect, Color(1, 0, 0, 1))
-	else:
-		# 扇形视锥模式 (例如 200° 扇形)
+		# 2. 正向视锥点亮：以角色为中心，绘制视野扇形 (R=1)
 		var facing_dir: Vector2 = entity.call("get_facing_direction") if entity.has_method("get_facing_direction") else Vector2.DOWN
 		var base_angle: float = facing_dir.angle()
 		var half_fov: float = deg_to_rad(vision_fov * 0.5)
@@ -570,6 +576,9 @@ func _on_fog_drawer_draw() -> void:
 			_fov_pts[s + 1] = player_pos + Vector2(cos(a), sin(a)) * radius
 
 		fog_drawer.draw_polygon(_fov_pts, _fov_colors)
+	else:
+		# 1. 关闭背后黑色遮罩：全屏点亮为可见 (R=1，背后地面保持完全正常原色，不产生黑色半透明扇形)
+		fog_drawer.draw_rect(screen_rect, Color(1, 0, 0, 1))
 
 	# 3. 一次性合批提交所有黑色障碍物阴影四边形 (从 60+ 次 Draw Call 缩减至 1 次底层提交！)
 	if current_quads_count > 0 and not _batched_indices.is_empty():
