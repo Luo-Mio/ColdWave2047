@@ -8,10 +8,11 @@ enum AnimMode {
 }
 
 @export_group("动画朝向与前缀配置")
+## 朝向模式：CARDINAL_4 (正四向: East, West, North, South，适合人形主角)；DIAGONAL_4 (斜四向: EastSouth, EastNorth, WestSouth, WestNorth，适合狼等怪物)
 @export var anim_mode: AnimMode = AnimMode.DIAGONAL_4
-# 待机动画前缀 (如主角为 "walk" 停止或 "idle"，狼为 "idel")
+## 待机静止状态的动画名称前缀 (如主角为 "walk" 停止帧，部分生物为 "idle" 或 "idel")
 @export var idle_prefix: String = "idle"
-# 移动动画前缀 (如主角为 "walk"，狼为 "run")
+## 行走/奔跑移动状态的动画名称前缀 (如主角为 "walk"，狼为 "run")
 @export var move_prefix: String = "walk"
 
 var sprite: AnimatedSprite2D

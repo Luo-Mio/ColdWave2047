@@ -79,6 +79,10 @@ vision_mask_tex={
 "type": "sampler2D",
 "value": ""
 }
+xray_mask_tex={
+"type": "sampler2D",
+"value": ""
+}
 vision_cam_pos={
 "type": "vec2",
 "value": Vector2(0, 0)

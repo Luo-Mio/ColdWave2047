@@ -1,15 +1,14 @@
 shader_type canvas_item;
 
-global uniform vec2 player_world_pos;
+// 全局屏幕空间多实体透视遮罩贴图 (由 vision_fog_component 动态绘制玩家与视野内所有生物)
+global uniform sampler2D xray_mask_tex : filter_linear, repeat_disable;
 
-// 透视中心相对于角色脚底坐标的世界偏移量 (例如 (0, -24) 可将透视中心上移至角色面部/胸部)
+// 保持材质级可选参数兼容性 (供树木或高墙微调透视透光乘率)
+uniform float max_transparency : hint_range(0.0, 1.0) = 1.0;
 uniform vec2 target_offset = vec2(0.0, 0.0);
-
 uniform float rx : hint_range(4.0, 400.0) = 85.0;
 uniform float ry : hint_range(4.0, 400.0) = 55.0;
 uniform float feather : hint_range(0.01, 1.0) = 0.8;
-uniform float max_transparency : hint_range(0.0, 1.0) = 0.85; // 0.0=完全实心, 1.0=中心完全镂空透明
-
 
 // 4x4 经典 Bayer 像素抖动矩阵
 const mat4 bayer = mat4(
@@ -19,36 +18,21 @@ const mat4 bayer = mat4(
     vec4(10.0/16.0,  6.0/16.0,  9.0/16.0,  5.0/16.0)
 );
 
-varying vec2 v_world_pos;
-
-void vertex() {
-    v_world_pos = (MODEL_MATRIX * vec4(VERTEX, 0.0, 1.0)).xy;
-}
-
 void fragment() {
     vec4 col = texture(TEXTURE, UV);
     if (col.a <= 0.001) { discard; }
 
-    // 1. 近身椭圆透视 (针对角色走到树木近处/面部)
-    vec2 target_pos = player_world_pos + target_offset;
-    vec2 diff = (v_world_pos - target_pos) / vec2(rx, ry);
-    float dist_sq = dot(diff, diff);
-    float proximity_mask = 0.0;
-    if (dist_sq < 1.0) {
-        proximity_mask = (1.0 - smoothstep(1.0 - feather, 1.0, dist_sq)) * max_transparency;
-    }
+    // 1. 单次采样屏幕空间多实体透视蒙版 (Alpha 通道记录透视强度，O(1) 恒定开销)
+    float proximity_mask = texture(xray_mask_tex, SCREEN_UV).a * max_transparency;
 
-    // 角色为中心范围内的近身椭圆透视 (针对角色走到树木/物体近处或被遮挡)
-    float final_mask = proximity_mask;
-
-    if (final_mask > 0.0) {
-        // 像素点阵抖动：利用屏幕绝对像素对齐镂空
+    // 2. 经典 4x4 Bayer 像素点阵抖动镂空
+    if (proximity_mask > 0.0) {
         int x = int(FRAGCOORD.x) % 4;
         int y = int(FRAGCOORD.y) % 4;
         float dither_threshold = bayer[x][y];
 
-        // 越靠近中心或视线照射越充分，被剔除的像素越多
-        if (final_mask > dither_threshold) {
+        // 越靠近生物中心，被剔除的像素越多
+        if (proximity_mask > dither_threshold) {
             discard;
         }
     }

@@ -3,47 +3,47 @@ class_name VisionFogComponent
 extends Node
 
 @export_group("视野核心参数")
-# 屏幕边缘外扩裕量 (像素，用于提前加载进入屏幕边缘的障碍物阴影)
+## 屏幕边缘外扩裕量 (像素)。用于在障碍物刚接近屏幕边缘时提前生成阴影，防止边缘闪烁
 @export var screen_margin: float = 96.0
-# 历史探索区域的半黑留底深浅 (0.0=全亮, 0.35=半透明辅助阴影, 1.0=纯黑)
-@export_range(0.0, 1.0) var explored_alpha: float = 0.35
-# 未探索区域的浓雾深浅 (0.5 = 半透明视觉辅助，方便比对视线与障碍物)
-@export_range(0.0, 1.0) var unexplored_alpha: float = 0.50
-# 是否彻底隐藏视线盲区内的其他生物
+## 历史探索区域的留底深浅 (0.0=全亮探索即清空, 0.35=半透明辅助阴影, 1.0=完全纯黑未见)
+@export_range(0.0, 1.0, 0.05) var explored_alpha: float = 0.35
+## 未探索未知区域的浓雾深浅 (0.5=半透明开发调试, 1.0=纯黑伸手不见五指)
+@export_range(0.0, 1.0, 0.05) var unexplored_alpha: float = 0.50
+## 是否隐藏视线盲区内的其他生物。勾选后，躲在阴影或厚墙后的生物将彻底隐形
 @export var enable_creature_hiding: bool = true
-# 遮挡视线的物理障碍层掩码 (Layer 2 树木/高墙 = 2)
+## 遮挡视线的物理障碍层掩码。通常为 Layer 2 障碍物层 (数值 2)
 @export_flags_2d_physics var obstacle_mask: int = 2
-# 屏幕内最大障碍物探测上限 (极限密林测试可调大至 1024)
+## 屏幕内单次最大障碍物探测数量上限。极限密林测试可调大至 1024
 @export var max_obstacles: int = 512
-# 地图边界覆盖尺寸
+## 地图边界覆盖尺寸 (像素)。用于历史探索图尺寸范围映射
 @export var map_bounds: float = 4096.0
 
-@export_group("透视与全屏黑雾模式")
-# 是否在全屏渲染黑色迷雾覆盖层 (true = 开启半透明黑色阴影作为视觉辅助，false = 彻底取消地面阴影)
+@export_group("迷雾表现与点阵模式")
+## 是否在全屏渲染迷雾覆盖层。设为 false 将完全关闭全屏黑雾
 @export var enable_black_fog_overlay: bool = true:
 	set(v):
 		enable_black_fog_overlay = v
 		if is_instance_valid(fog_rect):
 			fog_rect.visible = enable_black_fog_overlay
-# 是否启用纯黑点阵抖动迷雾 (true = 掺杂纯黑像素、边缘少中心深的像素艺术模式; false = 传统平滑半透明 Alpha 遮罩)
+## 是否启用纯黑点阵抖动迷雾。开启后呈现边缘黑点稀疏、中心纯黑的复古像素艺术质感；关闭则为平滑灰色渐变
 @export var enable_dither_fog: bool = true:
 	set(v):
 		enable_dither_fog = v
 		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
 			(fog_rect.material as ShaderMaterial).set_shader_parameter("enable_dither_fog", enable_dither_fog)
-# 点阵像素缩放 (1 = 精细单像素点，2 = 2x2 复古大像素格)
+## 点阵像素缩放颗粒度 (1=精细屏幕像素, 2=2x2复古像素块)
 @export_range(1, 4) var dither_scale: int = 1:
 	set(v):
 		dither_scale = v
 		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
 			(fog_rect.material as ShaderMaterial).set_shader_parameter("dither_scale", dither_scale)
-# 阴影与迷雾边缘过渡羽化宽度 (像素，越宽则边缘黑色像素稀疏过渡区越大)
+## 阴影边缘过渡羽化柔和度 (像素)。数值越大，边缘黑点向中心过渡越宽越柔和
 @export_range(4.0, 80.0) var fog_edge_softness: float = 28.0:
 	set(v):
 		fog_edge_softness = v
 		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
 			(fog_rect.material as ShaderMaterial).set_shader_parameter("edge_softness", fog_edge_softness)
-# 是否允许生物透过半透明树冠显现 (true = 屏幕内生物始终可见，可透过半透明树叶看清敌友)
+## 是否允许生物透过半透明树冠显现 (屏幕内生物处于树叶下时保留可见轮廓)
 @export var show_creatures_through_canopy: bool = true
 
 var entity: CharacterBody2D
@@ -55,6 +55,13 @@ var fog_rect: ColorRect
 var fog_viewport: SubViewport
 var fog_cam: Camera2D
 var fog_drawer: Node2D
+
+# 内部多实体透视遮罩视口与摄像机
+var xray_viewport: SubViewport
+var xray_cam: Camera2D
+var xray_drawer: Node2D
+var _radial_gradient_tex: GradientTexture2D
+var _visible_creatures: Array[Node2D] = []
 
 # 性能优化：静态障碍物碰撞多边形缓存对象
 class ObstacleCacheItem:
@@ -166,6 +173,13 @@ func _physics_process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set("player_facing_dir", facing_dir_global)
 	RenderingServer.global_shader_parameter_set("vision_fov", 360.0)
 
+	# 1.5 同步透视遮罩视口摄像机并触发平滑重绘 (多实体移动实时响应)
+	if is_instance_valid(xray_cam):
+		xray_cam.position = cam_pos
+		xray_cam.zoom = cam_zoom
+	if is_instance_valid(xray_drawer):
+		xray_drawer.queue_redraw()
+
 	# 2. 同步摄像机与屏幕参数给全屏黑雾 Shader (若开启黑雾)
 	if is_instance_valid(fog_rect):
 		fog_rect.visible = enable_black_fog_overlay
@@ -197,6 +211,8 @@ func _physics_process(delta: float) -> void:
 		# 运算屏幕内生物显隐与视线遮蔽 (结合几何阴影体判定与反向射线法)
 		if enable_creature_hiding:
 			_update_creature_visibility(player_pos, screen_world_rect)
+		else:
+			_collect_visible_creatures(screen_world_rect)
 
 		# 脏标记智能重绘：仅当摄像机位移、角色位移或阴影形状变动时才重绘，静止时 0 额外 CPU/GPU 消耗！
 		var threshold_sq := move_threshold * move_threshold
@@ -251,6 +267,7 @@ func _get_screen_world_rect(cam_pos: Vector2, cam_zoom: Vector2, margin: float =
 # 一、生物显隐判定：屏幕视口剔除 + 反向单射线 (极其高效，零 GC 堆分配)
 # -------------------------------------------------------------
 func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> void:
+	_visible_creatures.clear()
 	var space_state := entity.get_world_2d().direct_space_state
 	var creatures := get_tree().get_nodes_in_group("creatures")
 
@@ -289,7 +306,24 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> voi
 		_ray_exclude_rids.pop_back()
 
 		# 射线通畅且未被真实障碍物阻挡 -> 可见；被大树等挡住 -> 隐形！
-		c_node.visible = hit.is_empty()
+		var is_vis := hit.is_empty()
+		c_node.visible = is_vis
+		if is_vis:
+			_visible_creatures.append(c_node)
+
+func _collect_visible_creatures(screen_rect: Rect2) -> void:
+	_visible_creatures.clear()
+	var creatures := get_tree().get_nodes_in_group("creatures")
+	for c in creatures:
+		if not is_instance_valid(c) or c == entity or not (c is Node2D):
+			continue
+		var c_node := c as Node2D
+		var c_foot := c_node.global_position
+		if c_node.has_method("get_visual_foot_position"):
+			c_foot = c_node.call("get_visual_foot_position")
+		if screen_rect.has_point(c_foot):
+			c_node.visible = true
+			_visible_creatures.append(c_node)
 
 # -------------------------------------------------------------
 # 二、几何运算：提取屏幕内障碍物并向屏幕外延展阴影体 (零 GC 内存复用)
@@ -495,6 +529,9 @@ func _setup_fog_rendering_pipeline() -> void:
 			fog_viewport.size = Vector2i(get_viewport().get_visible_rect().size)
 			fog_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 			RenderingServer.global_shader_parameter_set("vision_mask_tex", fog_viewport.get_texture())
+		if is_instance_valid(xray_viewport):
+			xray_viewport.size = Vector2i(get_viewport().get_visible_rect().size)
+			RenderingServer.global_shader_parameter_set("xray_mask_tex", xray_viewport.get_texture())
 	)
 
 	# 广播全局视线遮罩纹理供所有高耸物体 (如树冠) 材质采样
@@ -508,6 +545,26 @@ func _setup_fog_rendering_pipeline() -> void:
 	fog_drawer = Node2D.new()
 	fog_drawer.draw.connect(_on_fog_drawer_draw)
 	fog_viewport.add_child(fog_drawer)
+
+	# 2.5 创建用于绘制多实体透视遮罩的 SubViewport 与光晕纹理
+	_init_radial_gradient()
+	xray_viewport = SubViewport.new()
+	xray_viewport.size = fog_viewport.size
+	xray_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	xray_viewport.transparent_bg = true
+	add_child(xray_viewport)
+
+	xray_cam = Camera2D.new()
+	xray_viewport.add_child(xray_cam)
+
+	xray_drawer = Node2D.new()
+	var xray_mat := CanvasItemMaterial.new()
+	xray_mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	xray_drawer.material = xray_mat
+	xray_drawer.draw.connect(_on_xray_drawer_draw)
+	xray_viewport.add_child(xray_drawer)
+
+	RenderingServer.global_shader_parameter_set("xray_mask_tex", xray_viewport.get_texture())
 
 	# 3. 创建全屏后处理 ColorRect (若未开启全屏黑雾，保持隐藏)
 	fog_rect = ColorRect.new()
@@ -550,4 +607,52 @@ func _on_fog_drawer_draw() -> void:
 			_batched_vertices,
 			_batched_colors
 		)
+
+func _init_radial_gradient() -> void:
+	var grad := Gradient.new()
+	grad.offsets = PackedFloat32Array([0.0, 0.6, 1.0])
+	grad.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0)])
+	_radial_gradient_tex = GradientTexture2D.new()
+	_radial_gradient_tex.gradient = grad
+	_radial_gradient_tex.fill = GradientTexture2D.FILL_RADIAL
+	_radial_gradient_tex.fill_from = Vector2(0.5, 0.5)
+	_radial_gradient_tex.fill_to = Vector2(1.0, 0.5)
+	_radial_gradient_tex.width = 64
+	_radial_gradient_tex.height = 64
+
+# 视口内绘制玩家与视野内所有可见生物的范围透视印章 (写入 xray_mask_tex)
+func _on_xray_drawer_draw() -> void:
+	if entity == null or _radial_gradient_tex == null or not is_instance_valid(xray_drawer):
+		return
+
+	# 1. 绘制玩家自身的透视光晕印章
+	var p_pos := entity.global_position
+	if entity.has_method("get_visual_foot_position"):
+		p_pos = entity.call("get_visual_foot_position")
+	var p_rx: float = entity.get("xray_radius").x if entity.get("xray_radius") != null else 85.0
+	var p_ry: float = entity.get("xray_radius").y if entity.get("xray_radius") != null else 55.0
+	var p_offset: Vector2 = entity.get("xray_offset") if entity.get("xray_offset") != null else Vector2(0.0, -16.0)
+	var p_trans: float = entity.get("xray_max_transparency") if entity.get("xray_max_transparency") != null else 0.85
+	var p_center := p_pos + p_offset
+	var p_rect := Rect2(p_center.x - p_rx, p_center.y - p_ry, p_rx * 2.0, p_ry * 2.0)
+	xray_drawer.draw_texture_rect(_radial_gradient_tex, p_rect, false, Color(1, 1, 1, p_trans))
+
+	# 2. 批量绘制当前屏幕视野内所有可见生物的透视印章
+	for c_node in _visible_creatures:
+		if not is_instance_valid(c_node) or not c_node.is_inside_tree() or c_node == entity:
+			continue
+		if c_node.get("xray_enabled") == false:
+			continue
+
+		var c_pos := c_node.global_position
+		if c_node.has_method("get_visual_foot_position"):
+			c_pos = c_node.call("get_visual_foot_position")
+
+		var c_rx: float = c_node.get("xray_radius").x if c_node.get("xray_radius") != null else 85.0
+		var c_ry: float = c_node.get("xray_radius").y if c_node.get("xray_radius") != null else 55.0
+		var c_offset: Vector2 = c_node.get("xray_offset") if c_node.get("xray_offset") != null else Vector2(0.0, -16.0)
+		var c_trans: float = c_node.get("xray_max_transparency") if c_node.get("xray_max_transparency") != null else 0.85
+		var c_center := c_pos + c_offset
+		var c_rect := Rect2(c_center.x - c_rx, c_center.y - c_ry, c_rx * 2.0, c_ry * 2.0)
+		xray_drawer.draw_texture_rect(_radial_gradient_tex, c_rect, false, Color(1, 1, 1, c_trans))
 

@@ -2,16 +2,18 @@
 class_name IsoDepthComponent
 extends Node
 
-@export_group("2.5D 深度与触地锚点")
-# 贴图中心到脚底/爪底的局部像素距离 (例如: 32x32 角色中心到脚底为 -12px; 64x64 狼中心到爪底为 -16px)
+@export_group("2.5D 深度排序与触地锚点")
+## 脚底触地偏移量 (像素)。贴图中心到脚底/爪底的局部垂直距离 (例如 32x32 角色脚底通常为 -12px；64x64 狼爪底通常为 -16px)
 @export var foot_offset_y: float = -12.0
-# 深度排序锚点微调 (像素)
+## 深度排序锚点微调偏移量 (像素)。用于对齐前后遮挡关系的基准线微调
 @export var sort_origin_offset_y: float = 0.0
-# 排序次键 (同深度时实体图层号，默认 1000)
+## 实体排序图层次键 (默认 1000)。当两个物体处于同一深度时，数值大者优先渲染在上方
 @export var layer_no: int = 1000
 
-@export_group("摄像机平滑跟随 (仅玩家需要)")
+@export_group("摄像机跟随配置 (通常仅主角开启)")
+## 是否启用摄像机跟随。开启后摄像机将平滑跟踪当前实体的移动
 @export var enable_camera_follow: bool = false
+## 摄像机平滑插值追踪速度。数值越大跟随越紧凑，数值越小越柔和
 @export var camera_speed: float = 8.0
 
 var parent_entity: Node2D

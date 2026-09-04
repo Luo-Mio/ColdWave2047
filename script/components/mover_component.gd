@@ -2,14 +2,14 @@
 class_name MoverComponent
 extends Node
 
-@export_group("生物物理移动参数")
-# 基础移动速度 (像素/秒)，可在检查器随时微调
+@export_group("物理移动与平滑参数")
+## 基础最大移动速度 (像素/秒)。主角建议 80~120，狼/野兽建议 100~160
 @export var move_speed: float = 100.0
-# 加速度 (起步响应速度)
+## 起步加速度 (像素/秒²)。数值越大起步越灵敏，数值越小越有惯性厚重感
 @export var acceleration: float = 1200.0
-# 摩擦阻尼 (刹车灵敏度)
+## 停止时的地面摩擦阻尼 (像素/秒²)。数值越大松手刹车越干脆，数值越小滑行越明显
 @export var friction: float = 1000.0
-# 是否吸附 2:1 等距网格斜向 (斜率 ±0.5)，适合玩家 WASD 贴格手感
+## 是否吸附 2:1 等距斜向 (斜率 ±0.5)。开启后 WASD 八向输入将贴合等距菱形网格行走路线，手感更规范
 @export var snap_iso_diagonal: bool = false
 
 var parent_body: CharacterBody2D

@@ -15,6 +15,17 @@ var foot_y: float = 0.0
 # 大脑/输入决策组件 (自动识别 PlayerInputComponent 或各类 AI 组件)
 @onready var brain_comp: Node = _find_brain_component()
 
+# 透视遮罩参数 (方便玩家在视野内锁定被物体遮挡的目标)
+@export_group("透视遮罩配置 (X-Ray)")
+## 是否启用该生物的透视遮罩。勾选后，该生物处于树冠或高墙等遮挡物下方时会自动挖出透视视窗；取消勾选可用于隐形或潜行生物
+@export var xray_enabled: bool = true
+## 透视椭圆视窗的大小 (X: 水平半宽像素, Y: 垂直半高像素)。数值越大，挖出的透视洞越广
+@export var xray_radius: Vector2 = Vector2(85.0, 55.0)
+## 透视中心相对于生物脚底的世界坐标偏移量。例如 (0, -16) 代表将透视中心由脚底上移至胸口/面部
+@export var xray_offset: Vector2 = Vector2(0.0, -16.0)
+## 透视中心的最大镂空透明度 (0.0=完全实心不透, 0.85=85%点阵镂空露出生物, 1.0=中心完全透明)
+@export_range(0.0, 1.0, 0.05) var xray_max_transparency: float = 0.85
+
 func _ready() -> void:
 	# 统一 2.5D 生物物理碰撞规则：
 	# Layer 3 (数值 4): 活体生物层

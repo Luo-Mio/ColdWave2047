@@ -3,15 +3,13 @@
 [ext_resource type="Script" uid="uid://dtf4i254omkic" path="res://script/entities/player/main_chara.gd" id="1_0nnbn"]
 [ext_resource type="Texture2D" uid="uid://ngnduc36vmbt" path="res://resources/character/texture/W.png" id="1_atro3"]
 [ext_resource type="Texture2D" uid="uid://0kfq54vngui" path="res://resources/object/weapon/stick/stick.png" id="3_p7jj5"]
-[ext_resource type="Script" uid="uid://cqsyfolud1vyp" path="res://script/components/movement_controller.gd" id="4_move"]
 [ext_resource type="Script" uid="uid://d22bcxmc70tri" path="res://script/components/iso_depth_component.gd" id="5_depth"]
-[ext_resource type="Script" uid="uid://b4vai2782g1c4" path="res://script/components/animation_controller.gd" id="6_anim"]
-[ext_resource type="Script" path="res://script/components/mover_component.gd" id="7_mover"]
-[ext_resource type="Script" path="res://script/components/iso_anim_component.gd" id="8_isoanim"]
-[ext_resource type="Script" path="res://script/components/player_input_component.gd" id="9_input"]
-[ext_resource type="Script" path="res://script/components/weapon_holder_component.gd" id="10_weapon"]
-[ext_resource type="Script" path="res://script/components/item_collector.gd" id="11_collector"]
-[ext_resource type="Script" path="res://script/components/vision_fog_component.gd" id="12_fog"]
+[ext_resource type="Script" uid="uid://beslwppir52f2" path="res://script/components/mover_component.gd" id="7_mover"]
+[ext_resource type="Script" uid="uid://c8ud3seb7jpr1" path="res://script/components/iso_anim_component.gd" id="8_isoanim"]
+[ext_resource type="Script" uid="uid://by5qdsoqvty7o" path="res://script/components/player_input_component.gd" id="9_input"]
+[ext_resource type="Script" uid="uid://djd5hyomkbf3i" path="res://script/components/weapon_holder_component.gd" id="10_weapon"]
+[ext_resource type="Script" uid="uid://cnpbyksel0ivf" path="res://script/components/item_collector.gd" id="11_collector"]
+[ext_resource type="Script" uid="uid://b1bnki8nfwh2s" path="res://script/components/vision_fog_component.gd" id="12_fog"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -154,6 +152,8 @@ collision_layer = 4
 collision_mask = 6
 motion_mode = 1
 script = ExtResource("1_0nnbn")
+xray_radius = Vector2(150, 100)
+xray_max_transparency = 0.95
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=733103301]
 process_callback = 0
@@ -197,16 +197,16 @@ snap_iso_diagonal = true
 script = ExtResource("8_isoanim")
 anim_mode = 0
 idle_prefix = "walk"
-move_prefix = "walk"
 
-[node name="PlayerInputComponent" type="Node" parent="LogicScript"]
+[node name="PlayerInputComponent" type="Node" parent="LogicScript" unique_id=1195795293]
 script = ExtResource("9_input")
 
-[node name="WeaponHolderComponent" type="Node" parent="LogicScript"]
+[node name="WeaponHolderComponent" type="Node" parent="LogicScript" unique_id=1210968014]
 script = ExtResource("10_weapon")
 
-[node name="ItemCollector" type="Area2D" parent="LogicScript"]
+[node name="ItemCollector" type="Area2D" parent="LogicScript" unique_id=975501996]
 script = ExtResource("11_collector")
 
-[node name="VisionFogComponent" type="Node" parent="LogicScript"]
+[node name="VisionFogComponent" type="Node" parent="LogicScript" unique_id=1332865012]
 script = ExtResource("12_fog")
+explored_alpha = 0.5

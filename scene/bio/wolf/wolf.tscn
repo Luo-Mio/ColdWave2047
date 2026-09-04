@@ -391,6 +391,8 @@ animations = [{
 texture_filter = 1
 scale = Vector2(2, 2)
 script = ExtResource("3_wolfscript")
+xray_radius = Vector2(150, 100)
+xray_max_transparency = 0.9
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=2097517203]
 sprite_frames = SubResource("SpriteFrames_lfxu0")

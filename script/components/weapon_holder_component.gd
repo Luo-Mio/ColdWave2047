@@ -2,8 +2,8 @@
 class_name WeaponHolderComponent
 extends Node
 
-@export_group("武器系统配置")
-# 是否自动监听主角的底部快捷栏 (NPC / 怪物设为 false，通过 set_weapon 手动指定)
+@export_group("手持武器系统配置")
+## 是否自动同步主角底部快捷栏选中的物品。主角设为 true，NPC或怪物设为 false（由代码手动分配武器）
 @export var enable_hotbar_sync: bool = true
 
 var is_weapon_active: bool = false

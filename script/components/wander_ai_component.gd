@@ -2,16 +2,18 @@
 class_name WanderAIComponent
 extends Node
 
-@export_group("AI 闲逛行为配置")
-# 是否开启随机闲逛 (在检查器随时勾选测试)
+@export_group("AI 随机漫步与休憩配置")
+## 是否开启随机闲逛行为。勾选后生物将在原地休息与随机漫步之间自动循环
 @export var enable_wander: bool = false
-# 休息时间范围 (秒)
+## 每次停下休息的最短时间 (秒)
 @export var min_rest_time: float = 1.5
+## 每次停下休息的最长时间 (秒)
 @export var max_rest_time: float = 4.0
-# 移动概率 (0.0~1.0)
-@export var move_chance: float = 0.6
-# 单次移动持续时间范围 (秒)
+## 休息结束后决定开始移动的概率 (0.0=绝不移动, 1.0=百分之百移动)
+@export_range(0.0, 1.0, 0.05) var move_chance: float = 0.6
+## 单次移动漫步的最短持续时间 (秒)
 @export var min_move_time: float = 1.0
+## 单次移动漫步的最长持续时间 (秒)
 @export var max_move_time: float = 3.0
 
 var _timer: float = 0.0

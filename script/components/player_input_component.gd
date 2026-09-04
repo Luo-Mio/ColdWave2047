@@ -3,9 +3,9 @@ class_name PlayerInputComponent
 extends Node
 
 @export_group("输入控制开关")
-# 是否接收玩家输入 (骑乘、被冰冻、对话时可设为 false 禁用)
+## 是否激活玩家按键输入控制。设为 false 时将屏蔽键盘移动（可用于剧情对话、被眩晕冰冻或骑乘接管）
 @export var is_active: bool = true
-# 角色是否始终面朝鼠标指针方向 (实现随鼠标瞄准、平移走与视锥跟随)
+## 角色是否始终面朝鼠标指针方向。开启后主角将随鼠标瞄准实时转向，并支持平移倒退走
 @export var always_face_mouse: bool = true
 
 # 获取期望的移动方向向量 (归一化)
