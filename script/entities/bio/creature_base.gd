@@ -44,13 +44,29 @@ func _physics_process(delta: float) -> void:
 	if depth_comp and depth_comp.has_method("update_depth"):
 		depth_comp.call("update_depth", delta)
 
-	# 4. 等距朝向动画驱动 (若手持武器瞄准，锁定朝向鼠标实现平移倒退走；否则随移动方向转向)
+	# 4. 等距朝向动画驱动 (若大脑开启了始终朝向鼠标，或手持武器瞄准，锁定朝向目标实现平移倒退走；否则随移动方向转向)
 	var look_dir := Vector2.ZERO
-	if weapon_comp and weapon_comp.get("is_weapon_active"):
+	if brain_comp and brain_comp.get("always_face_mouse") and brain_comp.has_method("get_aim_direction"):
+		look_dir = brain_comp.call("get_aim_direction", global_position)
+	elif weapon_comp and weapon_comp.get("is_weapon_active"):
 		look_dir = weapon_comp.get("current_aim_dir")
 
 	if anim_comp and anim_comp.has_method("update_animation"):
 		anim_comp.call("update_animation", current_velocity, look_dir)
+
+# 获取当前实体的世界朝向向量 (优先鼠标瞄准向量，其次身体动画朝向)
+func get_facing_direction() -> Vector2:
+	if brain_comp and brain_comp.get("always_face_mouse") and brain_comp.has_method("get_aim_direction"):
+		var aim: Vector2 = brain_comp.call("get_aim_direction", global_position)
+		if aim.length_squared() > 0.001:
+			return aim
+	if weapon_comp and weapon_comp.get("is_weapon_active"):
+		var aim: Vector2 = weapon_comp.get("current_aim_dir")
+		if aim.length_squared() > 0.001:
+			return aim
+	if anim_comp and anim_comp.has_method("get_facing_direction"):
+		return anim_comp.call("get_facing_direction")
+	return Vector2.DOWN
 
 # 供全局 Shader（树干与高墙透视）获取角色的视觉身体/脚底世界坐标
 func get_visual_foot_position() -> Vector2:

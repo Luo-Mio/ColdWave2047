@@ -20,6 +20,8 @@ shader_parameter/rx = 90.000003895
 shader_parameter/ry = 60.00000247
 shader_parameter/feather = 1.0
 shader_parameter/max_transparency = 1.0
+shader_parameter/enable_vision_xray = true
+shader_parameter/vision_transparency = 0.70
 
 [node name="Node2D" type="Node2D" unique_id=686197970]
 script = ExtResource("1_lutej")

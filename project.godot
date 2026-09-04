@@ -75,3 +75,27 @@ player_world_pos={
 "type": "vec2",
 "value": Vector2(0, 0)
 }
+vision_mask_tex={
+"type": "sampler2D",
+"value": ""
+}
+vision_cam_pos={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+vision_cam_zoom={
+"type": "vec2",
+"value": Vector2(1, 1)
+}
+vision_screen_size={
+"type": "vec2",
+"value": Vector2(1152, 648)
+}
+player_facing_dir={
+"type": "vec2",
+"value": Vector2(0, 1)
+}
+vision_fov={
+"type": "float",
+"value": 200.0
+}

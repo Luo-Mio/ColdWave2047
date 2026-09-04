@@ -5,6 +5,8 @@ extends Node
 @export_group("输入控制开关")
 # 是否接收玩家输入 (骑乘、被冰冻、对话时可设为 false 禁用)
 @export var is_active: bool = true
+# 角色是否始终面朝鼠标指针方向 (实现随鼠标瞄准、平移走与视锥跟随)
+@export var always_face_mouse: bool = true
 
 # 获取期望的移动方向向量 (归一化)
 func get_movement_direction(_delta: float = 0.0) -> Vector2:

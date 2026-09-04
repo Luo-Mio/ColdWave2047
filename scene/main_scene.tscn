@@ -9,7 +9,7 @@
 [ext_resource type="Script" uid="uid://cmwffxpi1h3gk" path="res://script/systems/selector.gd" id="5_x5n27"]
 [ext_resource type="Script" uid="uid://ccyjcrsoj6l7p" path="res://script/systems/wall_xray.gd" id="8_hrphr"]
 [ext_resource type="Script" uid="uid://bbfq38ivdtgy8" path="res://script/systems/build_manager.gd" id="9_86xya"]
-[ext_resource type="PackedScene" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
+[ext_resource type="PackedScene" uid="uid://dewx1yy1y8ghw" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_86xya"]
 texture = ExtResource("4_hrphr")
@@ -113,8 +113,14 @@ script = ExtResource("3_4wnd8")
 [node name="CharacterBody2D" parent="sortworld" unique_id=240145075 instance=ExtResource("3_x5n27")]
 position = Vector2(255, 103)
 
-[node name="Wolf" parent="sortworld" instance=ExtResource("10_wolf")]
-position = Vector2(300, 103)
+[node name="Wolf" parent="sortworld" unique_id=666637326 instance=ExtResource("10_wolf")]
+position = Vector2(277, 168)
+
+[node name="Wolf2" parent="sortworld" unique_id=1368364354 instance=ExtResource("10_wolf")]
+position = Vector2(165, 63)
+
+[node name="Wolf3" parent="sortworld" unique_id=701672555 instance=ExtResource("10_wolf")]
+position = Vector2(316, 24)
 
 [node name="plantscene" type="Node" parent="." unique_id=676632468]
 
