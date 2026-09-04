@@ -38,13 +38,18 @@ func _ready() -> void:
 		var rx := jitter_size.x * 0.5
 		var ry := jitter_size.y * 0.5
 		jitter = _get_random_diamond_offset(rx, ry)
+	# 2. 编辑器直接拖入场景时的防呆回退与楼层自动识别
+	if base_position == Vector2.ZERO and position != Vector2.ZERO:
+		base_position = position
+	if floor_level == 0 and not GridData.layers.is_empty():
+		var c := GridData.world_to_cell(base_position)
+		var hf := GridData.get_highest_floor(c)
+		if hf > 0:
+			floor_level = hf
 
-	# 3. 碰撞体高度修正（如果有）
-	var collision_node := get_node_or_null("StaticBody2D")
-	if collision_node:
-		collision_node.position.y = float(floor_level + 1) * GridData.FLOOR_HEIGHT
-
-	# 4. 精确世界坐标与高精度微格排序键
+	# 3. 精确世界坐标（含楼层高度偏移与随机微偏移）
+	# 物体根节点自身已施加完整的楼层高度偏移 (-floor_level * 16px)
+	# 子节点 StaticBody2D 的碰撞多边形自然继承此高度，完美与贴图根部对齐！
 	global_position = base_position + jitter + Vector2(0.0, GridData.get_floor_pixel_offset(floor_level))
 	foot_y = global_position.y
 

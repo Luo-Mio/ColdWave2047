@@ -14,6 +14,7 @@ const DIAMOND_POINTS: PackedVector2Array = [
 ]
 
 func _ready() -> void:
+	add_to_group("air_walls")
 	# 设置物理碰撞层（Layer 2：障碍物层，匹配角色的 collision_mask）
 	collision_layer = 2
 	collision_mask = 0

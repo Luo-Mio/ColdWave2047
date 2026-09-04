@@ -11,6 +11,7 @@
 [ext_resource type="Script" path="res://script/components/player_input_component.gd" id="9_input"]
 [ext_resource type="Script" path="res://script/components/weapon_holder_component.gd" id="10_weapon"]
 [ext_resource type="Script" path="res://script/components/item_collector.gd" id="11_collector"]
+[ext_resource type="Script" path="res://script/components/vision_fog_component.gd" id="12_fog"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -206,3 +207,6 @@ script = ExtResource("10_weapon")
 
 [node name="ItemCollector" type="Area2D" parent="LogicScript"]
 script = ExtResource("11_collector")
+
+[node name="VisionFogComponent" type="Node" parent="LogicScript"]
+script = ExtResource("12_fog")

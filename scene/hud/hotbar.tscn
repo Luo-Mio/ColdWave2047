@@ -15,6 +15,7 @@ corner_radius_bottom_right = 3
 corner_radius_bottom_left = 3
 
 [node name="hotbar" type="CanvasLayer" unique_id=292178155]
+layer = 100
 script = ExtResource("1_nwfd5")
 
 [node name="MarginContainer" type="MarginContainer" parent="." unique_id=575179856]

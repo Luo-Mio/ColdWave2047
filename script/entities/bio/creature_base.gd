@@ -23,6 +23,7 @@ func _ready() -> void:
 	collision_layer = 4
 	collision_mask = 6
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
+	add_to_group("creatures")
 
 func _physics_process(delta: float) -> void:
 	# 1. 询问大脑当前的期望移动意图 (无论是按键输入、AI漫步、追击或骑乘接管)
