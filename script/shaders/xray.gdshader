@@ -2,6 +2,9 @@ shader_type canvas_item;
 
 global uniform vec2 player_world_pos;
 
+// 透视中心相对于角色脚底坐标的世界偏移量 (例如 (0, -24) 可将透视中心上移至角色面部/胸部)
+uniform vec2 target_offset = vec2(0.0, 0.0);
+
 uniform float rx : hint_range(4.0, 400.0) = 85.0;
 uniform float ry : hint_range(4.0, 400.0) = 55.0;
 uniform float feather : hint_range(0.01, 1.0) = 0.8;
@@ -25,7 +28,8 @@ void fragment() {
     vec4 col = texture(TEXTURE, UV);
     if (col.a <= 0.001) { discard; }
 
-    vec2 diff = (v_world_pos - player_world_pos) / vec2(rx, ry);
+    vec2 target_pos = player_world_pos + target_offset;
+    vec2 diff = (v_world_pos - target_pos) / vec2(rx, ry);
     float dist_sq = dot(diff, diff);
 
     if (dist_sq < 1.0) {

@@ -7,6 +7,7 @@ uniform sampler2D fog_mask : filter_linear, repeat_disable;
 uniform sampler2D history_mask : filter_linear, repeat_disable;
 
 uniform vec2 cam_world_pos;
+uniform vec2 mask_cam_pos;
 uniform vec2 cam_zoom = vec2(1.0, 1.0);
 uniform vec2 screen_size = vec2(1152.0, 648.0);
 uniform vec2 map_bounds = vec2(4096.0, 4096.0);
@@ -19,8 +20,10 @@ uniform float unexplored_alpha : hint_range(0.0, 1.0) = 1.0;
 uniform vec4 fog_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 
 void fragment() {
-	// 1. 采样当前活跃视野 (来自 SubViewport，1.0=可见，0.0=盲区)
-	vec4 curr = texture(fog_mask, SCREEN_UV);
+	// 1. 摄像机微小位移平滑补偿采样活跃视野 (实现 30FPS 逻辑运算下的 120FPS 丝滑移动)
+	vec2 cam_diff = (cam_world_pos - mask_cam_pos) * cam_zoom;
+	vec2 mask_uv = clamp(SCREEN_UV + cam_diff / screen_size, vec2(0.0), vec2(1.0));
+	vec4 curr = texture(fog_mask, mask_uv);
 	float current_vis = curr.r;
 
 	// 2. 根据 SCREEN_UV 换算当前屏幕像素在世界坐标系中的位置
