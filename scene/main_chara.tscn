@@ -6,6 +6,11 @@
 [ext_resource type="Script" uid="uid://cqsyfolud1vyp" path="res://script/components/movement_controller.gd" id="4_move"]
 [ext_resource type="Script" uid="uid://d22bcxmc70tri" path="res://script/components/iso_depth_component.gd" id="5_depth"]
 [ext_resource type="Script" uid="uid://b4vai2782g1c4" path="res://script/components/animation_controller.gd" id="6_anim"]
+[ext_resource type="Script" path="res://script/components/mover_component.gd" id="7_mover"]
+[ext_resource type="Script" path="res://script/components/iso_anim_component.gd" id="8_isoanim"]
+[ext_resource type="Script" path="res://script/components/player_input_component.gd" id="9_input"]
+[ext_resource type="Script" path="res://script/components/weapon_holder_component.gd" id="10_weapon"]
+[ext_resource type="Script" path="res://script/components/item_collector.gd" id="11_collector"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -176,14 +181,28 @@ offset = Vector2(0, -8)
 scale = Vector2(1, 0.5)
 polygon = PackedVector2Array(4, 0, 0, 4, -4, 0, 0, -4)
 
-[node name="LogicSscript" type="Node" parent="." unique_id=2066323861]
+[node name="LogicScript" type="Node" parent="." unique_id=2066323861]
 
-[node name="MovementController" type="Node" parent="LogicSscript" unique_id=1945927822]
-script = ExtResource("4_move")
-
-[node name="IsoDepthComponent" type="Node" parent="LogicSscript" unique_id=1644273206]
+[node name="IsoDepthComponent" type="Node" parent="LogicScript" unique_id=1644273206]
 script = ExtResource("5_depth")
 enable_camera_follow = true
 
-[node name="AnimationController" type="Node" parent="LogicSscript" unique_id=1168471338]
-script = ExtResource("6_anim")
+[node name="MoverComponent" type="Node" parent="LogicScript" unique_id=1945927822]
+script = ExtResource("7_mover")
+move_speed = 80.0
+snap_iso_diagonal = true
+
+[node name="IsoAnimComponent" type="Node" parent="LogicScript" unique_id=1168471338]
+script = ExtResource("8_isoanim")
+anim_mode = 0
+idle_prefix = "walk"
+move_prefix = "walk"
+
+[node name="PlayerInputComponent" type="Node" parent="LogicScript"]
+script = ExtResource("9_input")
+
+[node name="WeaponHolderComponent" type="Node" parent="LogicScript"]
+script = ExtResource("10_weapon")
+
+[node name="ItemCollector" type="Area2D" parent="LogicScript"]
+script = ExtResource("11_collector")

@@ -21,6 +21,10 @@ var _is_moving: bool = false
 func _ready() -> void:
 	_timer = randf_range(min_rest_time, max_rest_time)
 
+# 统一接口：获取期望的移动方向向量 (Vector2)
+func get_movement_direction(delta: float = 0.0) -> Vector2:
+	return update_ai(delta)
+
 # 每物理帧更新状态并返回期望的移动向量 (Vector2)
 func update_ai(delta: float) -> Vector2:
 	if not enable_wander:
