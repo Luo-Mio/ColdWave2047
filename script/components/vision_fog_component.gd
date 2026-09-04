@@ -25,20 +25,26 @@ extends Node
 		enable_black_fog_overlay = v
 		if is_instance_valid(fog_rect):
 			fog_rect.visible = enable_black_fog_overlay
-# 角色背后盲区是否渲染黑色半透明遮罩 (false = 关闭背后的黑色遮罩，保持地面原色；true = 背后呈现黑色阴影)
-@export var enable_rear_fog: bool = false:
+# 是否启用纯黑点阵抖动迷雾 (true = 掺杂纯黑像素、边缘少中心深的像素艺术模式; false = 传统平滑半透明 Alpha 遮罩)
+@export var enable_dither_fog: bool = true:
 	set(v):
-		enable_rear_fog = v
-		if is_instance_valid(fog_drawer):
-			fog_drawer.queue_redraw()
+		enable_dither_fog = v
+		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
+			(fog_rect.material as ShaderMaterial).set_shader_parameter("enable_dither_fog", enable_dither_fog)
+# 点阵像素缩放 (1 = 精细单像素点，2 = 2x2 复古大像素格)
+@export_range(1, 4) var dither_scale: int = 1:
+	set(v):
+		dither_scale = v
+		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
+			(fog_rect.material as ShaderMaterial).set_shader_parameter("dither_scale", dither_scale)
+# 阴影与迷雾边缘过渡羽化宽度 (像素，越宽则边缘黑色像素稀疏过渡区越大)
+@export_range(4.0, 80.0) var fog_edge_softness: float = 28.0:
+	set(v):
+		fog_edge_softness = v
+		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
+			(fog_rect.material as ShaderMaterial).set_shader_parameter("edge_softness", fog_edge_softness)
 # 是否允许生物透过半透明树冠显现 (true = 屏幕内生物始终可见，可透过半透明树叶看清敌友)
 @export var show_creatures_through_canopy: bool = true
-
-@export_group("视锥范围配置")
-# 视野扇形开角 (度数，默认 200.0 代表正前方 200° 可视，背后 160° 为盲区，360 为全景)
-@export_range(30.0, 360.0) var vision_fov: float = 200.0
-# 视锥扇形弧度细分数 (默认 36 边形，圆弧极其平滑)
-@export var fov_arc_segments: int = 36
 
 var entity: CharacterBody2D
 var main_cam: Camera2D
@@ -63,9 +69,6 @@ var _batched_vertices: PackedVector2Array = PackedVector2Array()
 var _batched_indices: PackedInt32Array = PackedInt32Array()
 var _batched_colors: PackedColorArray = PackedColorArray([Color(0, 0, 0, 1)])
 var _static_indices: PackedInt32Array = PackedInt32Array()
-# 视锥扇形预分配缓冲 (0-GC)
-var _fov_pts: PackedVector2Array = PackedVector2Array()
-var _fov_colors: PackedColorArray = PackedColorArray([Color(1, 0, 0, 1)])
 
 # 移动距离微阈值 (像素，防止极微小抖动造成无意义重绘)
 @export var move_threshold: float = 1.0
@@ -83,7 +86,6 @@ var _excluded_rids: Array[RID] = []
 var _ray_exclude_rids: Array[RID] = []
 var _last_draw_pos := Vector2(-99999, -99999)
 var _last_draw_player_pos := Vector2(-99999, -99999)
-var _last_facing_angle: float = -999.0
 var _last_history_stamp_pos := Vector2(-99999, -99999)
 var _last_quads_hash: int = -1
 
@@ -162,7 +164,7 @@ func _physics_process(delta: float) -> void:
 	RenderingServer.global_shader_parameter_set("vision_cam_zoom", cam_zoom)
 	RenderingServer.global_shader_parameter_set("vision_screen_size", vp_size_vec)
 	RenderingServer.global_shader_parameter_set("player_facing_dir", facing_dir_global)
-	RenderingServer.global_shader_parameter_set("vision_fov", vision_fov)
+	RenderingServer.global_shader_parameter_set("vision_fov", 360.0)
 
 	# 2. 同步摄像机与屏幕参数给全屏黑雾 Shader (若开启黑雾)
 	if is_instance_valid(fog_rect):
@@ -196,16 +198,12 @@ func _physics_process(delta: float) -> void:
 		if enable_creature_hiding:
 			_update_creature_visibility(player_pos, screen_world_rect)
 
-		# 脏标记智能重绘：仅当摄像机位移、角色位移、朝向旋转或阴影形状变动时才重绘，静止时 0 额外 CPU/GPU 消耗！
-		var facing_dir: Vector2 = entity.call("get_facing_direction") if entity.has_method("get_facing_direction") else Vector2.DOWN
-		var facing_angle: float = facing_dir.angle()
-		var rotated: bool = (enable_rear_fog and vision_fov < 359.0) and absf(wrapf(facing_angle - _last_facing_angle, -PI, PI)) > 0.015
+		# 脏标记智能重绘：仅当摄像机位移、角色位移或阴影形状变动时才重绘，静止时 0 额外 CPU/GPU 消耗！
 		var threshold_sq := move_threshold * move_threshold
 		var moved := player_pos.distance_squared_to(_last_draw_player_pos) > threshold_sq or cam_pos.distance_squared_to(_last_draw_pos) > threshold_sq
-		if is_instance_valid(fog_drawer) and (moved or quads_changed or rotated or _last_draw_pos == Vector2(-99999, -99999)):
+		if is_instance_valid(fog_drawer) and (moved or quads_changed or _last_draw_pos == Vector2(-99999, -99999)):
 			_last_draw_pos = cam_pos
 			_last_draw_player_pos = player_pos
-			_last_facing_angle = facing_angle
 			_mask_cam_pos = cam_pos
 			# 同步视口摄像机
 			if is_instance_valid(fog_cam):
@@ -256,10 +254,6 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> voi
 	var space_state := entity.get_world_2d().direct_space_state
 	var creatures := get_tree().get_nodes_in_group("creatures")
 
-	var facing_dir: Vector2 = entity.call("get_facing_direction") if entity.has_method("get_facing_direction") else Vector2.DOWN
-	var base_angle: float = facing_dir.angle()
-	var half_fov: float = deg_to_rad(vision_fov * 0.5)
-
 	for c in creatures:
 		if not is_instance_valid(c) or c == entity or not (c is Node2D):
 			continue
@@ -274,16 +268,7 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> voi
 			c_node.visible = false
 			continue
 
-		# 2. 视锥开角判定：若超出正前方 vision_fov (如 200°)，处于背后盲区，直接隐藏
-		if vision_fov < 359.0:
-			var to_c := (c_foot - player_pos)
-			if to_c.length_squared() > 1.0:
-				var diff_angle := absf(wrapf(to_c.angle() - base_angle, -PI, PI))
-				if diff_angle > half_fov:
-					c_node.visible = false
-					continue
-
-		# 3. 屏幕内生物处于阴影判定：检查脚底是否落入任何正在投射的阴影体中 (与屏幕视觉阴影 100% 精确对齐)
+		# 2. 屏幕内生物处于阴影判定：检查脚底是否落入任何正在投射的阴影体中 (与屏幕视觉阴影 100% 精确对齐)
 		var in_shadow := false
 		for i in current_quads_count:
 			if Geometry2D.is_point_in_polygon(c_foot, current_shadow_quads[i]):
@@ -538,11 +523,14 @@ func _setup_fog_rendering_pipeline() -> void:
 	mat.set_shader_parameter("explored_alpha", explored_alpha)
 	mat.set_shader_parameter("unexplored_alpha", unexplored_alpha)
 	mat.set_shader_parameter("map_bounds", Vector2(map_bounds, map_bounds))
+	mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
+	mat.set_shader_parameter("dither_scale", dither_scale)
+	mat.set_shader_parameter("edge_softness", fog_edge_softness)
 	fog_rect.material = mat
 
 	canvas_layer.add_child(fog_rect)
 
-# 视口内的具体绘制 (盲区全黑 + 正向视锥点亮 + 覆盖黑色障碍物阴影四边形)
+# 视口内的具体绘制 (全屏点亮 + 覆盖黑色障碍物阴影四边形)
 func _on_fog_drawer_draw() -> void:
 	if entity == null:
 		return
@@ -551,36 +539,10 @@ func _on_fog_drawer_draw() -> void:
 	var cam_zoom := fog_cam.zoom if is_instance_valid(fog_cam) else Vector2.ONE
 	var screen_rect := _get_screen_world_rect(cam_pos, cam_zoom, screen_margin)
 
-	var player_pos := entity.global_position
-	if entity.has_method("get_visual_foot_position"):
-		player_pos = entity.call("get_visual_foot_position")
+	# 1. 全屏视野点亮：将整个屏幕视口绘制为全亮 (R=1)
+	fog_drawer.draw_rect(screen_rect, Color(1, 0, 0, 1))
 
-	if enable_rear_fog and vision_fov < 359.0:
-		# 1. 开启背后遮罩模式：视口全屏填充为全黑 (R=0，代表背后盲区为黑色半透明阴影)
-		fog_drawer.draw_rect(screen_rect, Color(0, 0, 0, 1))
-
-		# 2. 正向视锥点亮：以角色为中心，绘制视野扇形 (R=1)
-		var facing_dir: Vector2 = entity.call("get_facing_direction") if entity.has_method("get_facing_direction") else Vector2.DOWN
-		var base_angle: float = facing_dir.angle()
-		var half_fov: float = deg_to_rad(vision_fov * 0.5)
-		var radius: float = screen_rect.size.length() * 1.5 # 确保扇形穿透屏幕外边缘
-
-		var seg_count: int = maxi(12, fov_arc_segments)
-		if _fov_pts.size() != seg_count + 2:
-			_fov_pts.resize(seg_count + 2)
-		_fov_pts[0] = player_pos
-		var angle_step: float = (half_fov * 2.0) / float(seg_count)
-		var start_angle: float = base_angle - half_fov
-		for s in range(seg_count + 1):
-			var a: float = start_angle + angle_step * float(s)
-			_fov_pts[s + 1] = player_pos + Vector2(cos(a), sin(a)) * radius
-
-		fog_drawer.draw_polygon(_fov_pts, _fov_colors)
-	else:
-		# 1. 关闭背后黑色遮罩：全屏点亮为可见 (R=1，背后地面保持完全正常原色，不产生黑色半透明扇形)
-		fog_drawer.draw_rect(screen_rect, Color(1, 0, 0, 1))
-
-	# 3. 一次性合批提交所有黑色障碍物阴影四边形 (从 60+ 次 Draw Call 缩减至 1 次底层提交！)
+	# 2. 一次性合批提交所有黑色障碍物阴影四边形 (从 60+ 次 Draw Call 缩减至 1 次底层提交！)
 	if current_quads_count > 0 and not _batched_indices.is_empty():
 		RenderingServer.canvas_item_add_triangle_array(
 			fog_drawer.get_canvas_item(),

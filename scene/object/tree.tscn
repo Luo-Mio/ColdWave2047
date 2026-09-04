@@ -8,20 +8,18 @@
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_a1rck"]
 shader = ExtResource("2_s8eqp")
 shader_parameter/target_offset = Vector2(0, -16)
-shader_parameter/rx = 10.000000284999999
-shader_parameter/ry = 10.000000284999999
+shader_parameter/rx = 10.000000285
+shader_parameter/ry = 10.000000285
 shader_parameter/feather = 1.0
 shader_parameter/max_transparency = 0.85
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_qvu5t"]
 shader = ExtResource("2_s8eqp")
 shader_parameter/target_offset = Vector2(0, 0)
-shader_parameter/rx = 90.000003895
-shader_parameter/ry = 60.00000247
+shader_parameter/rx = 150.000006935
+shader_parameter/ry = 100.00000456
 shader_parameter/feather = 1.0
 shader_parameter/max_transparency = 1.0
-shader_parameter/enable_vision_xray = true
-shader_parameter/vision_transparency = 0.70
 
 [node name="Node2D" type="Node2D" unique_id=686197970]
 script = ExtResource("1_lutej")

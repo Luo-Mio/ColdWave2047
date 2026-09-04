@@ -97,5 +97,5 @@ player_facing_dir={
 }
 vision_fov={
 "type": "float",
-"value": 200.0
+"value": 360.0
 }
