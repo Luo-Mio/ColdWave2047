@@ -7,10 +7,10 @@ const MoverComponent := preload("res://script/components/mover_component.gd")
 const IsoAnimComponent := preload("res://script/components/iso_anim_component.gd")
 const WanderAIComponent := preload("res://script/components/wander_ai_component.gd")
 
-@onready var depth_comp: IsoDepthComponent = get_node_or_null("IsoDepthComponent")
-@onready var mover_comp: MoverComponent = get_node_or_null("MoverComponent")
-@onready var anim_comp: IsoAnimComponent = get_node_or_null("IsoAnimComponent")
-@onready var ai_comp: WanderAIComponent = get_node_or_null("WanderAIComponent")
+@onready var depth_comp: IsoDepthComponent = find_child("IsoDepthComponent", true, false)
+@onready var mover_comp: MoverComponent = find_child("MoverComponent", true, false)
+@onready var anim_comp: IsoAnimComponent = find_child("IsoAnimComponent", true, false)
+@onready var ai_comp: WanderAIComponent = find_child("WanderAIComponent", true, false)
 
 # 2.5D 深度排序所需变量（供 sort_world.gd 比对，由 depth_comp 自动维护）
 var layer_no: int = 1000
@@ -26,7 +26,16 @@ func _ready() -> void:
 	collision_mask = 6
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 
-	# 容错初始化：如果场景树中未挂载，则自动用标准参数创建
+	# 容错初始化：只有在场景树各层级彻底没有找到时，才自动用默认参数兜底创建
+	if depth_comp == null:
+		depth_comp = find_child("IsoDepthComponent", true, false)
+	if mover_comp == null:
+		mover_comp = find_child("MoverComponent", true, false)
+	if anim_comp == null:
+		anim_comp = find_child("IsoAnimComponent", true, false)
+	if ai_comp == null:
+		ai_comp = find_child("WanderAIComponent", true, false)
+
 	if depth_comp == null:
 		depth_comp = IsoDepthComponent.new()
 		depth_comp.name = "IsoDepthComponent"

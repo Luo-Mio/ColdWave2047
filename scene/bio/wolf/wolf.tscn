@@ -394,22 +394,25 @@ script = ExtResource("3_wolfscript")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=2097517203]
 sprite_frames = SubResource("SpriteFrames_lfxu0")
-animation = &"idelWestSouth"
+animation = &"runWestSouth"
+offset = Vector2(0, -9)
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1043909110]
 polygon = PackedVector2Array(12, 0, 0, 6, -12, 0, 0, -6)
 
-[node name="IsoDepthComponent" type="Node" parent="." unique_id=794987098]
+[node name="LogicScript" type="Node" parent="." unique_id=1391725743]
+
+[node name="IsoDepthComponent" type="Node" parent="LogicScript" unique_id=794987098]
 script = ExtResource("4_depth")
 foot_offset_y = -16.0
 
-[node name="MoverComponent" type="Node" parent="." unique_id=905963280]
+[node name="MoverComponent" type="Node" parent="LogicScript" unique_id=905963280]
 script = ExtResource("5_mover")
 
-[node name="IsoAnimComponent" type="Node" parent="." unique_id=457589332]
+[node name="IsoAnimComponent" type="Node" parent="LogicScript" unique_id=457589332]
 script = ExtResource("6_anim")
 idle_prefix = "idel"
 move_prefix = "run"
 
-[node name="WanderAIComponent" type="Node" parent="." unique_id=1186868075]
+[node name="WanderAIComponent" type="Node" parent="LogicScript" unique_id=1186868075]
 script = ExtResource("7_ai")

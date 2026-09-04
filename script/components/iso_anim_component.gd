@@ -20,9 +20,13 @@ var _facing_dir: Vector2 = Vector2(1.0, 1.0)
 var current_anim: String = ""
 
 func _ready() -> void:
-	var parent := get_parent()
-	if parent:
-		sprite = parent.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	var curr := get_parent()
+	while curr:
+		if curr is Node2D:
+			sprite = curr.find_child("AnimatedSprite2D", true, false) as AnimatedSprite2D
+			if sprite:
+				break
+		curr = curr.get_parent()
 
 # 核心驱动函数：move_vec 为移动速度/输入，look_vec 为额外凝视/瞄准方向 (可选)
 func update_animation(move_vec: Vector2, look_vec: Vector2 = Vector2.ZERO) -> void:

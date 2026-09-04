@@ -20,16 +20,28 @@ var col_shape: CollisionPolygon2D
 var camera: Camera2D
 
 var current_floor: int = 0
+var _base_sprite_y: float = 0.0
 
 func _ready() -> void:
-	parent_entity = get_parent() as Node2D
+	# 向上查找实体根节点（支持组件放在 LogicScript 等容器节点中）
+	var curr := get_parent()
+	while curr:
+		if curr is Node2D:
+			parent_entity = curr as Node2D
+			break
+		curr = curr.get_parent()
+
 	if parent_entity == null:
 		return
 
 	# 自动寻找常见的关键子节点
-	sprite = parent_entity.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
-	col_shape = parent_entity.get_node_or_null("CollisionPolygon2D") as CollisionPolygon2D
-	camera = parent_entity.get_node_or_null("Camera2D") as Camera2D
+	sprite = parent_entity.find_child("AnimatedSprite2D", true, false) as AnimatedSprite2D
+	col_shape = parent_entity.find_child("CollisionPolygon2D", true, false) as CollisionPolygon2D
+	camera = parent_entity.find_child("Camera2D", true, false) as Camera2D
+
+	# 缓存场景编辑器中美术/设计人员肉眼对齐好的基础 Y 轴位置 (所见即所得核心！)
+	if sprite:
+		_base_sprite_y = sprite.position.y
 
 	# 确保父节点具备排序所需的变量
 	if not ("sort_key" in parent_entity):
@@ -43,13 +55,12 @@ func _ready() -> void:
 	await get_tree().process_frame
 	update_depth(0.0)
 
-# 获取实体脚底/四爪接触地面的精确全局世界坐标
+# 获取实体脚底/四爪接触地面的精确全局世界坐标 (供 X-Ray 透视 Shader 使用)
 func get_visual_foot_position() -> Vector2:
-	if sprite and parent_entity:
-		var s_y := parent_entity.scale.y if parent_entity.scale.y != 0.0 else 1.0
-		# 贴图世界坐标中心往下偏移 |foot_offset_y| * scale.y 即为视觉脚底
-		return sprite.global_position + Vector2(0.0, absf(foot_offset_y) * s_y)
-	return parent_entity.global_position if parent_entity else Vector2.ZERO
+	if parent_entity:
+		var floor_offset := GridData.get_floor_pixel_offset(current_floor)
+		return parent_entity.global_position + Vector2(0.0, floor_offset)
+	return Vector2.ZERO
 
 # 每物理帧调用：处理楼层高度抬升、贴地与 2.5D 深度动态排序
 func update_depth(delta: float) -> void:
@@ -58,16 +69,16 @@ func update_depth(delta: float) -> void:
 
 	var s_y := parent_entity.scale.y if parent_entity.scale.y != 0.0 else 1.0
 
-	# 1. 查询当前脚底所在格子的楼层高度 (必须使用物理实体的地面坐标 parent_entity.global_position，绝不能用抬升后的视觉贴图坐标，否则会导致高频闪烁死循环！)
+	# 1. 查询当前脚底所在格子的楼层高度 (基于实体的物理地面坐标)
 	var ground_pos := parent_entity.global_position
 	var cell := GridData.world_to_cell(ground_pos)
 	current_floor = GridData.get_highest_floor(cell)
 	var floor_offset := GridData.get_floor_pixel_offset(current_floor)
 	var local_floor_y := floor_offset / s_y
 
-	# 2. 贴图视觉抬升 (scale 换算补偿，严丝合缝贴合楼层)
+	# 2. 贴图视觉抬升 (完美继承场景编辑器中微调好的基础位置，只动态累加台阶/楼层差值！)
 	if sprite:
-		sprite.position.y = local_floor_y + foot_offset_y
+		sprite.position.y = _base_sprite_y + local_floor_y
 
 	# 3. 碰撞体高度同步抬升
 	if col_shape:

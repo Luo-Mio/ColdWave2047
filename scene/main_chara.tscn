@@ -3,6 +3,9 @@
 [ext_resource type="Script" uid="uid://dtf4i254omkic" path="res://script/entities/player/main_chara.gd" id="1_0nnbn"]
 [ext_resource type="Texture2D" uid="uid://ngnduc36vmbt" path="res://resources/character/texture/W.png" id="1_atro3"]
 [ext_resource type="Texture2D" uid="uid://0kfq54vngui" path="res://resources/object/weapon/stick/stick.png" id="3_p7jj5"]
+[ext_resource type="Script" uid="uid://cqsyfolud1vyp" path="res://script/components/movement_controller.gd" id="4_move"]
+[ext_resource type="Script" uid="uid://d22bcxmc70tri" path="res://script/components/iso_depth_component.gd" id="5_depth"]
+[ext_resource type="Script" uid="uid://b4vai2782g1c4" path="res://script/components/animation_controller.gd" id="6_anim"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -172,3 +175,15 @@ offset = Vector2(0, -8)
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1635535632]
 scale = Vector2(1, 0.5)
 polygon = PackedVector2Array(4, 0, 0, 4, -4, 0, 0, -4)
+
+[node name="LogicSscript" type="Node" parent="." unique_id=2066323861]
+
+[node name="MovementController" type="Node" parent="LogicSscript" unique_id=1945927822]
+script = ExtResource("4_move")
+
+[node name="IsoDepthComponent" type="Node" parent="LogicSscript" unique_id=1644273206]
+script = ExtResource("5_depth")
+enable_camera_follow = true
+
+[node name="AnimationController" type="Node" parent="LogicSscript" unique_id=1168471338]
+script = ExtResource("6_anim")

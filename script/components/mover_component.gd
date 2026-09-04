@@ -15,7 +15,12 @@ extends Node
 var parent_body: CharacterBody2D
 
 func _ready() -> void:
-	parent_body = get_parent() as CharacterBody2D
+	var curr := get_parent()
+	while curr:
+		if curr is CharacterBody2D:
+			parent_body = curr as CharacterBody2D
+			break
+		curr = curr.get_parent()
 
 # 接收目标方向向量，平滑加速并驱动物理滑动
 func move(target_dir: Vector2, delta: float) -> Vector2:
