@@ -46,6 +46,10 @@ extends Node
 ## 是否允许生物透过半透明树冠显现 (屏幕内生物处于树叶下时保留可见轮廓)
 @export var show_creatures_through_canopy: bool = true
 
+@export_group("透视遮罩全局配置 (X-Ray)")
+## 透视默认边缘透明度渐变曲线弧度 (0.0=45度直线线性渐变, 1.0=1/4圆弧先平缓再陡降)
+@export_range(0.0, 1.0, 0.05) var default_xray_curve: float = 0.0
+
 var entity: CharacterBody2D
 var main_cam: Camera2D
 
@@ -60,7 +64,7 @@ var fog_drawer: Node2D
 var xray_viewport: SubViewport
 var xray_cam: Camera2D
 var xray_drawer: Node2D
-var _radial_gradient_tex: GradientTexture2D
+var _radial_tex_cache: Dictionary = {}
 var _visible_creatures: Array[Node2D] = []
 
 # 性能优化：静态障碍物碰撞多边形缓存对象
@@ -688,8 +692,7 @@ func _setup_fog_rendering_pipeline() -> void:
 	fog_drawer.draw.connect(_on_fog_drawer_draw)
 	fog_viewport.add_child(fog_drawer)
 
-	# 2.5 创建用于绘制多实体透视遮罩的 SubViewport 与光晕纹理
-	_init_radial_gradient()
+	# 2.5 创建用于绘制多实体透视遮罩的 SubViewport
 	xray_viewport = SubViewport.new()
 	xray_viewport.size = fog_viewport.size
 	xray_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -750,21 +753,41 @@ func _on_fog_drawer_draw() -> void:
 			_batched_colors
 		)
 
-func _init_radial_gradient() -> void:
+# 获取或动态创建指定曲线弧度的径向渐变纹理 (按 0.05 步长离散缓存，运行时 0 GC)
+func _get_radial_gradient_tex(curve: float) -> Texture2D:
+	var clamped: float = clampf(curve, 0.0, 1.0)
+	var key: float = snappedf(clamped, 0.05)
+	if _radial_tex_cache.has(key):
+		return _radial_tex_cache[key]
+
 	var grad := Gradient.new()
-	grad.offsets = PackedFloat32Array([0.0, 0.6, 1.0])
-	grad.colors = PackedColorArray([Color(1, 1, 1, 1), Color(1, 1, 1, 0.7), Color(1, 1, 1, 0)])
-	_radial_gradient_tex = GradientTexture2D.new()
-	_radial_gradient_tex.gradient = grad
-	_radial_gradient_tex.fill = GradientTexture2D.FILL_RADIAL
-	_radial_gradient_tex.fill_from = Vector2(0.5, 0.5)
-	_radial_gradient_tex.fill_to = Vector2(1.0, 0.5)
-	_radial_gradient_tex.width = 64
-	_radial_gradient_tex.height = 64
+	var offsets := PackedFloat32Array()
+	var colors := PackedColorArray()
+	var sample_count := 33
+	for i in range(sample_count):
+		var u: float = float(i) / float(sample_count - 1)
+		var linear_val: float = 1.0 - u
+		var circle_val: float = sqrt(maxf(0.0, 1.0 - u * u))
+		var alpha: float = lerpf(linear_val, circle_val, key)
+		offsets.append(u)
+		colors.append(Color(1.0, 1.0, 1.0, alpha))
+	grad.offsets = offsets
+	grad.colors = colors
+
+	var tex := GradientTexture2D.new()
+	tex.gradient = grad
+	tex.fill = GradientTexture2D.FILL_RADIAL
+	tex.fill_from = Vector2(0.5, 0.5)
+	tex.fill_to = Vector2(1.0, 0.5)
+	tex.width = 128
+	tex.height = 128
+
+	_radial_tex_cache[key] = tex
+	return tex
 
 # 视口内绘制玩家与视野内所有可见生物的范围透视印章 (写入 xray_mask_tex)
 func _on_xray_drawer_draw() -> void:
-	if entity == null or _radial_gradient_tex == null or not is_instance_valid(xray_drawer):
+	if entity == null or not is_instance_valid(xray_drawer):
 		return
 
 	# 1. 绘制玩家自身的透视光晕印章
@@ -775,9 +798,12 @@ func _on_xray_drawer_draw() -> void:
 	var p_ry: float = entity.get("xray_radius").y if entity.get("xray_radius") != null else 55.0
 	var p_offset: Vector2 = entity.get("xray_offset") if entity.get("xray_offset") != null else Vector2(0.0, -16.0)
 	var p_trans: float = entity.get("xray_max_transparency") if entity.get("xray_max_transparency") != null else 0.85
+	var p_curve: float = entity.get("xray_curve") if entity.get("xray_curve") != null else default_xray_curve
 	var p_center := p_pos + p_offset
 	var p_rect := Rect2(p_center.x - p_rx, p_center.y - p_ry, p_rx * 2.0, p_ry * 2.0)
-	xray_drawer.draw_texture_rect(_radial_gradient_tex, p_rect, false, Color(1, 1, 1, p_trans))
+	var p_tex := _get_radial_gradient_tex(p_curve)
+	if p_tex != null:
+		xray_drawer.draw_texture_rect(p_tex, p_rect, false, Color(1, 1, 1, p_trans))
 
 	# 2. 批量绘制当前屏幕视野内所有可见生物的透视印章
 	for c_node in _visible_creatures:
@@ -794,7 +820,10 @@ func _on_xray_drawer_draw() -> void:
 		var c_ry: float = c_node.get("xray_radius").y if c_node.get("xray_radius") != null else 55.0
 		var c_offset: Vector2 = c_node.get("xray_offset") if c_node.get("xray_offset") != null else Vector2(0.0, -16.0)
 		var c_trans: float = c_node.get("xray_max_transparency") if c_node.get("xray_max_transparency") != null else 0.85
+		var c_curve: float = c_node.get("xray_curve") if c_node.get("xray_curve") != null else default_xray_curve
 		var c_center := c_pos + c_offset
 		var c_rect := Rect2(c_center.x - c_rx, c_center.y - c_ry, c_rx * 2.0, c_ry * 2.0)
-		xray_drawer.draw_texture_rect(_radial_gradient_tex, c_rect, false, Color(1, 1, 1, c_trans))
+		var c_tex := _get_radial_gradient_tex(c_curve)
+		if c_tex != null:
+			xray_drawer.draw_texture_rect(c_tex, c_rect, false, Color(1, 1, 1, c_trans))
 

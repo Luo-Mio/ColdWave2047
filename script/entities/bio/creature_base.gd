@@ -30,6 +30,8 @@ var foot_y: float = 0.0
 @export var xray_offset: Vector2 = Vector2(0.0, -16.0)
 ## 透视中心的最大镂空透明度 (0.0=完全实心不透, 0.85=85%点阵镂空露出生物, 1.0=中心完全透明)
 @export_range(0.0, 1.0, 0.05) var xray_max_transparency: float = 0.85
+## 透视边缘透明度渐变曲线弧度 (0.0=45度直线线性渐变, 1.0=1/4圆弧先平缓大范围透光再边缘陡降)
+@export_range(0.0, 1.0, 0.05) var xray_curve: float = 0.0
 
 func _ready() -> void:
 	# 统一 2.5D 生物物理碰撞规则：
