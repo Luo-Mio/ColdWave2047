@@ -38,7 +38,7 @@ extends Node
 		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
 			(fog_rect.material as ShaderMaterial).set_shader_parameter("dither_scale", dither_scale)
 ## 阴影边缘过渡羽化柔和度 (像素)。数值越大，边缘黑点向中心过渡越宽越柔和
-@export_range(4.0, 80.0) var fog_edge_softness: float = 8.0:
+@export_range(4.0, 80.0, 1.0) var fog_edge_softness: float = 24.0:
 	set(v):
 		fog_edge_softness = v
 		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
@@ -50,6 +50,23 @@ extends Node
 ## 透视默认边缘透明度渐变曲线弧度 (0.0=45度直线线性渐变, 1.0=1/4圆弧先平缓再陡降)
 @export_range(0.0, 1.0, 0.05) var default_xray_curve: float = 0.0
 
+@export_group("地形 3D 视线遮挡 (Route B)")
+## 是否启用基于 2.5D 高度场的 3D 视线步进地形阴影 (高台与悬崖遮挡)
+@export var enable_terrain_shadows: bool = true
+## 3D 视线步进步数 (推荐 24~48，步数越高光影边缘越平滑)
+@export_range(8, 64, 1) var terrain_raymarch_steps: int = 32:
+	set(v):
+		terrain_raymarch_steps = v
+		if terrain_mat != null:
+			terrain_mat.set_shader_parameter("raymarch_steps", terrain_raymarch_steps)
+## 3D 地形阴影边缘半影软化宽度 (0.0=硬阴影, 16.0=极柔和半影，过渡平缓)
+@export_range(0.0, 48.0, 1.0) var terrain_shadow_softness: float = 16.0:
+	set(v):
+		terrain_shadow_softness = v
+		if terrain_mat != null:
+			terrain_mat.set_shader_parameter("shadow_softness", terrain_shadow_softness)
+
+
 var entity: CharacterBody2D
 var main_cam: Camera2D
 
@@ -58,7 +75,10 @@ var canvas_layer: CanvasLayer
 var fog_rect: ColorRect
 var fog_viewport: SubViewport
 var fog_cam: Camera2D
+var terrain_drawer: Node2D
+var terrain_mat: ShaderMaterial
 var fog_drawer: Node2D
+
 
 # 内部多实体透视遮罩视口与摄像机
 var xray_viewport: SubViewport
@@ -244,9 +264,15 @@ func _physics_process(delta: float) -> void:
 			if is_instance_valid(fog_cam):
 				fog_cam.position = cam_pos
 				fog_cam.zoom = cam_zoom
+			var true_ground_pos := entity.global_position if entity != null else player_pos
+			_update_terrain_raymarch_params(true_ground_pos, h_eye_total)
+			if is_instance_valid(terrain_drawer):
+				terrain_drawer.queue_redraw()
+
 			fog_drawer.queue_redraw()
 			if is_instance_valid(fog_viewport):
 				fog_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
+
 
 	# 3. 周期性累加全屏视野的历史探索足迹
 	_history_update_timer -= delta
@@ -313,7 +339,7 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 			c_node.visible = false
 			continue
 
-		# 2. 屏幕内生物处于阴影判定：检查脚底是否落入任何正在投射的阴影体中 (与屏幕视觉阴影 100% 精确对齐)
+		# 2. 屏幕内生物处于物体阴影判定：检查脚底是否落入任何正在投射的阴影体中 (与屏幕视觉阴影 100% 精确对齐)
 		var in_shadow := false
 		for i in current_quads_count:
 			if Geometry2D.is_point_in_polygon(c_foot, current_shadow_quads[i]):
@@ -321,6 +347,22 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 				break
 
 		if in_shadow:
+			c_node.visible = false
+			continue
+
+		# 获取生物的楼层高度与海平面绝对视线高度
+		var c_floor: int = 0
+		if c_node.has_method("get_current_floor"):
+			c_floor = c_node.call("get_current_floor")
+		elif "depth_comp" in c_node and is_instance_valid(c_node.get("depth_comp")) and "current_floor" in c_node.get("depth_comp"):
+			c_floor = c_node.get("depth_comp").current_floor
+		else:
+			c_floor = _get_cell_floor(c_foot)
+
+		var c_ground_z := float(c_floor) * 16.0
+
+		# 2.5 屏幕内生物处于地形 3D 高度场阴影判定 (与 GPU 视线步进阴影 100% 精确对齐)
+		if enable_terrain_shadows and _is_blocked_by_terrain(player_pos, h_eye_total, c_foot, c_ground_z, c_floor):
 			c_node.visible = false
 			continue
 
@@ -351,17 +393,8 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 					var oh := float(hit_node.get("obstacle_height")) if hit_node.get("obstacle_height") != null else 48.0
 					h_obs_hit = float(fl) * 16.0 + oh
 
-			# 计算在碰撞点处的 3D 视线高度
-			var c_floor: int = 0
-			if c_node.has_method("get_current_floor"):
-				c_floor = c_node.call("get_current_floor")
-			elif "depth_comp" in c_node and is_instance_valid(c_node.get("depth_comp")) and "current_floor" in c_node.get("depth_comp"):
-				c_floor = c_node.get("depth_comp").current_floor
-			else:
-				c_floor = _get_cell_floor(c_foot)
-
 			var c_eye_h: float = float(c_node.get("eye_height")) if c_node.get("eye_height") != null else 10.0
-			var h_c_eye := float(c_floor) * 16.0 + c_eye_h
+			var h_c_eye := c_ground_z + c_eye_h
 
 			var hit_pos: Vector2 = hit.get("position", c_foot)
 			var total_dist := c_foot.distance_to(player_pos)
@@ -374,6 +407,47 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 		c_node.visible = is_vis
 		if is_vis:
 			_visible_creatures.append(c_node)
+
+# 检查目标地面/生物是否处于地形高度场阴影中 (与 GPU 视线步进 3D 光影 100% 像素级对齐)
+func _is_blocked_by_terrain(p_pos: Vector2, p_eye_z: float, target_pos: Vector2, target_z: float, target_floor: int) -> bool:
+	if not enable_terrain_shadows:
+		return false
+	if target_z >= p_eye_z:
+		return true # 目标水平顶面高于视线高度，背面朝向不可见
+	var gd: Object = _get_grid_data()
+	if gd == null or not gd.has_method("world_to_cell") or not gd.has_method("get_highest_floor"):
+		return false
+
+	var total_dist := p_pos.distance_to(target_pos)
+	if total_dist < 16.0:
+		return false
+
+	var p_cell: Vector2i = gd.world_to_cell(p_pos)
+	var t_cell: Vector2i = gd.world_to_cell(target_pos)
+
+	var p_floor := maxi(0, int(round((p_eye_z - 18.0) / 16.0)))
+	var min_elev: float = float(mini(p_floor, target_floor)) * 16.0
+
+	var steps := clampi(int(total_dist / 24.0), 6, 32)
+	for i in range(1, steps):
+		var s := float(i) / float(steps)
+		var cur_pos := p_pos.lerp(target_pos, s)
+		var cur_ray_z := lerpf(p_eye_z, target_z, s)
+		var cell: Vector2i = gd.world_to_cell(cur_pos)
+
+		if cell == p_cell or cell == t_cell:
+			continue
+
+		var cell_floor: int = gd.get_highest_floor(cell)
+		var h := float(cell_floor) * 16.0
+
+		if h <= min_elev + 0.1:
+			continue
+
+		if cur_ray_z < h:
+			return true
+
+	return false
 
 func _collect_visible_creatures(screen_rect: Rect2) -> void:
 	_visible_creatures.clear()
@@ -441,8 +515,8 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 		var player_eye_h: float = float(entity.get("eye_height")) if entity.get("eye_height") != null else 18.0
 		h_eye_total = float(p_floor) * 16.0 + player_eye_h
 
-	# 角色纯净地表坐标 (消除楼层视觉 Y 轴负偏移，确保光线角度不受垂直高度污染)
-	var player_ground_pos := player_pos + Vector2(0.0, float(p_floor) * 16.0)
+	# 角色纯净地表坐标 (基准物理坐标，确保光线角度不受垂直高度污染)
+	var player_ground_pos := player_pos
 
 	for hit in hits:
 		var cid: int = hit.get("collider_id", 0)
@@ -687,10 +761,23 @@ func _setup_fog_rendering_pipeline() -> void:
 	fog_cam = Camera2D.new()
 	fog_viewport.add_child(fog_cam)
 
-	# 视口绘制节点
+	# 2.1 地形 3D 视线步进底图绘制节点 (位于视口底层)
+	terrain_drawer = Node2D.new()
+	var terrain_shader := load("res://script/shaders/terrain_raymarch.gdshader") as Shader
+	if terrain_shader != null:
+		terrain_mat = ShaderMaterial.new()
+		terrain_mat.shader = terrain_shader
+		terrain_drawer.material = terrain_mat
+		_update_terrain_raymarch_params(entity.global_position if entity != null else Vector2.ZERO, 18.0)
+	terrain_drawer.draw.connect(_on_terrain_drawer_draw)
+	fog_viewport.add_child(terrain_drawer)
+
+
+	# 2.2 障碍物阴影绘制节点 (位于顶层，叠加树木/微物体黑色阴影四边形)
 	fog_drawer = Node2D.new()
 	fog_drawer.draw.connect(_on_fog_drawer_draw)
 	fog_viewport.add_child(fog_drawer)
+
 
 	# 2.5 创建用于绘制多实体透视遮罩的 SubViewport
 	xray_viewport = SubViewport.new()
@@ -732,8 +819,8 @@ func _setup_fog_rendering_pipeline() -> void:
 
 	canvas_layer.add_child(fog_rect)
 
-# 视口内的具体绘制 (全屏点亮 + 覆盖黑色障碍物阴影四边形)
-func _on_fog_drawer_draw() -> void:
+# 视口最底层的地形光影绘制 (运行 3D 视线步进着色器)
+func _on_terrain_drawer_draw() -> void:
 	if entity == null:
 		return
 
@@ -741,10 +828,17 @@ func _on_fog_drawer_draw() -> void:
 	var cam_zoom := fog_cam.zoom if is_instance_valid(fog_cam) else Vector2.ONE
 	var screen_rect := _get_screen_world_rect(cam_pos, cam_zoom, screen_margin)
 
-	# 1. 全屏视野点亮：将整个屏幕视口绘制为全亮 (R=1)
-	fog_drawer.draw_rect(screen_rect, Color(1, 0, 0, 1))
+	if enable_terrain_shadows and terrain_mat != null:
+		terrain_drawer.draw_rect(screen_rect, Color.WHITE)
+	else:
+		terrain_drawer.draw_rect(screen_rect, Color(1, 0, 0, 1))
 
-	# 2. 一次性合批提交所有黑色障碍物阴影四边形 (从 60+ 次 Draw Call 缩减至 1 次底层提交！)
+# 视口内的障碍物具体绘制 (在地形底图之上覆盖黑色树木等障碍物阴影)
+func _on_fog_drawer_draw() -> void:
+	if entity == null:
+		return
+
+	# 一次性合批提交所有黑色障碍物阴影四边形 (从 60+ 次 Draw Call 缩减至 1 次底层提交！)
 	if current_quads_count > 0 and not _batched_indices.is_empty():
 		RenderingServer.canvas_item_add_triangle_array(
 			fog_drawer.get_canvas_item(),
@@ -752,6 +846,31 @@ func _on_fog_drawer_draw() -> void:
 			_batched_vertices,
 			_batched_colors
 		)
+
+# 安全获取 GridData 节点 (兼容独立运行与单元测试)
+func _get_grid_data() -> Object:
+	var tree := get_tree()
+	if tree and tree.root and tree.root.has_node("GridData"):
+		return tree.root.get_node("GridData")
+	return null
+
+# 更新地形 3D 视线步进 Shader 参数
+func _update_terrain_raymarch_params(player_ground_pos: Vector2, h_eye_total: float) -> void:
+	if terrain_mat == null or not enable_terrain_shadows:
+		return
+	terrain_mat.set_shader_parameter("player_ground_pos", player_ground_pos)
+	terrain_mat.set_shader_parameter("player_eye_z", h_eye_total)
+	terrain_mat.set_shader_parameter("raymarch_steps", terrain_raymarch_steps)
+	terrain_mat.set_shader_parameter("shadow_softness", terrain_shadow_softness)
+	var gd: Object = _get_grid_data()
+
+	if gd != null:
+		if "layers" in gd and not gd.layers.is_empty():
+			terrain_mat.set_shader_parameter("layer_offset_y", gd.layers[0].position.y)
+		if gd.has_method("get_height_map_texture"):
+			terrain_mat.set_shader_parameter("height_map_tex", gd.call("get_height_map_texture"))
+
+
 
 # 获取或动态创建指定曲线弧度的径向渐变纹理 (按 0.05 步长离散缓存，运行时 0 GC)
 func _get_radial_gradient_tex(curve: float) -> Texture2D:

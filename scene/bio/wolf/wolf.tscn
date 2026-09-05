@@ -391,8 +391,9 @@ animations = [{
 texture_filter = 1
 scale = Vector2(2, 2)
 script = ExtResource("3_wolfscript")
-xray_radius = Vector2(100, 50)
+xray_radius = Vector2(90, 60)
 xray_max_transparency = 1.0
+xray_curve = 1.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=2097517203]
 sprite_frames = SubResource("SpriteFrames_lfxu0")
@@ -418,3 +419,4 @@ move_prefix = "run"
 
 [node name="WanderAIComponent" type="Node" parent="LogicScript" unique_id=1186868075]
 script = ExtResource("7_ai")
+enable_wander = true

@@ -8,6 +8,14 @@ var grid: Dictionary = {}
 var layers: Array[TileMapLayer] = []
 var tile_cells: Dictionary = {}
 var highest_floor: Dictionary = {}
+
+# 2.5D GPU 高度场纹理 (R8 格式, 256x256, 覆盖 [-128, 128] 网格, 供 3D 视线步进 Shader 使用)
+const HEIGHT_MAP_WIDTH: int = 256
+const HEIGHT_MAP_HEIGHT: int = 256
+const HEIGHT_MAP_OFFSET: Vector2i = Vector2i(128, 128)
+var height_map_image: Image = null
+var height_map_texture: ImageTexture = null
+
 # 2. 物体与农作物占用表
 # 大物体占用表(4x4整格,如树木): key = cell_key(cell), value = 物体节点
 var objects_at: Dictionary = {}
@@ -26,6 +34,7 @@ func build_from_layers(layer_nodes: Array[TileMapLayer]) -> void:
 			grid[Vector3i(cell.x, cell.y, z)] = true
 			tile_cells[k] = true
 			highest_floor[k] = maxi(highest_floor.get(k, 0), z) # ← 记录该格最高层
+	_update_height_map()
 
 # 世界坐标 → 大格子坐标
 func world_to_cell(world_pos: Vector2) -> Vector2i:
@@ -109,6 +118,44 @@ func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 		else:
 			highest_floor.erase(ck)
 			tile_cells.erase(ck)
+
+	if height_map_image != null:
+		var cx := cell.x + HEIGHT_MAP_OFFSET.x
+		var cy := cell.y + HEIGHT_MAP_OFFSET.y
+		if cx >= 0 and cx < HEIGHT_MAP_WIDTH and cy >= 0 and cy < HEIGHT_MAP_HEIGHT:
+			var fl: int = highest_floor.get(ck, 0)
+			height_map_image.set_pixel(cx, cy, Color(float(fl) / 16.0, 0, 0, 1))
+			if height_map_texture != null:
+				height_map_texture.update(height_map_image)
+
+# 初始化并全量刷新全局 2.5D 高度场纹理 (ImageTexture R8)
+func _update_height_map() -> void:
+	if height_map_image == null:
+		height_map_image = Image.create(HEIGHT_MAP_WIDTH, HEIGHT_MAP_HEIGHT, false, Image.FORMAT_R8)
+	else:
+		height_map_image.fill(Color(0, 0, 0, 1))
+
+	for z in layers.size():
+		for cell in layers[z].get_used_cells():
+			var cx := cell.x + HEIGHT_MAP_OFFSET.x
+			var cy := cell.y + HEIGHT_MAP_OFFSET.y
+			if cx >= 0 and cx < HEIGHT_MAP_WIDTH and cy >= 0 and cy < HEIGHT_MAP_HEIGHT:
+				var current_px := height_map_image.get_pixel(cx, cy)
+				var current_fl := int(round(current_px.r * 16.0))
+				if z > current_fl:
+					height_map_image.set_pixel(cx, cy, Color(float(z) / 16.0, 0, 0, 1))
+
+	if height_map_texture == null:
+		height_map_texture = ImageTexture.create_from_image(height_map_image)
+	else:
+		height_map_texture.update(height_map_image)
+
+# 获取全局 2.5D 高度场纹理 (供战争迷雾与视线 Shader 采样)
+func get_height_map_texture() -> ImageTexture:
+	if height_map_texture == null:
+		_update_height_map()
+	return height_map_texture
+
 
 # === 物体与农作物多槽位占用系统 ===
 

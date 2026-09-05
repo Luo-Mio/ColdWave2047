@@ -152,6 +152,7 @@ collision_layer = 4
 collision_mask = 6
 motion_mode = 1
 script = ExtResource("1_0nnbn")
+eye_height = 20.0
 xray_radius = Vector2(150, 100)
 xray_max_transparency = 0.95
 
@@ -209,4 +210,5 @@ script = ExtResource("11_collector")
 
 [node name="VisionFogComponent" type="Node" parent="LogicScript" unique_id=1332865012]
 script = ExtResource("12_fog")
-explored_alpha = 0.4
+explored_alpha = 0.1
+fog_edge_softness = 8.0
