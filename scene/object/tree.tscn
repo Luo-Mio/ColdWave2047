@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://jfn7of5p6he0"]
+
+[ext_resource type="Texture2D" uid="uid://bcwfy0tha30o5" path="res://resources/tree/AutumnTree/AutumnTree.png" id="1_dcgk5"]
+[ext_resource type="Texture2D" uid="uid://ccnd37afaj3nu" path="res://resources/tree/AutumnTree/AutumnTreeTrunk.png" id="2_aotr1"]
+[ext_resource type="Script" uid="uid://bgvstxqn0pm7v" path="res://script/entities/objects/world_object_base.gd" id="3_base"]
+[ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="4_placement"]
+[ext_resource type="Script" uid="uid://bjjesxnpjv7bl" path="res://script/components/object_xray_component.gd" id="5_xray"]
+[ext_resource type="Script" uid="uid://bo27wqobp7dge" path="res://script/components/object_destructible_component.gd" id="6_destruct"]
+
+[node name="AutumnTree" type="Node2D" unique_id=686197970]
+script = ExtResource("3_base")
+
+[node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
+texture_filter = 1
+position = Vector2(-1, 0)
+texture = ExtResource("2_aotr1")
+offset = Vector2(0, -60)
+
+[node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
+texture_filter = 1
+position = Vector2(-1, -60)
+texture = ExtResource("1_dcgk5")
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(3, 0, 0, 3, -4, 0, 0, -3)
+
+[node name="LogicScript" type="Node" parent="." unique_id=892176431]
+
+[node name="ObjectPlacementComponent" type="Node" parent="LogicScript" unique_id=561029384]
+script = ExtResource("4_placement")
+enable_random_jitter = true
+jitter_size = Vector2(16, 12)
+
+[node name="ObjectXRayComponent" type="Node" parent="LogicScript" unique_id=319084725]
+script = ExtResource("5_xray")
+
+[node name="ObjectDestructibleComponent" type="Node" parent="LogicScript" unique_id=742910385]
+script = ExtResource("6_destruct")
+break_with_tile = false
+drop_count = 0

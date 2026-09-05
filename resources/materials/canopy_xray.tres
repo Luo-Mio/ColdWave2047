@@ -1,0 +1,7 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://c5xraymat001"]
+
+[ext_resource type="Shader" uid="uid://cm6timcwebens" path="res://script/shaders/xray.gdshader" id="1_xray"]
+
+[resource]
+shader = ExtResource("1_xray")
+shader_parameter/max_transparency = 1.0

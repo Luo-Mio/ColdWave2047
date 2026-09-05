@@ -1,0 +1,7 @@
+# Godot 4 自动生成的缓存/导入目录（不纳入版本管理）
+.godot/
+
+# 系统/编辑器文件
+.DS_Store
+Thumbs.db
+*.tmp

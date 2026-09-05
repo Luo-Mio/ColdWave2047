@@ -1,0 +1,25 @@
+[gd_scene format=3 uid="uid://d2c1deva3kl4l"]
+
+[ext_resource type="Script" path="res://script/entities/objects/drop_item.gd" id="1_drop"]
+[ext_resource type="Texture2D" uid="uid://bdtrs0pwwhvv2" path="res://resources/object/dirt.png" id="2_yadpp"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_dirt"]
+radius = 12.0
+
+[node name="dirt" type="Node2D" unique_id=435790979]
+script = ExtResource("1_drop")
+item_id = "dirt"
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1407338272]
+texture_filter = 1
+texture = ExtResource("2_yadpp")
+offset = Vector2(0, -4)
+
+[node name="PickupArea" type="Area2D" parent="."]
+collision_layer = 8
+collision_mask = 0
+monitoring = false
+monitorable = true
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="PickupArea"]
+shape = SubResource("CircleShape2D_dirt")
