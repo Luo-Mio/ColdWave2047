@@ -8,6 +8,7 @@
 [node name="wheat" type="Node2D" unique_id=806792723]
 script = ExtResource("1_base")
 grid_size = Vector2i(1, 1)
+obstacle_height = 8.0
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1036024556]
 texture_filter = 1

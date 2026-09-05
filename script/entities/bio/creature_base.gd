@@ -15,6 +15,11 @@ var foot_y: float = 0.0
 # 大脑/输入决策组件 (自动识别 PlayerInputComponent 或各类 AI 组件)
 @onready var brain_comp: Node = _find_brain_component()
 
+@export_group("物理视线高度 (Line of Sight)")
+## 生物站立时的视线/眼睛离地物理高度 (像素)。用于 2.5D 视线投射与跨障碍俯视判断。
+## 主角站立约为 18.0px；野狼等四足生物约为 10.0px；巨型生物可设更高。
+@export var eye_height: float = 18.0
+
 # 透视遮罩参数 (方便玩家在视野内锁定被物体遮挡的目标)
 @export_group("透视遮罩配置 (X-Ray)")
 ## 是否启用该生物的透视遮罩。勾选后，该生物处于树冠或高墙等遮挡物下方时会自动挖出透视视窗；取消勾选可用于隐形或潜行生物
@@ -93,6 +98,12 @@ func set_brain(new_brain: Node) -> void:
 func update_held_item(item_data: Dictionary) -> void:
 	if weapon_comp and weapon_comp.has_method("update_held_item"):
 		weapon_comp.call("update_held_item", item_data)
+
+# 获取生物当前所处楼层 (0=地表, 1=一层台上...)
+func get_current_floor() -> int:
+	if depth_comp and "current_floor" in depth_comp:
+		return depth_comp.current_floor
+	return 0
 
 # 自动寻找大脑组件
 func _find_brain_component() -> Node:

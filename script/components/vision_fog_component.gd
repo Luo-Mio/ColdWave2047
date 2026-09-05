@@ -68,6 +68,9 @@ class ObstacleCacheItem:
 	var world_pos: Vector2
 	var center: Vector2
 	var world_pts: PackedVector2Array
+	var obstacle_node: Node = null
+	var obstacle_height: float = 48.0
+	var floor_level: int = 0
 
 var _obstacle_cache: Dictionary = {} # int (collider_id) -> ObstacleCacheItem
 
@@ -202,15 +205,27 @@ func _physics_process(delta: float) -> void:
 		# 确保物理排除列表（虚空空气墙与自身）已注入底层查询，完全不占用检测名额
 		_ensure_excluded_rids()
 
+		# 获取角色的楼层高度与海平面绝对视线高度
+		var player_floor: int = 0
+		if entity.has_method("get_current_floor"):
+			player_floor = entity.call("get_current_floor")
+		elif "depth_comp" in entity and is_instance_valid(entity.get("depth_comp")) and "current_floor" in entity.get("depth_comp"):
+			player_floor = entity.get("depth_comp").current_floor
+		else:
+			player_floor = _get_cell_floor(player_pos)
+
+		var player_eye_h: float = float(entity.get("eye_height")) if entity.get("eye_height") != null else 18.0
+		var h_eye_total := float(player_floor) * 16.0 + player_eye_h
+
 		# 当前屏幕分辨率对应的世界空间可视包围盒
 		var screen_world_rect := _get_screen_world_rect(cam_pos, cam_zoom, 48.0)
 
-		# 收集屏幕内的物理障碍物，几何运算投射到屏幕外的阴影体
-		var quads_changed := _calculate_shadow_quads(player_pos, cam_pos, cam_zoom)
+		# 收集屏幕内的物理障碍物，几何运算投射到屏幕外的阴影体 (纯净地表坐标与 3D 几何截断)
+		var quads_changed := _calculate_shadow_quads(player_pos, cam_pos, cam_zoom, player_floor, h_eye_total)
 
-		# 运算屏幕内生物显隐与视线遮蔽 (结合几何阴影体判定与反向射线法)
+		# 运算屏幕内生物显隐与视线遮蔽 (结合几何阴影体判定与 3D 视线高度判定)
 		if enable_creature_hiding:
-			_update_creature_visibility(player_pos, screen_world_rect)
+			_update_creature_visibility(player_pos, screen_world_rect, h_eye_total)
 		else:
 			_collect_visible_creatures(screen_world_rect)
 
@@ -234,6 +249,15 @@ func _physics_process(delta: float) -> void:
 	if _history_update_timer <= 0.0:
 		_history_update_timer = 0.5 # 每 500ms 检查一次，大幅降低 CPU 到 GPU 的显存写回频次
 		_stamp_history_exploration(cam_pos, cam_zoom)
+
+# 安全获取指定世界坐标对应的网格地表楼层 (兼容独立运行与单元测试)
+func _get_cell_floor(world_pos: Vector2) -> int:
+	var tree := get_tree()
+	if tree and tree.root and tree.root.has_node("GridData"):
+		var gd = tree.root.get_node("GridData")
+		if gd.has_method("world_to_cell") and gd.has_method("get_highest_floor"):
+			return gd.get_highest_floor(gd.world_to_cell(world_pos))
+	return 0
 
 # 确保虚空空气墙与自身被底层物理查询排除
 func _ensure_excluded_rids() -> void:
@@ -266,7 +290,7 @@ func _get_screen_world_rect(cam_pos: Vector2, cam_zoom: Vector2, margin: float =
 # -------------------------------------------------------------
 # 一、生物显隐判定：屏幕视口剔除 + 反向单射线 (极其高效，零 GC 堆分配)
 # -------------------------------------------------------------
-func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> void:
+func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_total: float = 18.0) -> void:
 	_visible_creatures.clear()
 	var space_state := entity.get_world_2d().direct_space_state
 	var creatures := get_tree().get_nodes_in_group("creatures")
@@ -296,7 +320,7 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> voi
 			c_node.visible = false
 			continue
 
-		# 4. 严格射线物理遮蔽检测（针对角色与生物之间的实体碰撞体，如高墙/厚障碍物）
+		# 3. 严格射线物理遮蔽检测（针对角色与生物之间的实体碰撞体，如高墙/厚障碍物）
 		_shared_ray_query.from = c_foot
 		_shared_ray_query.to = player_pos
 		_shared_ray_query.collision_mask = obstacle_mask
@@ -305,8 +329,44 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2) -> voi
 		var hit := space_state.intersect_ray(_shared_ray_query)
 		_ray_exclude_rids.pop_back()
 
-		# 射线通畅且未被真实障碍物阻挡 -> 可见；被大树等挡住 -> 隐形！
-		var is_vis := hit.is_empty()
+		# 射线通畅且未被真实障碍物阻挡 -> 可见；被挡住时判断视线是否能越顶俯视
+		var is_vis := true
+		if not hit.is_empty():
+			var hit_cid: int = hit.get("collider_id", 0)
+			var hit_item: ObstacleCacheItem = _obstacle_cache.get(hit_cid)
+			var h_obs_hit: float = 48.0
+			if hit_item != null:
+				h_obs_hit = float(hit_item.floor_level) * 16.0 + hit_item.obstacle_height
+			else:
+				var hit_col: Object = hit.get("collider")
+				if hit_col is Node:
+					var hit_node := hit_col as Node
+					if hit_node.get_parent() != null and (hit_node.get_parent().get("obstacle_height") != null or hit_node.get_parent().get("floor_level") != null):
+						hit_node = hit_node.get_parent()
+					var fl := int(hit_node.get("floor_level")) if hit_node.get("floor_level") != null else _get_cell_floor(hit.get("position", Vector2.ZERO))
+					var oh := float(hit_node.get("obstacle_height")) if hit_node.get("obstacle_height") != null else 48.0
+					h_obs_hit = float(fl) * 16.0 + oh
+
+			# 计算在碰撞点处的 3D 视线高度
+			var c_floor: int = 0
+			if c_node.has_method("get_current_floor"):
+				c_floor = c_node.call("get_current_floor")
+			elif "depth_comp" in c_node and is_instance_valid(c_node.get("depth_comp")) and "current_floor" in c_node.get("depth_comp"):
+				c_floor = c_node.get("depth_comp").current_floor
+			else:
+				c_floor = _get_cell_floor(c_foot)
+
+			var c_eye_h: float = float(c_node.get("eye_height")) if c_node.get("eye_height") != null else 10.0
+			var h_c_eye := float(c_floor) * 16.0 + c_eye_h
+
+			var hit_pos: Vector2 = hit.get("position", c_foot)
+			var total_dist := c_foot.distance_to(player_pos)
+			var t := (c_foot.distance_to(hit_pos) / total_dist) if total_dist > 0.001 else 0.0
+			var h_sight := lerpf(h_c_eye, h_eye_total, t)
+
+			if h_sight <= h_obs_hit:
+				is_vis = false
+
 		c_node.visible = is_vis
 		if is_vis:
 			_visible_creatures.append(c_node)
@@ -341,7 +401,7 @@ func _init_indices_pool(max_quads: int) -> void:
 		_static_indices[i_base + 4] = v_base + 2
 		_static_indices[i_base + 5] = v_base + 3
 
-func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Vector2) -> bool:
+func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Vector2, player_floor: int = -9999, h_eye_total_in: float = -9999.0) -> bool:
 	current_quads_count = 0
 
 	if _shape_query == null:
@@ -361,6 +421,24 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 
 	# 阴影四边形外推长度：保证阴影贯穿整个屏幕并穿透到屏幕之外
 	var extend_len := screen_rect.size.length() * 1.5
+
+	# 自动推断角色的楼层与海平面绝对视线高度 (若未指定)
+	var p_floor := player_floor
+	if p_floor == -9999:
+		if entity.has_method("get_current_floor"):
+			p_floor = entity.call("get_current_floor")
+		elif "depth_comp" in entity and is_instance_valid(entity.get("depth_comp")) and "current_floor" in entity.get("depth_comp"):
+			p_floor = entity.get("depth_comp").current_floor
+		else:
+			p_floor = _get_cell_floor(player_pos)
+
+	var h_eye_total := h_eye_total_in
+	if h_eye_total < -9000.0:
+		var player_eye_h: float = float(entity.get("eye_height")) if entity.get("eye_height") != null else 18.0
+		h_eye_total = float(p_floor) * 16.0 + player_eye_h
+
+	# 角色纯净地表坐标 (消除楼层视觉 Y 轴负偏移，确保光线角度不受垂直高度污染)
+	var player_ground_pos := player_pos + Vector2(0.0, float(p_floor) * 16.0)
 
 	for hit in hits:
 		var cid: int = hit.get("collider_id", 0)
@@ -383,35 +461,74 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 		if obs_item == null or not screen_rect.has_point(obs_item.world_pos):
 			continue
 
-		var base_dir := (obs_item.center - player_pos)
-		if base_dir.is_zero_approx():
+		var obs_node := obs_item.obstacle_node
+		var obs_floor := obs_item.floor_level
+		if is_instance_valid(obs_node) and obs_node.get("floor_level") != null:
+			obs_floor = int(obs_node.get("floor_level"))
+
+		var obs_h := obs_item.obstacle_height
+		if is_instance_valid(obs_node) and obs_node.get("obstacle_height") != null:
+			obs_h = float(obs_node.get("obstacle_height"))
+
+		# 若物体高度为 0，视为纯地表扁平贴花，不投射视野阴影
+		if obs_h <= 0.0:
 			continue
-		var base_angle := base_dir.angle()
+
+		# 障碍物地表中心坐标与绝对海平面立面高度
+		var obs_floor_offset := float(obs_floor) * 16.0
+		var obs_ground_center := obs_item.center + Vector2(0.0, obs_floor_offset)
+		var h_obs_total := obs_floor_offset + obs_h
+
+		var base_dir_ground := (obs_ground_center - player_ground_pos)
+		if base_dir_ground.is_zero_approx():
+			continue
+		var base_angle_ground := base_dir_ground.angle()
 
 		var min_rel := INF
 		var max_rel := -INF
 		var v_left := Vector2.ZERO
 		var v_right := Vector2.ZERO
+		var v_left_ground := Vector2.ZERO
+		var v_right_ground := Vector2.ZERO
 
-		# 核心极值顶点扫描法 (基于相对偏差角)
+		# 核心极值顶点扫描法 (基于纯净地表坐标的相对偏差角，绝不因楼层升降发生角度偏转)
 		for v in obs_item.world_pts:
-			var rel := wrapf((v - player_pos).angle() - base_angle, -PI, PI)
+			var vg := v + Vector2(0.0, obs_floor_offset)
+			var rel := wrapf((vg - player_ground_pos).angle() - base_angle_ground, -PI, PI)
 			if rel < min_rel:
 				min_rel = rel
 				v_left = v
+				v_left_ground = vg
 			if rel > max_rel:
 				max_rel = rel
 				v_right = v
+				v_right_ground = vg
 
 		# 异常防呆：若两极值相对角极小（退化）或跨度接近 PI（角色身处物体中心），跳过
 		if max_rel - min_rel < 0.001 or max_rel - min_rel > PI * 0.98:
 			continue
 
-		# 沿玩家到极值顶点的射线方向推向屏幕之外
-		var dir_left := (v_left - player_pos).normalized()
-		var dir_right := (v_right - player_pos).normalized()
-		var e_left := player_pos + dir_left * extend_len
-		var e_right := player_pos + dir_right * extend_len
+		# 地表射线方向
+		var dir_left_ground := (v_left_ground - player_ground_pos).normalized()
+		var dir_right_ground := (v_right_ground - player_ground_pos).normalized()
+
+		# 基于 3D 相似三角形计算阴影落点长度 (若视线高于障碍物顶端则产生有限长截断阴影)
+		var len_left := extend_len
+		var len_right := extend_len
+		var height_diff := h_eye_total - h_obs_total
+		if height_diff > 0.001:
+			var dist_left := (v_left_ground - player_ground_pos).length()
+			var dist_right := (v_right_ground - player_ground_pos).length()
+			len_left = minf(extend_len, dist_left * (obs_h / height_diff))
+			len_right = minf(extend_len, dist_right * (obs_h / height_diff))
+
+		# 若阴影被截断到极短（例如微弱矮草），可忽略
+		if len_left < 0.5 and len_right < 0.5:
+			continue
+
+		# 计算屏幕阴影边缘落点
+		var e_left := v_left + dir_left_ground * len_left
+		var e_right := v_right + dir_right_ground * len_right
 
 		# 1. 0-GC 写入 current_shadow_quads 槽位 (保持外部可观察性与测试兼容)
 		if current_quads_count < current_shadow_quads.size():
@@ -467,6 +584,31 @@ func _extract_obstacle_cache(c_node: Node) -> ObstacleCacheItem:
 			center += wp
 		item.center = center / float(pts.size())
 		item.world_pts = pts
+
+		var obs_node: Node = c_node
+		var p_node := c_node.get_parent()
+		if p_node != null and (p_node.get("obstacle_height") != null or p_node.get("floor_level") != null):
+			obs_node = p_node
+		item.obstacle_node = obs_node
+
+		var obs_h: float = 48.0
+		var h_val = obs_node.get("obstacle_height")
+		if h_val != null:
+			obs_h = float(h_val)
+		elif c_node.get("obstacle_height") != null:
+			obs_h = float(c_node.get("obstacle_height"))
+		item.obstacle_height = obs_h
+
+		var fl: int = 0
+		var fl_val = obs_node.get("floor_level")
+		if fl_val != null:
+			fl = int(fl_val)
+		elif c_node.get("floor_level") != null:
+			fl = int(c_node.get("floor_level"))
+		else:
+			fl = _get_cell_floor(item.center)
+		item.floor_level = fl
+
 		return item
 	return null
 

@@ -13,6 +13,12 @@ extends Node2D
 ## 物体所在楼层高度 (0=地面, 1=一层台上...)
 @export var floor_level: int = 0
 
+# === 物理立面遮挡高度 ===
+@export_group("物理立面高度 (Obstacle Height)")
+## 物体自身的立体遮挡高度 (像素)。用于 2.5D 视线阴影投射计算。
+## 秋季大树约为 48px~60px；单层砖石方块约为 16px；低矮农作物/小麦约为 8px。
+@export var obstacle_height: float = 48.0
+
 # === 破坏与掉落属性 ===
 @export_group("破坏与掉落配置")
 ## 是否随地砖被挖而连带瓦解（小麦/花草 = true，大树/巨石 = false）
