@@ -46,7 +46,7 @@ const float SAMPLE_WEIGHTS[13] = {
 };
 
 void fragment() {
-    vec4 col = texture(TEXTURE, UV);
+    vec4 col = COLOR; // Godot 的 COLOR 在片元阶段已预乘贴图与 modulate，直接使用避免二次乘算导致变黑
     if (col.a <= 0.001) {
         discard;
     }

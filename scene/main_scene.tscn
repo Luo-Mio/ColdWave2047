@@ -122,6 +122,21 @@ position = Vector2(165, 63)
 [node name="Wolf3" parent="sortworld" unique_id=701672555 instance=ExtResource("10_wolf")]
 position = Vector2(316, 24)
 
+[node name="Wolf4" parent="sortworld" unique_id=1895894603 instance=ExtResource("10_wolf")]
+position = Vector2(49, 180)
+
+[node name="Wolf5" parent="sortworld" unique_id=1489722693 instance=ExtResource("10_wolf")]
+position = Vector2(499, 116)
+
+[node name="Wolf6" parent="sortworld" unique_id=947021064 instance=ExtResource("10_wolf")]
+position = Vector2(242, 286)
+
+[node name="Wolf7" parent="sortworld" unique_id=1625236670 instance=ExtResource("10_wolf")]
+position = Vector2(206, -52)
+
+[node name="Wolf8" parent="sortworld" unique_id=1257553610 instance=ExtResource("10_wolf")]
+position = Vector2(-80, 93)
+
 [node name="plantscene" type="Node" parent="." unique_id=676632468]
 
 [node name="WallXRayManager" type="Node" parent="." unique_id=1000475511]

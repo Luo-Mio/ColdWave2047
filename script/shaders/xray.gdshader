@@ -19,7 +19,7 @@ const mat4 bayer = mat4(
 );
 
 void fragment() {
-    vec4 col = texture(TEXTURE, UV);
+    vec4 col = COLOR;
     if (col.a <= 0.001) { discard; }
 
     // 1. 单次采样屏幕空间多实体透视蒙版 (Alpha 通道记录透视强度，O(1) 恒定开销)
