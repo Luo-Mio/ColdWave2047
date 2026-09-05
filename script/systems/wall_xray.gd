@@ -41,7 +41,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 	# 1. 还原上一批透视的高墙与被染黑的同层地基
 	for layer in active_xray_layers:
 		if is_instance_valid(layer):
-			layer.material = null
+			layer.material = VisionFogComponent.get_tile_shadow_material()
 	active_xray_layers.clear()
 
 	for layer in active_black_layers:

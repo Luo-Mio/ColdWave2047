@@ -119,13 +119,20 @@ float compute_visibility(vec3 eye, vec3 target, int steps, vec2 frag_coord) {
 		}
 		
 		float clearance = cur_ray_z - h;
-		if (clearance < -0.5) {
-			return 0.0; // 完全处于遮挡之下
-		}
-		if (shadow_softness > 0.001) {
-			float t = clamp((clearance + 0.5) / shadow_softness, 0.0, 1.0);
-			float soft = smoothstep(0.0, 1.0, t); // S 型缓动平滑过渡，浓度渐变极柔和
-			min_vis = min(min_vis, soft);
+		if (shadow_softness <= 0.001) {
+			if (clearance < 0.0) {
+				return 0.0;
+			}
+		} else {
+			float z_soft = max(0.5, shadow_softness * 0.1);
+			if (clearance <= -z_soft) {
+				return 0.0; // 完全处于遮挡死角之下
+			}
+			if (clearance < z_soft) {
+				float t = (clearance + z_soft) / (2.0 * z_soft);
+				float soft = smoothstep(0.0, 1.0, t); // S 型平滑过渡，在几何截断落点处自然淡出
+				min_vis = min(min_vis, soft);
+			}
 		}
 	}
 	return min_vis;

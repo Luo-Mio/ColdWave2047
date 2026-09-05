@@ -23,6 +23,8 @@ uniform vec4 fog_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform bool enable_dither_fog = true;
 uniform int dither_scale : hint_range(1, 4) = 1; // 点阵像素缩放 (1=精细屏幕像素, 2=2x2复古像素)
 uniform float edge_softness : hint_range(4.0, 80.0) = 28.0; // 边缘到中心渐变过渡宽度 (像素)
+// 是否将动态投影仅渲染在地表瓷砖之下 (地表阴影交由 TileMapLayer 负责，全屏层仅负责未知未探索黑雾)
+uniform bool render_shadows_under_objects = true;
 
 // 8x8 经典 Bayer 像素抖动矩阵 (64 级精细灰阶，比 4x4 细腻 4 倍，浓度渐变过渡极度柔和丝滑)
 const float bayer8[64] = float[64](
@@ -83,13 +85,26 @@ void fragment() {
 
 	// 4. 三态深度计算：当前视野全亮(0.0) -> 历史探索半黑 -> 未知浓雾纯黑(1.0)
 	float darkness = unexplored_alpha;
-	if (current_vis > 0.0001) {
-		// S 型平滑缓动曲线让浓度过渡极度柔和自然
-		float vis_factor = smoothstep(0.0, 1.0, clamp(current_vis, 0.0, 1.0));
-		darkness = mix(explored_alpha, 0.0, vis_factor);
-	} else if (explored > 0.05) {
-		// 历史探索记忆区：半黑留底
-		darkness = mix(unexplored_alpha, explored_alpha, clamp(explored, 0.0, 1.0));
+	if (render_shadows_under_objects) {
+		// 当开启“阴影在物体之下”分层渲染时：
+		// 已探索区域的地表动态阴影已由地表瓷砖 Shader 负责（位于前景树木等物体之下）
+		// 全屏后处理层仅负责未探索未知浓雾 (Unexplored Fog)
+		if (current_vis > 0.999 || explored >= 0.999) {
+			discard;
+		}
+		float vis_blend = max(current_vis, explored);
+		if (vis_blend > 0.001) {
+			darkness = (1.0 - smoothstep(0.0, 1.0, clamp(vis_blend, 0.0, 1.0))) * unexplored_alpha;
+		}
+	} else {
+		if (current_vis > 0.0001) {
+			// S 型平滑缓动曲线让浓度过渡极度柔和自然
+			float vis_factor = smoothstep(0.0, 1.0, clamp(current_vis, 0.0, 1.0));
+			darkness = mix(explored_alpha, 0.0, vis_factor);
+		} else if (explored > 0.05) {
+			// 历史探索记忆区：半黑留底
+			darkness = mix(unexplored_alpha, explored_alpha, clamp(explored, 0.0, 1.0));
+		}
 	}
 
 	// 5. 像素呈现：纯黑 8x8 精细点阵抖动或传统 Alpha 半透明

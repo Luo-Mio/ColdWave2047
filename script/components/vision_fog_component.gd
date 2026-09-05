@@ -6,9 +6,15 @@ extends Node
 ## 屏幕边缘外扩裕量 (像素)。用于在障碍物刚接近屏幕边缘时提前生成阴影，防止边缘闪烁
 @export var screen_margin: float = 96.0
 ## 历史探索区域的留底深浅 (0.0=全亮探索即清空, 0.35=半透明辅助阴影, 1.0=完全纯黑未见)
-@export_range(0.0, 1.0, 0.05) var explored_alpha: float = 0.35
+@export_range(0.0, 1.0, 0.05) var explored_alpha: float = 0.35:
+	set(v):
+		explored_alpha = v
+		_sync_tile_shadow_params()
 ## 未探索未知区域的浓雾深浅 (0.5=半透明开发调试, 1.0=纯黑伸手不见五指)
-@export_range(0.0, 1.0, 0.05) var unexplored_alpha: float = 0.50
+@export_range(0.0, 1.0, 0.05) var unexplored_alpha: float = 0.50:
+	set(v):
+		unexplored_alpha = v
+		_sync_tile_shadow_params()
 ## 是否隐藏视线盲区内的其他生物。勾选后，躲在阴影或厚墙后的生物将彻底隐形
 @export var enable_creature_hiding: bool = true
 ## 遮挡视线的物理障碍层掩码。通常为 Layer 2 障碍物层 (数值 2)
@@ -29,20 +35,22 @@ extends Node
 @export var enable_dither_fog: bool = true:
 	set(v):
 		enable_dither_fog = v
-		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
-			(fog_rect.material as ShaderMaterial).set_shader_parameter("enable_dither_fog", enable_dither_fog)
+		_sync_tile_shadow_params()
 ## 点阵像素缩放颗粒度 (1=精细屏幕像素, 2=2x2复古像素块)
 @export_range(1, 4) var dither_scale: int = 1:
 	set(v):
 		dither_scale = v
-		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
-			(fog_rect.material as ShaderMaterial).set_shader_parameter("dither_scale", dither_scale)
+		_sync_tile_shadow_params()
 ## 阴影边缘过渡羽化柔和度 (像素)。数值越大，边缘黑点向中心过渡越宽越柔和
 @export_range(4.0, 80.0, 1.0) var fog_edge_softness: float = 24.0:
 	set(v):
 		fog_edge_softness = v
-		if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
-			(fog_rect.material as ShaderMaterial).set_shader_parameter("edge_softness", fog_edge_softness)
+		_sync_tile_shadow_params()
+## 是否将动态投影仅渲染在地表瓷砖层 (物体之下)。开启后树木等前景物体自然遮盖地表阴影，全屏层仅负责未知黑雾
+@export var render_shadows_under_objects: bool = true:
+	set(v):
+		render_shadows_under_objects = v
+		_sync_tile_shadow_params()
 ## 是否允许生物透过半透明树冠显现 (屏幕内生物处于树叶下时保留可见轮廓)
 @export var show_creatures_through_canopy: bool = true
 
@@ -79,6 +87,35 @@ var terrain_drawer: Node2D
 var terrain_mat: ShaderMaterial
 var fog_drawer: Node2D
 
+
+# 享元模式：全局地表瓦片阴影共享材质单例 (所有 cell_layer 瓦片共用一份材质，显存零浪费且底层自动合批)
+static var shared_tile_shadow_material: ShaderMaterial = null
+
+static func get_tile_shadow_material() -> ShaderMaterial:
+	if shared_tile_shadow_material == null:
+		var shader := load("res://script/shaders/tile_ground_shadow.gdshader") as Shader
+		if shader:
+			shared_tile_shadow_material = ShaderMaterial.new()
+			shared_tile_shadow_material.shader = shader
+	return shared_tile_shadow_material
+
+func _sync_tile_shadow_params() -> void:
+	if is_instance_valid(fog_rect) and fog_rect.material is ShaderMaterial:
+		var fog_mat := fog_rect.material as ShaderMaterial
+		fog_mat.set_shader_parameter("explored_alpha", explored_alpha)
+		fog_mat.set_shader_parameter("unexplored_alpha", unexplored_alpha)
+		fog_mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
+		fog_mat.set_shader_parameter("dither_scale", dither_scale)
+		fog_mat.set_shader_parameter("edge_softness", fog_edge_softness)
+		fog_mat.set_shader_parameter("render_shadows_under_objects", render_shadows_under_objects)
+
+	var tile_mat := get_tile_shadow_material()
+	if tile_mat != null:
+		tile_mat.set_shader_parameter("active", render_shadows_under_objects)
+		tile_mat.set_shader_parameter("shadow_darkness", explored_alpha)
+		tile_mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
+		tile_mat.set_shader_parameter("dither_scale", dither_scale)
+		tile_mat.set_shader_parameter("edge_softness", fog_edge_softness)
 
 # 内部多实体透视遮罩视口与摄像机
 var xray_viewport: SubViewport
@@ -167,6 +204,7 @@ func _ready() -> void:
 
 	_init_history_map()
 	_setup_fog_rendering_pipeline()
+	_sync_tile_shadow_params()
 
 func _physics_process(delta: float) -> void:
 	if entity == null:
@@ -191,7 +229,7 @@ func _physics_process(delta: float) -> void:
 	if _mask_cam_pos == Vector2(-99999, -99999):
 		_mask_cam_pos = cam_pos
 
-	# 1. 广播全局 Shader 变量给树冠与遮挡物透视 (供 xray.gdshader 等使用)
+	# 1. 广播全局 Shader 变量给树冠与遮挡物透视以及地表阴影
 	var vp_size_vec := Vector2(fog_viewport.size) if is_instance_valid(fog_viewport) else Vector2(1152, 648)
 	var facing_dir_global: Vector2 = entity.call("get_facing_direction") if entity.has_method("get_facing_direction") else Vector2.DOWN
 	RenderingServer.global_shader_parameter_set("vision_cam_pos", _mask_cam_pos)
@@ -324,13 +362,15 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 	_visible_creatures.clear()
 	var space_state := entity.get_world_2d().direct_space_state
 	var creatures := get_tree().get_nodes_in_group("creatures")
+	var p_ground_pos := entity.global_position if entity != null else player_pos
 
 	for c in creatures:
 		if not is_instance_valid(c) or c == entity or not (c is Node2D):
 			continue
 
 		var c_node := c as Node2D
-		var c_foot := c_node.global_position
+		var c_ground_pos := c_node.global_position
+		var c_foot := c_ground_pos
 		if c_node.has_method("get_visual_foot_position"):
 			c_foot = c_node.call("get_visual_foot_position")
 
@@ -357,18 +397,18 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 		elif "depth_comp" in c_node and is_instance_valid(c_node.get("depth_comp")) and "current_floor" in c_node.get("depth_comp"):
 			c_floor = c_node.get("depth_comp").current_floor
 		else:
-			c_floor = _get_cell_floor(c_foot)
+			c_floor = _get_cell_floor(c_ground_pos)
 
 		var c_ground_z := float(c_floor) * 16.0
 
 		# 2.5 屏幕内生物处于地形 3D 高度场阴影判定 (与 GPU 视线步进阴影 100% 精确对齐)
-		if enable_terrain_shadows and _is_blocked_by_terrain(player_pos, h_eye_total, c_foot, c_ground_z, c_floor):
+		if enable_terrain_shadows and _is_blocked_by_terrain(p_ground_pos, h_eye_total, c_ground_pos, c_ground_z, c_floor):
 			c_node.visible = false
 			continue
 
 		# 3. 严格射线物理遮蔽检测（针对角色与生物之间的实体碰撞体，如高墙/厚障碍物）
-		_shared_ray_query.from = c_foot
-		_shared_ray_query.to = player_pos
+		_shared_ray_query.from = c_ground_pos
+		_shared_ray_query.to = p_ground_pos
 		_shared_ray_query.collision_mask = obstacle_mask
 		_ray_exclude_rids.append(c_node.get_rid())
 		_shared_ray_query.exclude = _ray_exclude_rids
@@ -815,6 +855,7 @@ func _setup_fog_rendering_pipeline() -> void:
 	mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
 	mat.set_shader_parameter("dither_scale", dither_scale)
 	mat.set_shader_parameter("edge_softness", fog_edge_softness)
+	mat.set_shader_parameter("render_shadows_under_objects", render_shadows_under_objects)
 	fog_rect.material = mat
 
 	canvas_layer.add_child(fog_rect)

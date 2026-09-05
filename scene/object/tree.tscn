@@ -9,7 +9,6 @@
 
 [node name="AutumnTree" type="Node2D" unique_id=686197970]
 script = ExtResource("3_base")
-obstacle_height = 48.0
 
 [node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
 texture_filter = 1
@@ -28,7 +27,7 @@ collision_mask = 0
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
 scale = Vector2(1, 0.5)
-polygon = PackedVector2Array(3, 0, 0, 3, -4, 0, 0, -3)
+polygon = PackedVector2Array(7, 0, 0, 4, -7, 0, 0, -4)
 
 [node name="LogicScript" type="Node" parent="." unique_id=892176431]
 

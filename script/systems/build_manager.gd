@@ -149,6 +149,8 @@ func get_or_create_cell_layer(z: int, cell: Vector2i, sort_world: Node2D, tile_l
 	cell_layer.collision_enabled = false
 	cell_layer.set("sort_key", GridData.cell_to_sort_key(cell))
 	cell_layer.set("layer_no", z)
+	# 统一挂载地表动态阴影共享材质 (享元模式，所有瓦片共用一份 ShaderMaterial)
+	cell_layer.material = VisionFogComponent.get_tile_shadow_material()
 	sort_world.add_child(cell_layer)
 	return cell_layer
 	

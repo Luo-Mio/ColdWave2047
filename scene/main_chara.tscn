@@ -153,8 +153,9 @@ collision_mask = 6
 motion_mode = 1
 script = ExtResource("1_0nnbn")
 eye_height = 20.0
-xray_radius = Vector2(150, 100)
-xray_max_transparency = 0.95
+xray_radius = Vector2(180, 120)
+xray_max_transparency = 1.0
+xray_curve = 1.0
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=733103301]
 process_callback = 0
