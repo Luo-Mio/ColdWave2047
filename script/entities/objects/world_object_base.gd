@@ -113,6 +113,29 @@ func _ready() -> void:
 	if parent_sort and parent_sort.has_method("insert_sort"):
 		parent_sort.call("insert_sort", self)
 
+	# 3. 注册进全局世界物体组，便于战争迷雾动态阴影检测
+	add_to_group("world_objects")
+
+	# 4. 为所有视觉精灵挂载通用材质，并精确区分透视部件 (Canopy 树冠开启透视，Trunk 树干关闭透视保持实体)
+	var shared_mat := ObjectXRayComponent.get_shared_material()
+	for child in get_children():
+		if child is Sprite2D:
+			if child.material == null:
+				child.material = shared_mat
+			var is_xray: bool = (xray_comp != null and xray_comp.target_node_name == child.name) or child.name.begins_with("Canopy") or child.name.begins_with("Roof")
+			child.set_instance_shader_parameter("enable_xray", is_xray)
+
+var _is_in_shadow: bool = false
+
+# 动态切换物体是否处于阴影覆盖中 (在投影内叠加像素点阵阴影，不在投影内保持 100% 原色)
+func set_in_shadow(in_shadow: bool) -> void:
+	if _is_in_shadow == in_shadow:
+		return
+	_is_in_shadow = in_shadow
+	for child in get_children():
+		if child is CanvasItem and child.material != null:
+			child.set_instance_shader_parameter("is_in_shadow", in_shadow)
+
 func _find_placement_comp() -> ObjectPlacementComponent:
 	return find_child("ObjectPlacementComponent", true, false) as ObjectPlacementComponent
 

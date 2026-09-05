@@ -9,6 +9,7 @@
 
 [node name="AutumnTree" type="Node2D" unique_id=686197970]
 script = ExtResource("3_base")
+break_with_tile = false
 
 [node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
 texture_filter = 1

@@ -117,6 +117,12 @@ func _sync_tile_shadow_params() -> void:
 		tile_mat.set_shader_parameter("dither_scale", dither_scale)
 		tile_mat.set_shader_parameter("edge_softness", fog_edge_softness)
 
+	var obj_mat := ObjectXRayComponent.get_shared_material()
+	if obj_mat != null:
+		obj_mat.set_shader_parameter("shadow_darkness", explored_alpha)
+		obj_mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
+		obj_mat.set_shader_parameter("dither_scale", dither_scale)
+
 # 内部多实体透视遮罩视口与摄像机
 var xray_viewport: SubViewport
 var xray_cam: Camera2D
@@ -166,8 +172,9 @@ var history_texture: ImageTexture
 const MAP_RES: int = 256
 var _history_update_timer: float = 0.0
 
-# 当帧计算的阴影四边形
+# 当帧计算的阴影四边形与对应投射体 Collider ID
 var current_shadow_quads: Array[PackedVector2Array] = []
+var _quad_source_cids: Array[int] = []
 var current_quads_count: int = 0
 
 func _ready() -> void:
@@ -290,6 +297,9 @@ func _physics_process(delta: float) -> void:
 			_update_creature_visibility(player_pos, screen_world_rect, h_eye_total)
 		else:
 			_collect_visible_creatures(screen_world_rect)
+
+		# 运算屏幕内物体阴影覆盖状态 (在投影内的物体叠加阴影，不在投影内的物体处于阴影之上)
+		_update_objects_shadow_state(player_pos, screen_world_rect, h_eye_total)
 
 		# 脏标记智能重绘：仅当摄像机位移、角色位移或阴影形状变动时才重绘，静止时 0 额外 CPU/GPU 消耗！
 		var threshold_sq := move_threshold * move_threshold
@@ -503,6 +513,58 @@ func _collect_visible_creatures(screen_rect: Rect2) -> void:
 			c_node.visible = true
 			_visible_creatures.append(c_node)
 
+# 运算屏幕内物体阴影覆盖状态 (处于投影内的物体叠加点阵阴影，不在投影内的物体处于地表阴影之上保持原色)
+func _update_objects_shadow_state(player_pos: Vector2, screen_rect: Rect2, h_eye_total: float = 18.0) -> void:
+	var objects := get_tree().get_nodes_in_group("world_objects")
+	if objects.is_empty():
+		return
+
+	var p_ground_pos := entity.global_position if entity != null else player_pos
+
+	for obj in objects:
+		if not is_instance_valid(obj) or not (obj is Node2D):
+			continue
+		var obj_node := obj as Node2D
+		var obj_foot := obj_node.global_position
+		if obj_node.has_method("get_visual_foot_position"):
+			obj_foot = obj_node.call("get_visual_foot_position")
+
+		# 1. 屏幕视口剔除：不在当前屏幕可见范围内的物体不更新
+		if not screen_rect.has_point(obj_foot):
+			continue
+
+		var in_shadow := false
+
+		# 2. 障碍物投影四边形检测 (排除物体自身碰撞体投射的阴影体，严防自阴影)
+		var obj_cid: int = 0
+		var col_body := obj_node.find_child("StaticBody2D", true, false) as CollisionObject2D
+		if col_body:
+			obj_cid = col_body.get_instance_id()
+
+		for i in current_quads_count:
+			if i < _quad_source_cids.size() and _quad_source_cids[i] == obj_cid:
+				continue
+			if Geometry2D.is_point_in_polygon(obj_foot, current_shadow_quads[i]):
+				in_shadow = true
+				break
+
+		# 3. 地形 3D 高度场视线步进阴影判定
+		if not in_shadow and enable_terrain_shadows:
+			var obj_floor: int = 0
+			if obj_node.has_method("get_current_floor"):
+				obj_floor = obj_node.call("get_current_floor")
+			elif "floor_level" in obj_node:
+				obj_floor = int(obj_node.get("floor_level"))
+			else:
+				obj_floor = _get_cell_floor(obj_foot)
+
+			var obj_ground_z := float(obj_floor) * 16.0
+			if _is_blocked_by_terrain(p_ground_pos, h_eye_total, obj_foot, obj_ground_z, obj_floor):
+				in_shadow = true
+
+		if obj_node.has_method("set_in_shadow"):
+			obj_node.call("set_in_shadow", in_shadow)
+
 # -------------------------------------------------------------
 # 二、几何运算：提取屏幕内障碍物并向屏幕外延展阴影体 (零 GC 内存复用)
 # -------------------------------------------------------------
@@ -525,6 +587,7 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 	if _shape_query == null:
 		if not current_shadow_quads.is_empty():
 			current_shadow_quads.clear()
+		_quad_source_cids.clear()
 		_batched_indices = PackedInt32Array()
 		return false
 
@@ -654,8 +717,10 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 			current_shadow_quads[current_quads_count][1] = e_left
 			current_shadow_quads[current_quads_count][2] = e_right
 			current_shadow_quads[current_quads_count][3] = v_right
+			_quad_source_cids[current_quads_count] = cid
 		else:
 			current_shadow_quads.append(PackedVector2Array([v_left, e_left, e_right, v_right]))
+			_quad_source_cids.append(cid)
 
 		# 2. 0-GC 写入合批顶点缓冲 _batched_vertices
 		var v_base := current_quads_count * 4
@@ -668,9 +733,11 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 
 		current_quads_count += 1
 
-	# 收尾：同步 current_shadow_quads 尺寸以保证精确的 count
+	# 收尾：同步 current_shadow_quads 与 _quad_source_cids 尺寸以保证精确的 count
 	if current_shadow_quads.size() > current_quads_count:
 		current_shadow_quads.resize(current_quads_count)
+	if _quad_source_cids.size() > current_quads_count:
+		_quad_source_cids.resize(current_quads_count)
 
 	# 同步合批索引缓冲 _batched_indices
 	var target_idx_count := current_quads_count * 6

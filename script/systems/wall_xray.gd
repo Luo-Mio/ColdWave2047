@@ -21,12 +21,27 @@ extends Node
 		max_transparency = v
 		if material: material.set_shader_parameter("max_transparency", max_transparency)
 
-# 【核心配置】：透视时同层地基的渲染颜色（默认为纯黑，可在检查器微调）
+# 【核心配置】：透视时同层地基截面的渲染颜色（默认为纯黑，可在检查器微调）
 @export var base_floor_color: Color = Color(0.0, 0.0, 0.0, 1.0)
+
+# 轻量截面封顶多边形绘制节点 (排在同格瓷砖之上，渲染 64x32 纯黑截面)
+class XRayCap extends Node2D:
+	var sort_key: float = 0.0
+	var layer_no: int = 999
+	var cap_color: Color = Color.BLACK
+
+	func _draw() -> void:
+		var pts := PackedVector2Array([
+			Vector2(0, -16),
+			Vector2(32, 0),
+			Vector2(0, 16),
+			Vector2(-32, 0)
+		])
+		draw_colored_polygon(pts, cap_color)
 
 var material: ShaderMaterial
 var active_xray_layers: Array[TileMapLayer] = []
-var active_black_layers: Array[TileMapLayer] = [] # 记录当前被染黑的同层地基图层
+var active_caps: Array[Node2D] = [] # 记录当前活跃的同层封顶盖板
 
 func _ready() -> void:
 	material = ShaderMaterial.new()
@@ -38,16 +53,16 @@ func _ready() -> void:
 
 # 动态刷新高墙透视
 func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
-	# 1. 还原上一批透视的高墙与被染黑的同层地基
+	# 1. 还原上一批透视的高墙与清理截面封顶
 	for layer in active_xray_layers:
 		if is_instance_valid(layer):
 			layer.material = VisionFogComponent.get_tile_shadow_material()
 	active_xray_layers.clear()
 
-	for layer in active_black_layers:
-		if is_instance_valid(layer):
-			layer.modulate = Color(1.0, 1.0, 1.0, 1.0) # 还原为正常原色
-	active_black_layers.clear()
+	for cap in active_caps:
+		if is_instance_valid(cap):
+			cap.queue_free()
+	active_caps.clear()
 
 	if player_node == null or material == null or sort_world == null:
 		return
@@ -59,6 +74,8 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 	var player_cell := GridData.world_to_cell(player_node.global_position)
 	var player_floor := GridData.get_highest_floor(player_cell)
 	var player_base_y := player_node.global_position.y
+
+	var created_caps := false
 
 	# 2. 向南方大范围扫描
 	for dy in range(0, 25):
@@ -90,10 +107,19 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 						active_xray_layers.append(cell_layer)
 						is_cell_occluding = true
 
-			# 4. 【核心新增】：如果该格有砖块被透视，将该格与角色同层级的地基瓦片渲染为纯黑色！
+			# 4. 【核心截面封顶】：如果该格有砖块被透视，在角色同高度的地基顶部渲染 64x32 纯黑菱形封顶面！
+			# 位于瓷砖之上(layer_no = 999)，且保留立面自然贴图纹理
 			if is_cell_occluding:
-				var base_key := "cell_z%d_%d_%d" % [player_floor, front_cell.x, front_cell.y]
-				var base_layer := sort_world.get_node_or_null(base_key) as TileMapLayer
-				if base_layer and not active_black_layers.has(base_layer):
-					base_layer.modulate = base_floor_color # 变成纯黑
-					active_black_layers.append(base_layer)
+				var diamond_center := cell_center + Vector2(0.0, GridData.get_floor_pixel_offset(player_floor))
+				var cap := XRayCap.new()
+				cap.name = "xray_cap_%d_%d" % [front_cell.x, front_cell.y]
+				cap.position = diamond_center
+				cap.sort_key = GridData.cell_to_sort_key(front_cell)
+				cap.layer_no = 999
+				cap.cap_color = base_floor_color
+				sort_world.add_child(cap)
+				active_caps.append(cap)
+				created_caps = true
+
+	if created_caps:
+		sort_world.call("sort_now")

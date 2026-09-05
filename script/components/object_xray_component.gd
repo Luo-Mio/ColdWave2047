@@ -42,20 +42,22 @@ func _ready() -> void:
 	if target_visual_node:
 		_apply_xray_material(target_visual_node)
 
-func _apply_xray_material(target: CanvasItem) -> void:
+static func get_shared_material() -> ShaderMaterial:
 	if _shared_xray_material == null:
-		# 优先尝试加载已保存的共享材质，否则动态创建一份并复用
 		var mat_path := "res://resources/materials/canopy_xray.tres"
 		if ResourceLoader.exists(mat_path):
 			_shared_xray_material = load(mat_path) as ShaderMaterial
 		if _shared_xray_material == null:
 			_shared_xray_material = ShaderMaterial.new()
 			_shared_xray_material.shader = load("res://script/shaders/xray.gdshader")
+	return _shared_xray_material
 
-	# 若该物体自身有特殊的透明度乘率覆盖，可根据需要设置；若为默认1.0，则直接共享单例
+func _apply_xray_material(target: CanvasItem) -> void:
+	var shared_mat := get_shared_material()
 	if xray_max_transparency != 1.0:
-		var custom_mat := _shared_xray_material.duplicate() as ShaderMaterial
+		var custom_mat := shared_mat.duplicate() as ShaderMaterial
 		custom_mat.set_shader_parameter("max_transparency", xray_max_transparency)
 		target.material = custom_mat
 	else:
-		target.material = _shared_xray_material
+		target.material = shared_mat
+	target.set_instance_shader_parameter("enable_xray", true)
