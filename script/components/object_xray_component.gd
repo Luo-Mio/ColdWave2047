@@ -52,6 +52,14 @@ static func get_shared_material() -> ShaderMaterial:
 			_shared_xray_material.shader = load("res://script/shaders/xray.gdshader")
 	return _shared_xray_material
 
+static var _shared_shadow_material: ShaderMaterial = null
+
+static func get_shared_shadow_material() -> ShaderMaterial:
+	if _shared_shadow_material == null:
+		_shared_shadow_material = ShaderMaterial.new()
+		_shared_shadow_material.shader = load("res://script/shaders/object_shadow.gdshader")
+	return _shared_shadow_material
+
 func _apply_xray_material(target: CanvasItem) -> void:
 	var shared_mat := get_shared_material()
 	if xray_max_transparency != 1.0:
@@ -60,4 +68,3 @@ func _apply_xray_material(target: CanvasItem) -> void:
 		target.material = custom_mat
 	else:
 		target.material = shared_mat
-	target.set_instance_shader_parameter("enable_xray", true)

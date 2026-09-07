@@ -1,16 +1,6 @@
-shader_type canvas_item;
+﻿shader_type canvas_item;
 
-// 全局屏幕空间多实体透视遮罩贴图 (由 vision_fog_component 动态绘制玩家与视野内所有生物)
-global uniform sampler2D xray_mask_tex : filter_linear, repeat_disable;
-
-// 保持材质级可选参数兼容性 (供树木或高墙微调透视透光乘率)
-uniform float max_transparency : hint_range(0.0, 1.0) = 1.0;
-uniform vec2 target_offset = vec2(0.0, 0.0);
-uniform float rx : hint_range(4.0, 400.0) = 85.0;
-uniform float ry : hint_range(4.0, 400.0) = 55.0;
-uniform float feather : hint_range(0.01, 1.0) = 0.8;
-
-// 动态阴影配置 (与地表瓷砖阴影保持完全一致的 Bayer 8x8 像素质感)
+// 物体动态阴影 Shader (用于实体立柱如 Trunk 树干，仅接收阴影，绝不透视镂空)
 uniform float shadow_darkness : hint_range(0.0, 1.0) = 0.35;
 uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform bool enable_dither_fog = true;
@@ -18,14 +8,6 @@ uniform int dither_scale : hint_range(1, 4) = 1;
 
 // 每个物体独立控制是否处于阴影中 (支持 instance uniform 零冗余动态控制)
 instance uniform bool is_in_shadow = false;
-
-// 4x4 经典 Bayer 像素抖动矩阵 (用于 X-Ray 透视)
-const mat4 bayer4 = mat4(
-    vec4( 0.0/16.0, 12.0/16.0,  3.0/16.0, 15.0/16.0),
-    vec4( 8.0/16.0,  4.0/16.0, 11.0/16.0,  7.0/16.0),
-    vec4( 2.0/16.0, 14.0/16.0,  1.0/16.0, 13.0/16.0),
-    vec4(10.0/16.0,  6.0/16.0,  9.0/16.0,  5.0/16.0)
-);
 
 // 8x8 经典 Bayer 像素抖动矩阵 (用于阴影投影叠加)
 const float bayer8[64] = float[64](
@@ -43,22 +25,7 @@ void fragment() {
     vec4 col = COLOR;
     if (col.a <= 0.001) { discard; }
 
-    // 1. 单次采样屏幕空间多实体透视蒙版 (Alpha 通道记录透视强度，O(1) 恒定开销)
-    float proximity_mask = texture(xray_mask_tex, SCREEN_UV).a * max_transparency;
-
-    // 2. 经典 4x4 Bayer 像素点阵抖动镂空
-    if (proximity_mask > 0.0) {
-        int x = int(FRAGCOORD.x) % 4;
-        int y = int(FRAGCOORD.y) % 4;
-        float dither_threshold = bayer4[x][y];
-
-        // 越靠近生物中心，被剔除的像素越多
-        if (proximity_mask > dither_threshold) {
-            discard;
-        }
-    }
-
-    // 3. 动态阴影叠加：仅当物体处于阴影内时叠加阴影，不在阴影内时保持 100% 原色 (地表阴影在物体之下)
+    // 动态阴影叠加：仅当物体处于阴影内时叠加阴影，不在阴影内时保持 100% 原色 (地表阴影在物体之下)
     if (is_in_shadow) {
         if (enable_dither_fog) {
             int px = (int(FRAGCOORD.x) / dither_scale) % 8;

@@ -17,6 +17,14 @@ extends Node
 		_sync_tile_shadow_params()
 ## 是否隐藏视线盲区内的其他生物。勾选后，躲在阴影或厚墙后的生物将彻底隐形
 @export var enable_creature_hiding: bool = true
+
+@export_group("生物视线隐形与渐变过渡 (Creature Fade)")
+## 是否启用视线丢失后的延迟淡出过渡效果。开启后生物离开视线时不会瞬间闪烁消失，而是停留片刻后柔和淡出
+@export var enable_creature_fade: bool = true
+## 丢失视线后的残留停留时间 (秒)。在该时间内生物保持完全可见
+@export var creature_fade_delay: float = 0.5
+## 残留期结束后的平滑淡出时长 (秒)。在该时间内生物的不透明度由 1.0 渐变至 0.0
+@export var creature_fade_duration: float = 0.4
 ## 遮挡视线的物理障碍层掩码。通常为 Layer 2 障碍物层 (数值 2)
 @export_flags_2d_physics var obstacle_mask: int = 2
 ## 屏幕内单次最大障碍物探测数量上限。极限密林测试可调大至 1024
@@ -123,12 +131,28 @@ func _sync_tile_shadow_params() -> void:
 		obj_mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
 		obj_mat.set_shader_parameter("dither_scale", dither_scale)
 
+	var solid_mat := ObjectXRayComponent.get_shared_shadow_material()
+	if solid_mat != null:
+		solid_mat.set_shader_parameter("shadow_darkness", explored_alpha)
+		solid_mat.set_shader_parameter("enable_dither_fog", enable_dither_fog)
+		solid_mat.set_shader_parameter("dither_scale", dither_scale)
+
 # 内部多实体透视遮罩视口与摄像机
 var xray_viewport: SubViewport
 var xray_cam: Camera2D
 var xray_drawer: Node2D
 var _radial_tex_cache: Dictionary = {}
 var _visible_creatures: Array[Node2D] = []
+
+# 视线丢失延迟与平滑淡出状态项
+class CreatureFadeItem:
+	var node: Node2D
+	var delay_timer: float = 0.0
+	var current_alpha: float = 1.0
+	var is_in_sight: bool = false
+	var has_been_seen: bool = false
+
+var _creature_fade_cache: Dictionary = {} # int (instance_id) -> CreatureFadeItem
 
 # 性能优化：静态障碍物碰撞多边形缓存对象
 class ObstacleCacheItem:
@@ -321,6 +345,8 @@ func _physics_process(delta: float) -> void:
 			if is_instance_valid(fog_viewport):
 				fog_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
+	# 2.8 平滑生物淡出过渡更新 (每物理帧执行，保证渐变柔和丝滑无卡顿)
+	_process_creature_fading(delta)
 
 	# 3. 周期性累加全屏视野的历史探索足迹
 	_history_update_timer -= delta
@@ -366,13 +392,17 @@ func _get_screen_world_rect(cam_pos: Vector2, cam_zoom: Vector2, margin: float =
 	return Rect2(cam_pos.x - half_w, cam_pos.y - half_h, half_w * 2.0, half_h * 2.0)
 
 # -------------------------------------------------------------
-# 一、生物显隐判定：屏幕视口剔除 + 反向单射线 (极其高效，零 GC 堆分配)
+# 一、生物显隐判定：屏幕视口剔除 + 反向单射线 + 延迟渐变淡出
 # -------------------------------------------------------------
 func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_total: float = 18.0) -> void:
-	_visible_creatures.clear()
+	if entity == null or not entity.is_inside_tree() or entity.get_world_2d() == null:
+		return
 	var space_state := entity.get_world_2d().direct_space_state
 	var creatures := get_tree().get_nodes_in_group("creatures")
 	var p_ground_pos := entity.global_position if entity != null else player_pos
+
+	if not enable_creature_fade:
+		_visible_creatures.clear()
 
 	for c in creatures:
 		if not is_instance_valid(c) or c == entity or not (c is Node2D):
@@ -384,79 +414,170 @@ func _update_creature_visibility(player_pos: Vector2, screen_rect: Rect2, h_eye_
 		if c_node.has_method("get_visual_foot_position"):
 			c_foot = c_node.call("get_visual_foot_position")
 
-		# 1. 屏幕视口剔除：不在当前屏幕可见范围内的生物直接隐藏
-		if not screen_rect.has_point(c_foot):
-			c_node.visible = false
-			continue
+		var cid := c_node.get_instance_id()
+		var item: CreatureFadeItem = _creature_fade_cache.get(cid)
+		if item == null:
+			item = CreatureFadeItem.new()
+			item.node = c_node
+			_creature_fade_cache[cid] = item
 
-		# 2. 屏幕内生物处于物体阴影判定：检查脚底是否落入任何正在投射的阴影体中 (与屏幕视觉阴影 100% 精确对齐)
-		var in_shadow := false
-		for i in current_quads_count:
-			if Geometry2D.is_point_in_polygon(c_foot, current_shadow_quads[i]):
-				in_shadow = true
-				break
-
-		if in_shadow:
-			c_node.visible = false
-			continue
-
-		# 获取生物的楼层高度与海平面绝对视线高度
-		var c_floor: int = 0
-		if c_node.has_method("get_current_floor"):
-			c_floor = c_node.call("get_current_floor")
-		elif "depth_comp" in c_node and is_instance_valid(c_node.get("depth_comp")) and "current_floor" in c_node.get("depth_comp"):
-			c_floor = c_node.get("depth_comp").current_floor
-		else:
-			c_floor = _get_cell_floor(c_ground_pos)
-
-		var c_ground_z := float(c_floor) * 16.0
-
-		# 2.5 屏幕内生物处于地形 3D 高度场阴影判定 (与 GPU 视线步进阴影 100% 精确对齐)
-		if enable_terrain_shadows and _is_blocked_by_terrain(p_ground_pos, h_eye_total, c_ground_pos, c_ground_z, c_floor):
-			c_node.visible = false
-			continue
-
-		# 3. 严格射线物理遮蔽检测（针对角色与生物之间的实体碰撞体，如高墙/厚障碍物）
-		_shared_ray_query.from = c_ground_pos
-		_shared_ray_query.to = p_ground_pos
-		_shared_ray_query.collision_mask = obstacle_mask
-		_ray_exclude_rids.append(c_node.get_rid())
-		_shared_ray_query.exclude = _ray_exclude_rids
-		var hit := space_state.intersect_ray(_shared_ray_query)
-		_ray_exclude_rids.pop_back()
-
-		# 射线通畅且未被真实障碍物阻挡 -> 可见；被挡住时判断视线是否能越顶俯视
+		# 判定该生物是否在玩家视线内 (LOS)
 		var is_vis := true
-		if not hit.is_empty():
-			var hit_cid: int = hit.get("collider_id", 0)
-			var hit_item: ObstacleCacheItem = _obstacle_cache.get(hit_cid)
-			var h_obs_hit: float = 48.0
-			if hit_item != null:
-				h_obs_hit = float(hit_item.floor_level) * 16.0 + hit_item.obstacle_height
-			else:
-				var hit_col: Object = hit.get("collider")
-				if hit_col is Node:
-					var hit_node := hit_col as Node
-					if hit_node.get_parent() != null and (hit_node.get_parent().get("obstacle_height") != null or hit_node.get_parent().get("floor_level") != null):
-						hit_node = hit_node.get_parent()
-					var fl := int(hit_node.get("floor_level")) if hit_node.get("floor_level") != null else _get_cell_floor(hit.get("position", Vector2.ZERO))
-					var oh := float(hit_node.get("obstacle_height")) if hit_node.get("obstacle_height") != null else 48.0
-					h_obs_hit = float(fl) * 16.0 + oh
+		var on_screen := screen_rect.has_point(c_foot)
 
-			var c_eye_h: float = float(c_node.get("eye_height")) if c_node.get("eye_height") != null else 10.0
-			var h_c_eye := c_ground_z + c_eye_h
+		# 1. 屏幕视口剔除：不在当前屏幕可见范围内的生物直接判定无视线
+		if not on_screen:
+			is_vis = false
+		else:
+			# 2. 屏幕内生物处于物体阴影判定：检查脚底是否落入任何正在投射的阴影体中 (与屏幕视觉阴影 100% 精确对齐)
+			var in_shadow := false
+			for i in current_quads_count:
+				if Geometry2D.is_point_in_polygon(c_foot, current_shadow_quads[i]):
+					in_shadow = true
+					break
 
-			var hit_pos: Vector2 = hit.get("position", c_foot)
-			var total_dist := c_foot.distance_to(player_pos)
-			var t := (c_foot.distance_to(hit_pos) / total_dist) if total_dist > 0.001 else 0.0
-			var h_sight := lerpf(h_c_eye, h_eye_total, t)
-
-			if h_sight <= h_obs_hit:
+			if in_shadow:
 				is_vis = false
+			else:
+				# 获取生物的楼层高度与海平面绝对视线高度
+				var c_floor: int = 0
+				if c_node.has_method("get_current_floor"):
+					c_floor = c_node.call("get_current_floor")
+				elif "depth_comp" in c_node and is_instance_valid(c_node.get("depth_comp")) and "current_floor" in c_node.get("depth_comp"):
+					c_floor = c_node.get("depth_comp").current_floor
+				else:
+					c_floor = _get_cell_floor(c_ground_pos)
 
-		c_node.visible = is_vis
-		if is_vis:
+				var c_ground_z := float(c_floor) * 16.0
+
+				# 2.5 屏幕内生物处于地形 3D 高度场阴影判定 (与 GPU 视线步进阴影 100% 精确对齐)
+				if enable_terrain_shadows and _is_blocked_by_terrain(p_ground_pos, h_eye_total, c_ground_pos, c_ground_z, c_floor):
+					is_vis = false
+				else:
+					# 3. 严格射线物理遮蔽检测（针对角色与生物之间的实体碰撞体，如高墙/厚障碍物）
+					_shared_ray_query.from = c_ground_pos
+					_shared_ray_query.to = p_ground_pos
+					_shared_ray_query.collision_mask = obstacle_mask
+					_ray_exclude_rids.append(c_node.get_rid())
+					_shared_ray_query.exclude = _ray_exclude_rids
+					var hit := space_state.intersect_ray(_shared_ray_query)
+					_ray_exclude_rids.pop_back()
+
+					# 射线通畅且未被真实障碍物阻挡 -> 可见；被挡住时判断视线是否能越顶俯视
+					if not hit.is_empty():
+						var hit_cid: int = hit.get("collider_id", 0)
+						var hit_item: ObstacleCacheItem = _obstacle_cache.get(hit_cid)
+						var h_obs_hit: float = 48.0
+						if hit_item != null:
+							h_obs_hit = float(hit_item.floor_level) * 16.0 + hit_item.obstacle_height
+						else:
+							var hit_col: Object = hit.get("collider")
+							if hit_col is Node:
+								var hit_node := hit_col as Node
+								if hit_node.get_parent() != null and (hit_node.get_parent().get("obstacle_height") != null or hit_node.get_parent().get("floor_level") != null):
+									hit_node = hit_node.get_parent()
+								var fl := int(hit_node.get("floor_level")) if hit_node.get("floor_level") != null else _get_cell_floor(hit.get("position", Vector2.ZERO))
+								var oh := float(hit_node.get("obstacle_height")) if hit_node.get("obstacle_height") != null else 48.0
+								h_obs_hit = float(fl) * 16.0 + oh
+
+						var c_eye_h: float = float(c_node.get("eye_height")) if c_node.get("eye_height") != null else 10.0
+						var h_c_eye := c_ground_z + c_eye_h
+
+						var hit_pos: Vector2 = hit.get("position", c_foot)
+						var total_dist := c_foot.distance_to(player_pos)
+						var t := (c_foot.distance_to(hit_pos) / total_dist) if total_dist > 0.001 else 0.0
+						var h_sight := lerpf(h_c_eye, h_eye_total, t)
+
+						if h_sight <= h_obs_hit:
+							is_vis = false
+
+		if not enable_creature_fade:
+			# 渐变开关关闭，保持原有瞬间显隐行为
+			c_node.visible = is_vis
+			c_node.modulate.a = 1.0
+			item.is_in_sight = is_vis
+			item.current_alpha = 1.0 if is_vis else 0.0
+			if is_vis:
+				_visible_creatures.append(c_node)
+		else:
+			if is_vis:
+				# 在视线内：立即现形，重置停留延迟与不透明度
+				item.is_in_sight = true
+				item.has_been_seen = true
+				item.delay_timer = creature_fade_delay
+				item.current_alpha = 1.0
+				c_node.visible = true
+				c_node.modulate.a = 1.0
+			else:
+				item.is_in_sight = false
+				if not item.has_been_seen:
+					# 从未被目击（如开局或暗处未探索）：直接隐藏，绝不发生误淡出
+					c_node.visible = false
+					c_node.modulate.a = 0.0
+					item.current_alpha = 0.0
+				elif not on_screen:
+					# 已离开屏幕可见范围：直接隐藏并清零，防止在屏幕外空耗
+					c_node.visible = false
+					c_node.modulate.a = 0.0
+					item.current_alpha = 0.0
+
+# 每物理帧平滑驱动生物渐变淡出逻辑 (保证 60 FPS 丝滑过渡与资源回收)
+func _process_creature_fading(delta: float) -> void:
+	if not enable_creature_hiding:
+		return
+
+	if not enable_creature_fade:
+		return
+
+	_visible_creatures.clear()
+	var to_erase: Array[int] = []
+
+	for cid in _creature_fade_cache:
+		var item: CreatureFadeItem = _creature_fade_cache[cid]
+		if not is_instance_valid(item.node) or not item.node.is_inside_tree():
+			to_erase.append(cid)
+			continue
+
+		var c_node := item.node
+
+		if not item.has_been_seen:
+			c_node.visible = false
+			c_node.modulate.a = 0.0
+			continue
+
+		if item.is_in_sight:
+			# 仍在视线内，维持完全可见
+			c_node.visible = true
+			c_node.modulate.a = 1.0
+			item.current_alpha = 1.0
 			_visible_creatures.append(c_node)
+		else:
+			# 丢失视线：停留延迟阶段 -> 平滑淡出阶段
+			if item.current_alpha <= 0.001:
+				c_node.visible = false
+				c_node.modulate.a = 0.0
+				continue
+
+			if item.delay_timer > 0.0:
+				item.delay_timer -= delta
+				item.current_alpha = 1.0
+			else:
+				if creature_fade_duration > 0.001:
+					item.current_alpha = maxf(0.0, item.current_alpha - (delta / creature_fade_duration))
+				else:
+					item.current_alpha = 0.0
+
+			if item.current_alpha <= 0.001:
+				item.current_alpha = 0.0
+				c_node.visible = false
+				c_node.modulate.a = 0.0
+			else:
+				c_node.visible = true
+				c_node.modulate.a = item.current_alpha
+				_visible_creatures.append(c_node)
+
+	for cid in to_erase:
+		_creature_fade_cache.erase(cid)
 
 # 检查目标地面/生物是否处于地形高度场阴影中 (与 GPU 视线步进 3D 光影 100% 像素级对齐)
 func _is_blocked_by_terrain(p_pos: Vector2, p_eye_z: float, target_pos: Vector2, target_z: float, target_floor: int) -> bool:
@@ -511,6 +632,7 @@ func _collect_visible_creatures(screen_rect: Rect2) -> void:
 			c_foot = c_node.call("get_visual_foot_position")
 		if screen_rect.has_point(c_foot):
 			c_node.visible = true
+			c_node.modulate.a = 1.0
 			_visible_creatures.append(c_node)
 
 # 运算屏幕内物体阴影覆盖状态 (处于投影内的物体叠加点阵阴影，不在投影内的物体处于地表阴影之上保持原色)
@@ -1046,11 +1168,11 @@ func _on_xray_drawer_draw() -> void:
 		var c_rx: float = c_node.get("xray_radius").x if c_node.get("xray_radius") != null else 85.0
 		var c_ry: float = c_node.get("xray_radius").y if c_node.get("xray_radius") != null else 55.0
 		var c_offset: Vector2 = c_node.get("xray_offset") if c_node.get("xray_offset") != null else Vector2(0.0, -16.0)
-		var c_trans: float = c_node.get("xray_max_transparency") if c_node.get("xray_max_transparency") != null else 0.85
+		var c_trans: float = (c_node.get("xray_max_transparency") if c_node.get("xray_max_transparency") != null else 0.85) * c_node.modulate.a
 		var c_curve: float = c_node.get("xray_curve") if c_node.get("xray_curve") != null else default_xray_curve
 		var c_center := c_pos + c_offset
 		var c_rect := Rect2(c_center.x - c_rx, c_center.y - c_ry, c_rx * 2.0, c_ry * 2.0)
 		var c_tex := _get_radial_gradient_tex(c_curve)
-		if c_tex != null:
+		if c_tex != null and c_trans > 0.001:
 			xray_drawer.draw_texture_rect(c_tex, c_rect, false, Color(1, 1, 1, c_trans))
 

@@ -212,4 +212,6 @@ script = ExtResource("11_collector")
 [node name="VisionFogComponent" type="Node" parent="LogicScript" unique_id=1332865012]
 script = ExtResource("12_fog")
 explored_alpha = 0.1
+creature_fade_delay = 0.3
+creature_fade_duration = 0.5
 fog_edge_softness = 8.0

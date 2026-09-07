@@ -116,14 +116,11 @@ func _ready() -> void:
 	# 3. 注册进全局世界物体组，便于战争迷雾动态阴影检测
 	add_to_group("world_objects")
 
-	# 4. 为所有视觉精灵挂载通用材质，并精确区分透视部件 (Canopy 树冠开启透视，Trunk 树干关闭透视保持实体)
-	var shared_mat := ObjectXRayComponent.get_shared_material()
+	# 4. 为非透视实体精灵（如 Trunk 树干）挂载专用阴影材质 (只接收阴影，绝不透视镂空)
+	var shadow_mat := ObjectXRayComponent.get_shared_shadow_material()
 	for child in get_children():
-		if child is Sprite2D:
-			if child.material == null:
-				child.material = shared_mat
-			var is_xray: bool = (xray_comp != null and xray_comp.target_node_name == child.name) or child.name.begins_with("Canopy") or child.name.begins_with("Roof")
-			child.set_instance_shader_parameter("enable_xray", is_xray)
+		if child is Sprite2D and child.material == null:
+			child.material = shadow_mat
 
 var _is_in_shadow: bool = false
 
