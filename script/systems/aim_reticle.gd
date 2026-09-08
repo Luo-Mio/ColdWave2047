@@ -36,8 +36,9 @@ func _draw() -> void:
 
 	# 2. 读取瞄准控制器当前样式与尺寸 (支持道具定制化动态覆盖)
 	var ring_col: Color = aim_controller.ring_color if "ring_color" in aim_controller else ring_color
+	var inner_ring_col: Color = aim_controller.inner_ring_color if "inner_ring_color" in aim_controller else (aim_controller.deadzone_color if "deadzone_color" in aim_controller else Color(1.0, 0.45, 0.35, 0.45))
+	var outer_ring_col: Color = aim_controller.outer_ring_color if "outer_ring_color" in aim_controller else Color(ring_col.r, ring_col.g, ring_col.b, 0.35)
 	var cursor_col: Color = aim_controller.cursor_color if "cursor_color" in aim_controller else cursor_color
-	var deadzone_col: Color = aim_controller.deadzone_color if "deadzone_color" in aim_controller else deadzone_color
 	var laser_col: Color = aim_controller.laser_color if "laser_color" in aim_controller else laser_color
 	var laser_len: float = float(aim_controller.laser_length) if "laser_length" in aim_controller else 180.0
 
@@ -57,32 +58,34 @@ func _draw() -> void:
 	else:
 		chest_origin = player_ground + Vector2(0.0, floor_y_lift - 8.0)
 
-	# 4. 绘制 2:1 等距基准水平环 (θ = 0°)
-	var r0: float = aim_controller.radius_horizontal
+	# 4. 获取三环尺寸
+	var r_min: float = aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 140.0
+	var r0: float = aim_controller.call("get_effective_radius_horizontal") if aim_controller.has_method("get_effective_radius_horizontal") else aim_controller.radius_horizontal
+	var r_max: float = aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max
+
+	# 5. 绘制【内环】—— 最大俯角环 (虚线边界，θ = -max_pitch，暂定 140px)
+	_draw_dashed_isometric_ellipse(ground_center, r_min, r_min * 0.5, inner_ring_col, 1.0, 4.0, 3.5)
+
+	# 5.1 绘制【中环】—— 2:1 等距基准水平环 (实线，θ = 0°)
 	_draw_isometric_ellipse(ground_center, r0, r0 * 0.5, ring_col, 1.5)
 
-	# 5. 绘制 2:1 等距内圈死区环
-	var r_dead: float = aim_controller.radius_deadzone
-	_draw_isometric_ellipse(ground_center, r_dead, r_dead * 0.5, deadzone_col, 1.0)
-
-	# 5.5 绘制 2:1 等距最大仰角外环 (虚线边界，θ = +75°)
-	var r_max: float = aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max
-	var max_ring_col := Color(ring_col.r, ring_col.g, ring_col.b, 0.35)
-	_draw_dashed_isometric_ellipse(ground_center, r_max, r_max * 0.5, max_ring_col, 1.0, 5.0, 4.0)
+	# 5.2 绘制【外环】—— 2:1 等距最大仰角外环 (虚线边界，θ = +max_pitch)
+	_draw_dashed_isometric_ellipse(ground_center, r_max, r_max * 0.5, outer_ring_col, 1.0, 5.0, 4.0)
 
 	# 6. 计算鼠标在等距地面上的投影与动态准心光标
 	var mouse_screen: Vector2 = get_global_mouse_position()
 	var delta_ground: Vector2 = mouse_screen - ground_center
 	var r_iso: float = sqrt(delta_ground.x * delta_ground.x + 4.0 * delta_ground.y * delta_ground.y)
 	
-	var r_clamped: float = clampf(r_iso, r_dead, r_max)
+	# 光标位置在 [r_min, r_max] 之间随鼠标自由滑移；落入内环以内时光标贴附在内环上并保持 360° 全向朝向
+	var r_clamped: float = clampf(r_iso, r_min, r_max)
 	var active_cursor_pos: Vector2
 	var r0_ref_pos: Vector2
 	if r_iso > 0.001:
 		active_cursor_pos = ground_center + delta_ground * (r_clamped / r_iso)
 		r0_ref_pos = ground_center + delta_ground * (r0 / r_iso)
 	else:
-		active_cursor_pos = ground_center + Vector2(r0, 0.0)
+		active_cursor_pos = ground_center + Vector2(r_min, 0.0)
 		r0_ref_pos = ground_center + Vector2(r0, 0.0)
 
 	# 绘制从地面中心到活动准心的【地面指引射线】

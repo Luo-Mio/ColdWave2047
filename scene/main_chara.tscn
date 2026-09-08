@@ -219,3 +219,4 @@ fog_edge_softness = 8.0
 
 [node name="AimController" type="Node" parent="LogicScript" unique_id=1587239102]
 script = ExtResource("13_aim")
+pitch_curve_power = 3.0

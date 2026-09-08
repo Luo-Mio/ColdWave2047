@@ -21,15 +21,16 @@ var items: Array[Dictionary] = [
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
 	# 4 号位：秋季大树（物体 4x4 整格，无瞄准）
 	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
-	# 5 号位：远射长弓（超远程武器，基准环自动放大至 200px，青蓝准心）
+	# 5 号位：远射长弓（超远程武器，基准环放大至 280px，俯角内环 160px，仰角外环 420px）
 	{
 		"type": ItemType.WEAPON,
 		"name": "远射长弓",
 		"icon": "res://resources/object/weapon/stick/stick.png",
 		"weapon_tex": "res://resources/object/weapon/stick/stick.png",
 		"aim_config": {
-			"radius_horizontal": 200.0,
-			"radius_deadzone": 35.0,
+			"radius_min": 160.0,
+			"radius_horizontal": 280.0,
+			"radius_max": 420.0,
 			"laser_length": 280.0,
 			"ring_color": Color(0.3, 0.8, 1.0, 0.75),
 			"laser_color": Color(0.4, 0.9, 1.0, 0.9)
