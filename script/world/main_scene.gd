@@ -32,13 +32,12 @@ func _ready() -> void:
 	air_wall = AirWallScript.new()
 	add_child(air_wall)
 
-	aim_controller = AimControllerScript.new()
-	add_child(aim_controller)
-
-	aim_reticle = AimReticleScript.new()
-	aim_reticle.player_path = NodePath("sortworld/CharacterBody2D")
-	aim_reticle.aim_controller = aim_controller
-	add_child(aim_reticle)
+	var player_node: Node2D = get_node_or_null("sortworld/CharacterBody2D")
+	if player_node:
+		aim_controller = player_node.find_child("AimController", true, false)
+	aim_reticle = get_node_or_null("AimReticle")
+	if aim_reticle and aim_controller:
+		aim_reticle.aim_controller = aim_controller
 
 	# 2. 收集并按 Y 坐标排序原始层
 	tile_layers = []
@@ -130,12 +129,6 @@ func _process(_delta: float) -> void:
 		_last_player_cell = current_cell
 		_refresh_xray()
 
-	# 3. 实时更新 3D 瞄准极坐标计算（以角色脚底地面等距中心为基准）
-	if aim_controller:
-		var p_floor := GridData.get_highest_floor(current_cell)
-		var ground_center: Vector2 = player.global_position + Vector2(0.0, GridData.get_floor_pixel_offset(p_floor))
-		var mouse_pos: Vector2 = get_global_mouse_position()
-		aim_controller.update_aim(ground_center, mouse_pos)
 
 func _refresh_xray() -> void:
 	var player: Node2D = get_node_or_null("sortworld/CharacterBody2D")

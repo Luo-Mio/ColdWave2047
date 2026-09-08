@@ -10,6 +10,7 @@
 [ext_resource type="Script" uid="uid://djd5hyomkbf3i" path="res://script/components/weapon_holder_component.gd" id="10_weapon"]
 [ext_resource type="Script" uid="uid://cnpbyksel0ivf" path="res://script/components/item_collector.gd" id="11_collector"]
 [ext_resource type="Script" uid="uid://b1bnki8nfwh2s" path="res://script/components/vision_fog_component.gd" id="12_fog"]
+[ext_resource type="Script" uid="uid://7i3ghn1cqqw3" path="res://script/components/aim_controller.gd" id="13_aim"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -215,3 +216,6 @@ explored_alpha = 0.1
 creature_fade_delay = 0.3
 creature_fade_duration = 0.5
 fog_edge_softness = 8.0
+
+[node name="AimController" type="Node" parent="LogicScript" unique_id=1587239102]
+script = ExtResource("13_aim")

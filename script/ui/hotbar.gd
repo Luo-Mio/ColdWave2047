@@ -4,14 +4,37 @@ extends CanvasLayer
 enum ItemType { TILE, OBJECT, WEAPON }
 
 var items: Array[Dictionary] = [
-	# 1 号位：木棍法杖（武器）
-	{ "type": ItemType.WEAPON, "name": "木棍法杖", "icon": "res://resources/object/weapon/stick/stick.png", "weapon_tex": "res://resources/object/weapon/stick/stick.png" },
-	# 2 号位：泥土砖（地砖）
+	# 1 号位：木棍法杖（默认手持武器，直接继承 AimController 检查器中的基准环配置）
+	{
+		"type": ItemType.WEAPON,
+		"name": "木棍法杖",
+		"icon": "res://resources/object/weapon/stick/stick.png",
+		"weapon_tex": "res://resources/object/weapon/stick/stick.png",
+		"aim_config": {
+			"laser_length": 180.0,
+			"laser_color": Color(1.0, 0.95, 0.2, 0.85)
+		}
+	},
+	# 2 号位：泥土砖（地砖，无瞄准）
 	{ "type": ItemType.TILE,   "name": "新泥土砖", "atlas": Vector2i(0, 0) },
-	# 3 号位：小麦（农作物 1x1 微格）
+	# 3 号位：小麦（农作物 1x1 微格，无瞄准）
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
-	# 4 号位：秋季大树（物体 4x4 整格）
+	# 4 号位：秋季大树（物体 4x4 整格，无瞄准）
 	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
+	# 5 号位：远射长弓（超远程武器，基准环自动放大至 200px，青蓝准心）
+	{
+		"type": ItemType.WEAPON,
+		"name": "远射长弓",
+		"icon": "res://resources/object/weapon/stick/stick.png",
+		"weapon_tex": "res://resources/object/weapon/stick/stick.png",
+		"aim_config": {
+			"radius_horizontal": 200.0,
+			"radius_deadzone": 35.0,
+			"laser_length": 280.0,
+			"ring_color": Color(0.3, 0.8, 1.0, 0.75),
+			"laser_color": Color(0.4, 0.9, 1.0, 0.9)
+		}
+	},
 ]
 
 # 当前选中的槽位索引（0 ~ 4）
@@ -25,9 +48,9 @@ var normal_style: StyleBoxFlat
 var selected_style: StyleBoxFlat
 
 func _ready() -> void:
+	_init_styles()
 	# 等一帧，确保全局数据和图集已加载完毕
 	await get_tree().process_frame
-	_init_styles()
 	_load_slot_icons()
 	_update_selection()
 
@@ -105,6 +128,8 @@ func _select_slot(index: int) -> void:
 
 # 刷新各个槽位的边框外观（选中的槽位变成金色高亮框）
 func _update_selection() -> void:
+	if normal_style == null or selected_style == null:
+		_init_styles()
 	for i in slots_container.get_child_count():
 		var slot := slots_container.get_child(i) as PanelContainer
 		if slot:

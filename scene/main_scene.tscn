@@ -10,6 +10,7 @@
 [ext_resource type="Script" uid="uid://ccyjcrsoj6l7p" path="res://script/systems/wall_xray.gd" id="8_hrphr"]
 [ext_resource type="Script" uid="uid://bbfq38ivdtgy8" path="res://script/systems/build_manager.gd" id="9_86xya"]
 [ext_resource type="PackedScene" uid="uid://dewx1yy1y8ghw" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
+[ext_resource type="Script" uid="uid://heo0xna060h4" path="res://script/systems/aim_reticle.gd" id="11_aimreticle"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_86xya"]
 texture = ExtResource("4_hrphr")
@@ -106,6 +107,10 @@ collision_visibility_mode = 1
 [node name="selector" type="Node2D" parent="." unique_id=2062074770]
 script = ExtResource("5_x5n27")
 player_path = NodePath("../sortworld/CharacterBody2D")
+
+[node name="AimReticle" type="Node2D" parent="." unique_id=1849201948]
+script = ExtResource("11_aimreticle")
+player_path = NodePath("sortworld/CharacterBody2D")
 
 [node name="sortworld" type="Node2D" parent="." unique_id=2083341332]
 script = ExtResource("3_4wnd8")
