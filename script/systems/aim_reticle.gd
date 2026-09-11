@@ -103,7 +103,7 @@ func _draw() -> void:
 		chest_origin = player_ground + Vector2(0.0, floor_y_lift - 8.0)
 
 	# 4. 获取三环尺寸
-	var r_min: float = aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 140.0
+	var r_min: float = aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 8.0
 	var r0: float = aim_controller.call("get_effective_radius_horizontal") if aim_controller.has_method("get_effective_radius_horizontal") else aim_controller.radius_horizontal
 	var r_max: float = aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max
 

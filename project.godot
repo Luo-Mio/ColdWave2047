@@ -12,8 +12,8 @@ config_version=5
 
 config/name="测试001"
 run/main_scene="uid://23bxsmk7brqo"
-run/max_fps=120
 config/features=PackedStringArray("4.7", "Mobile")
+run/max_fps=120
 config/icon="res://icon.svg"
 
 [autoload]
