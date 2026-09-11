@@ -418,10 +418,14 @@ func get_trajectory_flight_info() -> Dictionary:
 #     "dashed_points": PackedVector2Array,  # 虚线延伸轨迹点 (低层时向下延伸)
 #     "hit_screen_pos": Vector2,       # 真实着弹屏幕坐标 (用于绘制 2:1 椭圆小红点)
 #     "hit_floor": int,                # 最终着弹楼层
+#     "primary_z": PackedFloat32Array, # 各实线点的 3D 空间高度 (用于判断是否被瓷砖遮挡)
+#     "dashed_z": PackedFloat32Array,  # 各虚线点的 3D 空间高度
+#     "hit_z": float,                  # 着弹点 3D 高度
+#     "is_hit_occluded": bool          # 着弹点是否被前方瓷砖遮挡
 # }
 func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest_origin: Vector2, custom_grid = null) -> Dictionary:
 	if drop_value <= 0.001 or projectile_speed <= 0.001:
-		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor }
+		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor, "primary_z": PackedFloat32Array(), "dashed_z": PackedFloat32Array(), "hit_z": 0.0, "is_hit_occluded": false }
 
 	var grid = custom_grid
 	if grid == null:
@@ -445,18 +449,22 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 	# 计算下落到角色当前层高基准面 (z = h_player) 的基准时间
 	var disc_base := vy * vy + 2.0 * drop_value * launch_height
 	if disc_base < 0.0:
-		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor }
+		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor, "primary_z": PackedFloat32Array(), "dashed_z": PackedFloat32Array(), "hit_z": 0.0, "is_hit_occluded": false }
 	var t_base := (vy + sqrt(disc_base)) / drop_value
 	if t_base <= 0.0001:
-		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor }
+		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor, "primary_z": PackedFloat32Array(), "dashed_z": PackedFloat32Array(), "hit_z": 0.0, "is_hit_occluded": false }
 
 	var primary_points := PackedVector2Array()
+	var primary_z := PackedFloat32Array()
 	var dashed_points := PackedVector2Array()
+	var dashed_z := PackedFloat32Array()
 	var hit_type := 0
 	var hit_screen_pos := Vector2.ZERO
 	var hit_floor := p_floor
+	var hit_z := 0.0
 
 	primary_points.push_back(chest_origin)
+	primary_z.push_back(z_start)
 
 	var segs := maxi(trajectory_segments, 16)
 	var high_floor_hit := false
@@ -501,10 +509,13 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 			var g_hit := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_hit)
 			var p_hit := g_hit - Vector2(0.0, z_hit)
 			primary_points.push_back(p_hit)
+			primary_z.push_back(z_hit)
 			hit_screen_pos = p_hit
+			hit_z = z_hit
 			break
 
 		primary_points.push_back(p_screen)
+		primary_z.push_back(z_t)
 		prev_t = t
 		prev_z = z_t
 
@@ -526,11 +537,14 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 			hit_type = 0
 			hit_floor = fl_base
 			hit_screen_pos = g_base - Vector2(0.0, surface_base)
+			hit_z = surface_base
 			primary_points[-1] = hit_screen_pos
+			primary_z[-1] = surface_base
 		else:
 			# 悬崖低层情况：实线到达角色基准面，随后向低层解析延伸为虚线
 			hit_type = -1
 			dashed_points.push_back(primary_points[-1])
+			dashed_z.push_back(primary_z[-1])
 
 			# 计算到达绝对地面 (z = 0) 的解析极限时间，避免步长过小在半空超时腰斩
 			var disc_max := vy * vy + 2.0 * drop_value * z_start
@@ -572,12 +586,15 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 					var g_hit := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_hit)
 					var p_hit := g_hit - Vector2(0.0, z_hit)
 					dashed_points.push_back(p_hit)
+					dashed_z.push_back(z_hit)
 					hit_floor = s_fl
 					hit_screen_pos = p_hit
+					hit_z = z_hit
 					low_hit = true
 					break
 
 				dashed_points.push_back(p_next)
+				dashed_z.push_back(z_next)
 				curr_t = next_t
 				curr_z = z_next
 
@@ -585,16 +602,54 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 				var g_max := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_max)
 				hit_floor = 0
 				hit_screen_pos = g_max - Vector2(0.0, 0.0)
+				hit_z = 0.0
 				dashed_points.push_back(hit_screen_pos)
+				dashed_z.push_back(0.0)
+
+	var is_hit_occluded: bool = is_point_occluded(hit_screen_pos, hit_z, grid)
 
 	return {
 		"is_valid": true,
 		"hit_type": hit_type,
 		"primary_points": primary_points,
+		"primary_z": primary_z,
 		"dashed_points": dashed_points,
+		"dashed_z": dashed_z,
 		"hit_screen_pos": hit_screen_pos,
-		"hit_floor": hit_floor
+		"hit_floor": hit_floor,
+		"hit_z": hit_z,
+		"is_hit_occluded": is_hit_occluded
 	}
+
+# 检查屏幕某点在 3D 高度 point_z 处是否被前方高层瓷砖遮挡 (2.5D 等距视线步进)
+func is_point_occluded(screen_pt: Vector2, point_z: float, custom_grid = null) -> bool:
+	var grid = custom_grid
+	if grid == null:
+		var tree := get_tree()
+		if tree and tree.root and tree.root.has_node("GridData"):
+			grid = tree.root.get_node("GridData")
+		elif Engine.has_singleton("GridData"):
+			grid = Engine.get_singleton("GridData")
+	if grid == null:
+		return false
+
+	var max_layers: int = grid.layers.size() if ("layers" in grid and grid.layers is Array) else 6
+	var max_h := float(maxi(max_layers, 4)) * 16.0
+	if point_z >= max_h:
+		return false
+
+	var z := max_h
+	var step_z := 4.0
+	while z > point_z + 0.5 and z > 0.5:
+		var test_ground := Vector2(screen_pt.x, screen_pt.y + z)
+		var c: Vector2i = grid.world_to_cell(test_ground)
+		if grid.has_any_tile(c):
+			var h_floor := float(grid.get_highest_floor(c)) * 16.0
+			if h_floor >= z:
+				return true
+		z -= step_z
+	return false
+
 
 
 

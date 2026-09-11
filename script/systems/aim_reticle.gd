@@ -177,32 +177,31 @@ func _draw() -> void:
 	draw_string_outline(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 2, Color(0.0, 0.0, 0.0, 0.85))
 	draw_string(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, end_color)
 
-	# 8. 绘制【3D 地形自适应重力弹道指示线】(高层提前截断 / 同层常规 / 低层虚线延伸 + 2:1 像素红点)
+	# 8. 绘制【3D 地形自适应重力弹道指示线】(高层提前截断 / 同层常规 / 低层虚线延伸 + 2:1 像素红点，遮挡处 50% 透明度)
 	if not traj_info.is_empty() and traj_info.get("is_valid", false):
 		var primary_pts: PackedVector2Array = traj_info.get("primary_points", PackedVector2Array())
+		var primary_z: PackedFloat32Array = traj_info.get("primary_z", PackedFloat32Array())
 		var dashed_pts: PackedVector2Array = traj_info.get("dashed_points", PackedVector2Array())
+		var dashed_z: PackedFloat32Array = traj_info.get("dashed_z", PackedFloat32Array())
 		var hit_screen_pos: Vector2 = traj_info.get("hit_screen_pos", Vector2.ZERO)
+		var is_hit_occluded: bool = traj_info.get("is_hit_occluded", false)
 
 		var traj_col: Color = aim_controller.trajectory_color if "trajectory_color" in aim_controller else Color(0.4, 0.8, 1.0, 0.85)
 
-		# 8.1 绘制像素实线段 (整像素采样，无抗锯齿)
+		# 8.1 绘制像素实线段 (被瓷砖遮挡处透明度降低至 50%)
 		if primary_pts.size() >= 2:
-			var snapped_pts := PackedVector2Array()
-			snapped_pts.resize(primary_pts.size())
-			for i in range(primary_pts.size()):
-				snapped_pts[i] = primary_pts[i].round()
-			draw_polyline(snapped_pts, traj_col, 1.0, false)
+			_draw_occlusion_aware_trajectory(primary_pts, primary_z, traj_col, false)
 
-		# 8.2 绘制像素虚线延伸段 (低层悬崖下坠)
+		# 8.2 绘制像素虚线延伸段 (低层悬崖下坠，被瓷砖遮挡处透明度降低至 50%)
 		if hit_type == -1 and dashed_pts.size() >= 2:
-			var snapped_dashed := PackedVector2Array()
-			snapped_dashed.resize(dashed_pts.size())
-			for i in range(dashed_pts.size()):
-				snapped_dashed[i] = dashed_pts[i].round()
-			_draw_pixel_dashed_polyline(snapped_dashed, Color(traj_col.r, traj_col.g, traj_col.b, 0.85), 1.0, 4.0, 3.5)
+			_draw_occlusion_aware_trajectory(dashed_pts, dashed_z, Color(traj_col.r, traj_col.g, traj_col.b, 0.85), true)
 
-		# 8.3 绘制落点指示：无论同层或跨层，直接在真实着弹地表绘制 2:1 像素红色着弹点
-		_draw_2to1_dot(hit_screen_pos, 4.0, 2.0, Color(1.0, 0.25, 0.25, 0.85), Color(1.0, 0.1, 0.1, 0.95), Color(1.0, 0.85, 0.85, 0.95))
+		# 8.3 绘制落点指示：无论同层或跨层，直接在真实着弹地表绘制 2:1 像素红色着弹点 (若被瓷砖遮挡同步降至 50% 透明度)
+		var dot_scale := 0.5 if is_hit_occluded else 1.0
+		_draw_2to1_dot(hit_screen_pos, 4.0, 2.0,
+			Color(1.0, 0.25, 0.25, 0.85 * dot_scale),
+			Color(1.0, 0.1, 0.1, 0.95 * dot_scale),
+			Color(1.0, 0.85, 0.85, 0.95 * dot_scale))
 	elif aim_controller.has_method("get_trajectory_points"):
 		var traj_points: PackedVector2Array = aim_controller.call("get_trajectory_points", chest_origin)
 		if traj_points.size() >= 2:
@@ -339,5 +338,85 @@ func _draw_dashed_line(from: Vector2, to: Vector2, color: Color, _width: float =
 		if start != end:
 			draw_line(start, end, color, 1.0, false)
 		curr += dash_len + gap_len
+
+# 绘制自适应遮挡弹道线（在被瓷砖遮挡处将透明度降低至 50%）
+func _draw_occlusion_aware_trajectory(pts: PackedVector2Array, z_vals: PackedFloat32Array, color: Color, is_dashed: bool = false) -> void:
+	if pts.size() < 2:
+		return
+	if z_vals.size() != pts.size() or aim_controller == null or not aim_controller.has_method("is_point_occluded"):
+		var snapped := PackedVector2Array()
+		snapped.resize(pts.size())
+		for i in range(pts.size()):
+			snapped[i] = pts[i].round()
+		if is_dashed:
+			_draw_pixel_dashed_polyline(snapped, color, 1.0, 4.0, 3.5)
+		else:
+			draw_polyline(snapped, color, 1.0, false)
+		return
+
+	var color_occluded := Color(color.r, color.g, color.b, color.a * 0.2)
+
+	# 1. 预先计算每个顶点的遮挡状态
+	var occ_status: Array[bool] = []
+	occ_status.resize(pts.size())
+	for i in range(pts.size()):
+		occ_status[i] = aim_controller.call("is_point_occluded", pts[i], z_vals[i])
+
+	# 2. 逐段遍历并将线段切分为连续的可见段与遮挡段
+	# 为保证过渡处 1 像素级精准对齐且无缝连接，对跨越遮挡边界的线段进行 3 轮二分查找
+	var current_mode: bool = occ_status[0]
+	var current_strip := PackedVector2Array()
+	current_strip.push_back(pts[0].round())
+
+	for i in range(pts.size() - 1):
+		var p0 := pts[i]
+		var p1 := pts[i + 1]
+		var z0 := z_vals[i]
+		var z1 := z_vals[i + 1]
+		var occ0 := occ_status[i]
+		var occ1 := occ_status[i + 1]
+
+		if occ0 == occ1:
+			var p1_round := p1.round()
+			if current_strip.is_empty() or current_strip[-1] != p1_round:
+				current_strip.push_back(p1_round)
+		else:
+			var t0 := 0.0
+			var t1 := 1.0
+			for iter in range(3):
+				var t_mid := (t0 + t1) * 0.5
+				var s_mid := p0.lerp(p1, t_mid)
+				var z_mid := lerpf(z0, z1, t_mid)
+				var occ_mid: bool = aim_controller.call("is_point_occluded", s_mid, z_mid)
+				if occ_mid == occ0:
+					t0 = t_mid
+				else:
+					t1 = t_mid
+
+			var split_pt := p0.lerp(p1, (t0 + t1) * 0.5).round()
+			if current_strip.is_empty() or current_strip[-1] != split_pt:
+				current_strip.push_back(split_pt)
+
+			_flush_trajectory_strip(current_strip, current_mode, color, color_occluded, is_dashed)
+
+			current_mode = occ1
+			current_strip.clear()
+			current_strip.push_back(split_pt)
+			var p1_round := p1.round()
+			if split_pt != p1_round:
+				current_strip.push_back(p1_round)
+
+	if not current_strip.is_empty():
+		_flush_trajectory_strip(current_strip, current_mode, color, color_occluded, is_dashed)
+
+func _flush_trajectory_strip(strip: PackedVector2Array, is_occluded: bool, normal_col: Color, occluded_col: Color, is_dashed: bool) -> void:
+	if strip.size() < 2:
+		return
+	var col := occluded_col if is_occluded else normal_col
+	if is_dashed:
+		_draw_pixel_dashed_polyline(strip, col, 1.0, 4.0, 3.5)
+	else:
+		draw_polyline(strip, col, 1.0, false)
+
 
 
