@@ -84,6 +84,7 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -96)
+tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -91,6 +92,7 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -112)
+tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -98,6 +100,7 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -128)
+tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
@@ -105,6 +108,7 @@ collision_visibility_mode = 1
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -144)
+tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 

@@ -12,17 +12,59 @@ var cursor_color: Color = Color(0.2, 1.0, 0.5, 0.9)       # 准心指示器 (亮
 var deadzone_color: Color = Color(1.0, 0.3, 0.3, 0.45)    # 死区环 (淡红)
 var laser_color: Color = Color(1.0, 0.95, 0.2, 0.85)      # 激光瞄准线 (亮金黄)
 
+@export_group("性能与更新频率 (Performance & Tick Rate)")
+## 准星与瞄准线重绘刷新率 (Hz，默认 60.0 次/秒；若 <= 0 则跟随游戏渲染帧率无限制刷新)
+@export var update_rate_hz: float = 60.0
+
+var _update_timer: float = 0.0
+var _was_aim_active: bool = false
+
 func _ready() -> void:
 	z_index = 150
-	if hotbar_node == null:
+	if hotbar_node == null and get_tree() and get_tree().root:
 		hotbar_node = get_tree().root.find_child("hotbar", true, false)
 
-func _process(_delta: float) -> void:
-	queue_redraw()
+func _process(delta: float) -> void:
+	if aim_controller == null:
+		var player: Node2D = get_node_or_null(player_path)
+		if player == null and get_tree() and get_tree().root:
+			player = get_tree().root.find_child("CharacterBody2D", true, false)
+		if player != null:
+			aim_controller = player.find_child("AimController", true, false)
+
+	var is_active: bool = false
+	if aim_controller and aim_controller.get("is_aim_active"):
+		is_active = true
+
+	# 状态切换检测：若从未激活变为激活，或者从激活变为未激活，立即重绘一帧以确保准星即时显示/隐藏，零延迟响应
+	if is_active != _was_aim_active:
+		_was_aim_active = is_active
+		_update_timer = 0.0
+		queue_redraw()
+		return
+
+	if not is_active:
+		return
+
+	# 获取目标刷新率 (优先读取 AimController 的配置保持完全同步)
+	var target_hz: float = update_rate_hz
+	if aim_controller and "update_rate_hz" in aim_controller:
+		target_hz = float(aim_controller.update_rate_hz)
+
+	# 若 <= 0 则无限制跟随游戏渲染帧率
+	if target_hz <= 0.0:
+		queue_redraw()
+		return
+
+	_update_timer += delta
+	var interval := 1.0 / target_hz
+	if _update_timer >= interval:
+		_update_timer = fmod(_update_timer, interval)
+		queue_redraw()
 
 func _draw() -> void:
 	var player: Node2D = get_node_or_null(player_path)
-	if player == null:
+	if player == null and get_tree() and get_tree().root:
 		player = get_tree().root.find_child("CharacterBody2D", true, false)
 	if aim_controller == null and player != null:
 		aim_controller = player.find_child("AimController", true, false)
@@ -44,9 +86,11 @@ func _draw() -> void:
 
 	# 3. 获取角色地面坐标与胸口/手部起点
 	var player_ground: Vector2 = player.global_position
-	var player_cell := GridData.world_to_cell(player_ground)
-	var p_floor := GridData.get_highest_floor(player_cell)
-	var floor_y_lift := GridData.get_floor_pixel_offset(p_floor)
+	var tree := get_tree()
+	var gd = tree.root.get_node_or_null("GridData") if (tree and tree.root) else null
+	var player_cell: Vector2i = gd.world_to_cell(player_ground) if gd else Vector2i.ZERO
+	var p_floor: int = gd.get_highest_floor(player_cell) if gd else 0
+	var floor_y_lift: float = gd.get_floor_pixel_offset(p_floor) if gd else 0.0
 	
 	# 地面环中心（等距地面基准面）
 	var ground_center := player_ground + Vector2(0.0, floor_y_lift)
@@ -88,17 +132,26 @@ func _draw() -> void:
 		active_cursor_pos = ground_center + Vector2(r_min, 0.0)
 		r0_ref_pos = ground_center + Vector2(r0, 0.0)
 
+	# 提前获取 3D 地形自适应重力弹道数据
+	var traj_info: Dictionary = {}
+	if aim_controller.has_method("get_terrain_adaptive_trajectory"):
+		traj_info = aim_controller.call("get_terrain_adaptive_trajectory", player_ground, p_floor, chest_origin)
+
+	var hit_type: int = traj_info.get("hit_type", 0) if traj_info.get("is_valid", false) else 0
+
 	# 绘制从地面中心到活动准心的【地面指引射线】
 	draw_line(ground_center, active_cursor_pos, Color(ring_col.r, ring_col.g, ring_col.b, 0.35), 1.0)
 
 	# 在基准水平环 (r0) 上绘制 0° 参考圆点
 	draw_circle(r0_ref_pos, 2.5, Color(ring_col.r, ring_col.g, ring_col.b, 0.5))
 
-	# 当前瞄准光标（跟随鼠标距离平滑滑移）
+	# 当前瞄准准星 (2:1 绿色圆点):
+	# 若命中位置与角色同层 (hit_type == 0)，瞄准原点不显示，直接在落地点显示红色点；
+	# 若命中位置为跨层 (高台截断 hit_type == 1 或 低层悬崖 hit_type == -1)，显示 2:1 绿色瞄准原点以明确区分基准瞄准点与实际落点
 	var pitch_deg: float = aim_controller.get_pitch_degrees()
 	var end_color: Color = Color(1.0, 0.4, 0.4, 0.9) if pitch_deg < -3.0 else (Color(0.2, 1.0, 0.5, 0.9) if pitch_deg > 3.0 else cursor_col)
-	draw_circle(active_cursor_pos, 3.5, end_color)
-	draw_arc(active_cursor_pos, 6.5, 0.0, TAU, 16, end_color, 1.2)
+	if hit_type != 0:
+		_draw_2to1_dot(active_cursor_pos, 5.0, 2.5, Color(0.2, 1.0, 0.5, 0.85), Color(0.1, 0.85, 0.35, 0.95), Color(0.85, 1.0, 0.85, 0.95))
 
 	# 7. 计算方向：无俯仰角基准方向 vs 3D 修正瞄准方向
 	var base_screen_dir: Vector2 = (r0_ref_pos - ground_center).normalized()
@@ -137,18 +190,82 @@ func _draw() -> void:
 		var default_font: Font = ThemeDB.fallback_font
 		draw_string(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_CENTER, -1, 11, end_color)
 
-	# 9. 绘制【+x+y 象限重力下坠弹道指示线】(浅蓝色细线)
-	if aim_controller.has_method("get_trajectory_points"):
+	# 9. 绘制【3D 地形自适应重力弹道指示线】(高层提前截断 / 同层常规 / 低层虚线延伸 + 2:1 红点)
+	if not traj_info.is_empty() and traj_info.get("is_valid", false):
+		var primary_pts: PackedVector2Array = traj_info.get("primary_points", PackedVector2Array())
+		var dashed_pts: PackedVector2Array = traj_info.get("dashed_points", PackedVector2Array())
+		var hit_screen_pos: Vector2 = traj_info.get("hit_screen_pos", Vector2.ZERO)
+
+		var traj_col: Color = aim_controller.trajectory_color if "trajectory_color" in aim_controller else Color(0.4, 0.8, 1.0, 0.85)
+		var traj_w: float = aim_controller.trajectory_width if "trajectory_width" in aim_controller else 1.5
+
+		# 9.1 绘制实线段 (高层阻挡时提前在障碍物截断)
+		if primary_pts.size() >= 2:
+			draw_polyline(primary_pts, traj_col, traj_w, true)
+
+		# 9.2 绘制虚线延伸段 (低层悬崖下坠)
+		if hit_type == -1 and dashed_pts.size() >= 2:
+			_draw_dashed_polyline(dashed_pts, Color(traj_col.r, traj_col.g, traj_col.b, 0.8), traj_w, 4.0, 3.5)
+
+		# 9.3 绘制落点指示：无论同层或跨层，直接在真实着弹地表绘制 2:1 椭圆红色着弹点
+		_draw_2to1_dot(hit_screen_pos, 5.0, 2.5, Color(1.0, 0.25, 0.25, 0.85), Color(1.0, 0.1, 0.1, 0.95), Color(1.0, 0.85, 0.85, 0.95))
+	elif aim_controller.has_method("get_trajectory_points"):
 		var traj_points: PackedVector2Array = aim_controller.call("get_trajectory_points", chest_origin)
 		if traj_points.size() >= 2:
 			var traj_col: Color = aim_controller.trajectory_color if "trajectory_color" in aim_controller else Color(0.4, 0.8, 1.0, 0.85)
 			var traj_w: float = aim_controller.trajectory_width if "trajectory_width" in aim_controller else 1.5
 			# 绘制浅蓝色弹道细线 (启用抗锯齿抗抖动)
 			draw_polyline(traj_points, traj_col, traj_w, true)
-			# 在落地点（回到发射基准面 y=0 处）绘制着弹点光斑
+			# 在落地点直接显示 2:1 红色圆点
 			var land_pt: Vector2 = traj_points[-1]
-			draw_arc(land_pt, 4.0, 0.0, TAU, 12, Color(traj_col.r, traj_col.g, traj_col.b, 0.75), 1.2)
-			draw_circle(land_pt, 2.0, Color(traj_col.r, traj_col.g, traj_col.b, 0.95))
+			_draw_2to1_dot(land_pt, 5.0, 2.5, Color(1.0, 0.25, 0.25, 0.85), Color(1.0, 0.1, 0.1, 0.95), Color(1.0, 0.85, 0.85, 0.95))
+
+# 绘制 2:1 等距圆点辅助函数 (贴合等距地面的微型椭圆标记)
+func _draw_2to1_dot(center: Vector2, rx: float, ry: float, fill_color: Color, outline_color: Color, core_color: Color = Color(1.0, 1.0, 1.0, 0.95)) -> void:
+	var segments := 24
+	var poly_pts := PackedVector2Array()
+	poly_pts.resize(segments)
+	for i in range(segments):
+		var th := (float(i) / float(segments)) * TAU
+		poly_pts[i] = center + Vector2(cos(th) * rx, sin(th) * ry)
+	# 绘制内部 2:1 半透明红色填充
+	draw_colored_polygon(poly_pts, fill_color)
+	# 绘制外边框高亮红环
+	poly_pts.push_back(poly_pts[0])
+	draw_polyline(poly_pts, outline_color, 1.2, true)
+	# 中心高亮小核 (形成立体激光聚光点质感)
+	draw_circle(center, 1.0, core_color)
+
+# 沿折线路径绘制平滑虚线 (用于悬崖下坠延伸弹道)
+func _draw_dashed_polyline(points: PackedVector2Array, color: Color, width: float, dash_len: float = 4.0, gap_len: float = 3.5) -> void:
+	if points.size() < 2:
+		return
+	var is_drawing := true
+	var current_remaining := dash_len
+
+	for i in range(points.size() - 1):
+		var p0 := points[i]
+		var p1 := points[i + 1]
+		var seg_len := p0.distance_to(p1)
+		if seg_len < 0.001:
+			continue
+		var seg_dir := (p1 - p0) / seg_len
+		var walked := 0.0
+
+		while walked < seg_len:
+			var step := minf(seg_len - walked, current_remaining)
+			var start_pt := p0 + seg_dir * walked
+			var end_pt := p0 + seg_dir * (walked + step)
+
+			if is_drawing:
+				draw_line(start_pt, end_pt, color, width, true)
+
+			walked += step
+			current_remaining -= step
+
+			if current_remaining <= 0.0001:
+				is_drawing = not is_drawing
+				current_remaining = dash_len if is_drawing else gap_len
 
 # 绘制 2:1 等距椭圆辅助函数
 func _draw_isometric_ellipse(center: Vector2, rx: float, ry: float, color: Color, width: float) -> void:
@@ -181,4 +298,5 @@ func _draw_dashed_line(from: Vector2, to: Vector2, color: Color, width: float, d
 		var end := from + dir * minf(curr + dash_len, total_dist)
 		draw_line(start, end, color, width)
 		curr += dash_len + gap_len
+
 

@@ -42,6 +42,10 @@ extends Node
 ## 弹道指示线线宽 (像素)
 @export var trajectory_width: float = 1.5
 
+@export_group("性能与更新频率 (Performance & Tick Rate)")
+## 瞄准计算与准星刷新目标频率 (Hz，默认 60.0 次/秒；若 <= 0 则无限制跟随渲染帧率)
+@export var update_rate_hz: float = 60.0
+
 # 向后兼容别名属性
 var radius_deadzone: float:
 	get: return radius_min
@@ -52,6 +56,8 @@ var deadzone_color: Color:
 
 # 当前瞄准激活状态 (受手持道具控制)
 var is_aim_active: bool = false
+var _was_aim_active: bool = false
+var _update_timer: float = 0.0
 
 # 当前计算状态
 var azimuth_rad: float = 0.0                 # 地面 360° 水平方位角 (0 ~ 2π)
@@ -94,6 +100,7 @@ func _save_defaults() -> void:
 		"trajectory_segments": trajectory_segments,
 		"trajectory_color": trajectory_color,
 		"trajectory_width": trajectory_width,
+		"update_rate_hz": update_rate_hz,
 	}
 
 # 动态应用道具专属的瞄准参数 (如不同武器具有不同基准环大小或射程)
@@ -162,6 +169,8 @@ func apply_aim_config(config: Dictionary) -> void:
 		trajectory_color = config["trajectory_color"]
 	if config.has("trajectory_width"):
 		trajectory_width = float(config["trajectory_width"])
+	if config.has("update_rate_hz"):
+		update_rate_hz = float(config["update_rate_hz"])
 
 # 清除道具覆盖，重置为 Inspector 默认参数并关闭瞄准
 func clear_aim_config() -> void:
@@ -185,6 +194,8 @@ func clear_aim_config() -> void:
 	trajectory_segments = _default_config["trajectory_segments"]
 	trajectory_color = _default_config["trajectory_color"]
 	trajectory_width = _default_config["trajectory_width"]
+	if _default_config.has("update_rate_hz"):
+		update_rate_hz = _default_config["update_rate_hz"]
 
 func get_effective_radius_min() -> float:
 	return maxf(radius_min, 10.0)
@@ -229,8 +240,30 @@ func solve_pitch_for_distance(target_distance: float) -> float:
 	var pitch := atan(u)
 	return clampf(pitch, deg_to_rad(-max_pitch_deg), deg_to_rad(max_pitch_deg))
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if not is_aim_active or entity == null:
+		_was_aim_active = false
+		return
+
+	# 瞄准刚激活的第一帧立即执行计算，避免切换时的初次响应延迟
+	if not _was_aim_active:
+		_was_aim_active = true
+		_update_timer = 0.0
+		_do_update_aim()
+		return
+
+	# 频率限制检测 (<= 0 则跟随渲染帧率无限制运行)
+	if update_rate_hz > 0.0:
+		_update_timer += delta
+		var interval := 1.0 / update_rate_hz
+		if _update_timer < interval:
+			return
+		_update_timer = fmod(_update_timer, interval)
+
+	_do_update_aim()
+
+func _do_update_aim() -> void:
+	if not is_inside_tree() or entity == null or not entity.is_inside_tree():
 		return
 	# 自动计算实体脚底中心与鼠标坐标
 	var p_pos := entity.global_position
@@ -355,5 +388,168 @@ func get_trajectory_flight_info() -> Dictionary:
 		"x_land": x_land,
 		"max_height": max_height
 	}
+
+# 获取考虑真实 3D 地形高度的自适应弹道数据：
+# - 若遭遇前方高层/高台阻挡：实线主弹道提前在撞击点截断，不穿模穿透地表，返回 hit_type = 1
+# - 若落在角色同层地表：保持常规平滑实线，返回 hit_type = 0
+# - 若飞离高台/跌入悬崖低层：角色层高以上为实线，跌出层高后平滑延伸为虚线，返回 hit_type = -1
+# 返回数据结构:
+# {
+#     "is_valid": bool,
+#     "hit_type": int,                 # 0: 同层, 1: 高层提前截断, -1: 低层悬崖延伸
+#     "primary_points": PackedVector2Array, # 实线轨迹点 (高层时自动提前截断)
+#     "dashed_points": PackedVector2Array,  # 虚线延伸轨迹点 (低层时向下延伸)
+#     "hit_screen_pos": Vector2,       # 真实着弹屏幕坐标 (用于绘制 2:1 椭圆小红点)
+#     "hit_floor": int,                # 最终着弹楼层
+# }
+func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest_origin: Vector2, custom_grid = null) -> Dictionary:
+	if drop_value <= 0.001 or projectile_speed <= 0.001:
+		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor }
+
+	var grid = custom_grid
+	if grid == null:
+		var tree := get_tree()
+		if tree and tree.root and tree.root.has_node("GridData"):
+			grid = tree.root.get_node("GridData")
+		elif Engine.has_singleton("GridData"):
+			grid = Engine.get_singleton("GridData")
+
+	var cos_p := cos(pitch_rad)
+	var sin_p := sin(pitch_rad)
+	var cos_a := cos(azimuth_rad)
+	var sin_a := sin(azimuth_rad)
+
+	var vx := projectile_speed * cos_p
+	var vy := projectile_speed * sin_p
+
+	var h_player := float(p_floor) * 16.0
+	var z_start := h_player + launch_height
+
+	# 计算下落到角色当前层高基准面 (z = h_player) 的基准时间
+	var disc_base := vy * vy + 2.0 * drop_value * launch_height
+	if disc_base < 0.0:
+		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor }
+	var t_base := (vy + sqrt(disc_base)) / drop_value
+	if t_base <= 0.0001:
+		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor }
+
+	var primary_points := PackedVector2Array()
+	var dashed_points := PackedVector2Array()
+	var hit_type := 0
+	var hit_screen_pos := Vector2.ZERO
+	var hit_floor := p_floor
+
+	primary_points.push_back(chest_origin)
+
+	var segs := maxi(trajectory_segments, 16)
+	var dt := t_base / float(segs)
+	var high_floor_hit := false
+	var prev_t := 0.0
+	var prev_z := z_start
+
+	for i in range(1, segs + 1):
+		var t := t_base * (float(i) / float(segs))
+		var g_t := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t)
+		var z_t := z_start + vy * t - 0.5 * drop_value * t * t
+		var p_screen := chest_origin + Vector2(vx * t * cos_a, 0.5 * vx * t * sin_a - (vy * t - 0.5 * drop_value * t * t))
+
+		var fl := p_floor
+		var surface_h := h_player
+		if grid:
+			var c: Vector2i = grid.world_to_cell(g_t)
+			if grid.has_any_tile(c):
+				fl = grid.get_highest_floor(c)
+				surface_h = float(fl) * 16.0
+			else:
+				fl = 0
+				surface_h = 0.0
+
+		# 撞击高层检测：地表高于角色基准层，且当前飞弹高度低于或等于该地表
+		if surface_h > h_player and z_t <= surface_h:
+			high_floor_hit = true
+			hit_type = 1
+			hit_floor = fl
+			
+			var denom := (prev_z - z_t)
+			var frac := clampf((prev_z - surface_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
+			var t_hit := lerpf(prev_t, t, frac)
+			var p_hit := chest_origin + Vector2(vx * t_hit * cos_a, 0.5 * vx * t_hit * sin_a - (vy * t_hit - 0.5 * drop_value * t_hit * t_hit))
+			primary_points.push_back(p_hit)
+			hit_screen_pos = p_hit
+			break
+
+		primary_points.push_back(p_screen)
+		prev_t = t
+		prev_z = z_t
+
+	if not high_floor_hit:
+		var g_base := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_base)
+		var fl_base := p_floor
+		var surface_base := h_player
+		if grid:
+			var c_base: Vector2i = grid.world_to_cell(g_base)
+			if grid.has_any_tile(c_base):
+				fl_base = grid.get_highest_floor(c_base)
+				surface_base = float(fl_base) * 16.0
+			else:
+				fl_base = 0
+				surface_base = 0.0
+
+		if fl_base >= p_floor:
+			# 同层着弹
+			hit_type = 0
+			hit_floor = fl_base
+			hit_screen_pos = primary_points[-1]
+		else:
+			# 悬崖低层情况：实线到达角色基准面，随后向低层延伸为虚线
+			hit_type = -1
+			dashed_points.push_back(primary_points[-1])
+			var curr_t := t_base
+			var curr_z := h_player
+			var max_steps := 80
+			var low_hit := false
+
+			for s in range(max_steps):
+				var next_t := curr_t + dt
+				var g_next := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * next_t)
+				var z_next := z_start + vy * next_t - 0.5 * drop_value * next_t * next_t
+				var p_next := chest_origin + Vector2(vx * next_t * cos_a, 0.5 * vx * next_t * sin_a - (vy * next_t - 0.5 * drop_value * next_t * next_t))
+
+				var s_fl := 0
+				var s_h := 0.0
+				if grid:
+					var c_next: Vector2i = grid.world_to_cell(g_next)
+					if grid.has_any_tile(c_next):
+						s_fl = grid.get_highest_floor(c_next)
+						s_h = float(s_fl) * 16.0
+
+				if z_next <= s_h:
+					var denom := (curr_z - z_next)
+					var frac := clampf((curr_z - s_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
+					var t_hit := lerpf(curr_t, next_t, frac)
+					var p_hit := chest_origin + Vector2(vx * t_hit * cos_a, 0.5 * vx * t_hit * sin_a - (vy * t_hit - 0.5 * drop_value * t_hit * t_hit))
+					dashed_points.push_back(p_hit)
+					hit_floor = s_fl
+					hit_screen_pos = p_hit
+					low_hit = true
+					break
+
+				dashed_points.push_back(p_next)
+				curr_t = next_t
+				curr_z = z_next
+
+			if not low_hit and not dashed_points.is_empty():
+				hit_floor = 0
+				hit_screen_pos = dashed_points[-1]
+
+	return {
+		"is_valid": true,
+		"hit_type": hit_type,
+		"primary_points": primary_points,
+		"dashed_points": dashed_points,
+		"hit_screen_pos": hit_screen_pos,
+		"hit_floor": hit_floor
+	}
+
 
 

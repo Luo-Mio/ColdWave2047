@@ -79,17 +79,16 @@ func _update_3d_transform_and_sorting() -> void:
 	if screen_velocity.length_squared() > 0.1:
 		rotation = screen_velocity.angle()
 
-	# 3. 黄金 3D 视线深度公式：
-	#    sort_key = (地面大格基准深度) + (格内微深度) + (3D空中高度加成！)
+	# 3. 2.5D 等距视线深度排序：
+	#    严格基于地面大格与格内微偏移，与角色和生物深度排序系统完全统一。
+	#    杜绝直接累加 height_px，否则会导致处于立柱/高墙后方（-xy）时因高度加成错误被提至立柱前方！
 	var current_cell := GridData.world_to_cell(ground_pos)
 	var base_key := GridData.cell_to_sort_key(current_cell)
 	var cell_center := GridData.cell_to_world(current_cell)
 	var rel_y := clampf((ground_pos.y - cell_center.y) + 16.0, 0.0, 32.0)
 	var sub_depth := (rel_y / 32.0) * 15.0
 	
-	# 【最核心关键】：将垂直高度 height_px 转化为深度权重加成！
-	# 飞得越高，深度越大，稳稳呈现在大树和地砖的上层！
-	sort_key = base_key + sub_depth + height_px
+	sort_key = base_key + sub_depth
 
 	# 4. 通知 sort_world 动态排位
 	var parent_sort := get_parent()
