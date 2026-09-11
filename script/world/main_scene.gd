@@ -97,6 +97,10 @@ func _unhandled_input(event: InputEvent) -> void:
 					if aim_3d.length_squared() > 0.01:
 						var scene_to_spawn: PackedScene = MagicOrbScene if event.button_index == MOUSE_BUTTON_LEFT else LightOrbScene
 						var orb := scene_to_spawn.instantiate() as Node2D
+						if "speed" in orb and "projectile_speed" in aim_controller:
+							orb.speed = aim_controller.projectile_speed
+						if "gravity" in orb and "drop_value" in aim_controller:
+							orb.gravity = aim_controller.drop_value
 						sort_world.add_child(orb)
 						orb.call("launch_3d", aim_3d, player_ground, p_floor)
 			return # 武器模式下不触发地砖建造

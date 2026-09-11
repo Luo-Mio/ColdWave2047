@@ -7,6 +7,7 @@
 [ext_resource type="Script" uid="uid://beslwppir52f2" path="res://script/components/mover_component.gd" id="5_mover"]
 [ext_resource type="Script" uid="uid://c8ud3seb7jpr1" path="res://script/components/iso_anim_component.gd" id="6_anim"]
 [ext_resource type="Script" uid="uid://dvtwp428cbc7p" path="res://script/components/wander_ai_component.gd" id="7_ai"]
+[ext_resource type="Script" path="res://script/components/height_step_limit_component.gd" id="8_step"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_fidek"]
 atlas = ExtResource("1_g3h8a")
@@ -420,3 +421,6 @@ move_prefix = "run"
 [node name="WanderAIComponent" type="Node" parent="LogicScript" unique_id=1186868075]
 script = ExtResource("7_ai")
 enable_wander = true
+
+[node name="HeightStepLimitComponent" type="Node" parent="LogicScript" unique_id=1849201934]
+script = ExtResource("8_step")

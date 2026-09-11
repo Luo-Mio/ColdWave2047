@@ -12,7 +12,11 @@ var items: Array[Dictionary] = [
 		"weapon_tex": "res://resources/object/weapon/stick/stick.png",
 		"aim_config": {
 			"laser_length": 180.0,
-			"laser_color": Color(1.0, 0.95, 0.2, 0.85)
+			"laser_color": Color(1.0, 0.95, 0.2, 0.85),
+			"projectile_speed": 520.0,
+			"drop_value": 800.0,
+			"launch_height": 10.0,
+			"trajectory_color": Color(0.4, 0.8, 1.0, 0.85)
 		}
 	},
 	# 2 号位：泥土砖（地砖，无瞄准）
@@ -21,19 +25,23 @@ var items: Array[Dictionary] = [
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
 	# 4 号位：秋季大树（物体 4x4 整格，无瞄准）
 	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
-	# 5 号位：远射长弓（超远程武器，基准环放大至 280px，俯角内环 160px，仰角外环 420px）
+	# 5 号位：远射长弓（超远程武器，基准环放大至 280px，俯角内环 160px，仰角外环 420px，初速高且下坠极小）
 	{
 		"type": ItemType.WEAPON,
 		"name": "远射长弓",
 		"icon": "res://resources/object/weapon/stick/stick.png",
 		"weapon_tex": "res://resources/object/weapon/stick/stick.png",
 		"aim_config": {
-			"radius_min": 160.0,
+			"radius_min": 40.0,
 			"radius_horizontal": 280.0,
 			"radius_max": 420.0,
 			"laser_length": 280.0,
 			"ring_color": Color(0.3, 0.8, 1.0, 0.75),
-			"laser_color": Color(0.4, 0.9, 1.0, 0.9)
+			"laser_color": Color(0.4, 0.9, 1.0, 0.9),
+			"projectile_speed": 680.0,
+			"drop_value": 360.0,
+			"launch_height": 10.0,
+			"trajectory_color": Color(0.5, 0.9, 1.0, 0.9)
 		}
 	},
 ]

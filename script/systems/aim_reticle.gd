@@ -137,6 +137,19 @@ func _draw() -> void:
 		var default_font: Font = ThemeDB.fallback_font
 		draw_string(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_CENTER, -1, 11, end_color)
 
+	# 9. 绘制【+x+y 象限重力下坠弹道指示线】(浅蓝色细线)
+	if aim_controller.has_method("get_trajectory_points"):
+		var traj_points: PackedVector2Array = aim_controller.call("get_trajectory_points", chest_origin)
+		if traj_points.size() >= 2:
+			var traj_col: Color = aim_controller.trajectory_color if "trajectory_color" in aim_controller else Color(0.4, 0.8, 1.0, 0.85)
+			var traj_w: float = aim_controller.trajectory_width if "trajectory_width" in aim_controller else 1.5
+			# 绘制浅蓝色弹道细线 (启用抗锯齿抗抖动)
+			draw_polyline(traj_points, traj_col, traj_w, true)
+			# 在落地点（回到发射基准面 y=0 处）绘制着弹点光斑
+			var land_pt: Vector2 = traj_points[-1]
+			draw_arc(land_pt, 4.0, 0.0, TAU, 12, Color(traj_col.r, traj_col.g, traj_col.b, 0.75), 1.2)
+			draw_circle(land_pt, 2.0, Color(traj_col.r, traj_col.g, traj_col.b, 0.95))
+
 # 绘制 2:1 等距椭圆辅助函数
 func _draw_isometric_ellipse(center: Vector2, rx: float, ry: float, color: Color, width: float) -> void:
 	var points := PackedVector2Array()

@@ -11,6 +11,7 @@
 [ext_resource type="Script" uid="uid://cnpbyksel0ivf" path="res://script/components/item_collector.gd" id="11_collector"]
 [ext_resource type="Script" uid="uid://b1bnki8nfwh2s" path="res://script/components/vision_fog_component.gd" id="12_fog"]
 [ext_resource type="Script" uid="uid://7i3ghn1cqqw3" path="res://script/components/aim_controller.gd" id="13_aim"]
+[ext_resource type="Script" uid="uid://ddrse11hrporb" path="res://script/components/height_step_limit_component.gd" id="14_step"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_26nfg"]
 atlas = ExtResource("1_atro3")
@@ -219,4 +220,11 @@ fog_edge_softness = 8.0
 
 [node name="AimController" type="Node" parent="LogicScript" unique_id=1587239102]
 script = ExtResource("13_aim")
+radius_min = 50.0
+radius_horizontal = 300.0
+radius_max = 560.0
 pitch_curve_power = 3.0
+
+[node name="HeightStepLimitComponent" type="Node" parent="LogicScript" unique_id=1789234501]
+script = ExtResource("14_step")
+margin_pixels = 0.0

@@ -58,8 +58,8 @@ func _physics_process(delta: float) -> void:
 	if GridData.has_any_tile(current_cell):
 		var terrain_floor := GridData.get_highest_floor(current_cell)
 		var terrain_surface_px := float(terrain_floor) * 16.0
-		# 只有当高度跌落进当前格子的地表表面以下时才判定为撞地销毁
-		if height_px <= terrain_surface_px - 2.0:
+		# 只有当高度跌落至当前格子的地表表面时判定为撞地销毁
+		if height_px <= terrain_surface_px:
 			queue_free()
 			return
 

@@ -3,14 +3,14 @@ class_name AimController
 extends Node
 
 @export_group("基准环与手感参数 (Base & Sensitivity)")
-## 最大俯角内环半径 (像素，暂定 140.0)。鼠标拉到此半径或更内侧时达到最大俯角 (-max_pitch_deg)
-@export var radius_min: float = 140.0
+## 最小有效射击半径 (像素，默认 30.0)。鼠标拉至此半径以内时贴附在脚底近距离
+@export var radius_min: float = 30.0
 ## 基准水平射击半径 (像素，θ = 0°)。鼠标光标落在此环上时俯仰角刚好为 0°
 @export var radius_horizontal: float = 240.0
 ## 最大仰角外环半径 (像素)。鼠标拉到此半径时达到最大仰角 (+max_pitch_deg)
 @export var radius_max: float = 360.0
-## 最大俯仰角 (度数)。控制最大抬枪/压枪角度
-@export_range(15.0, 89.0, 1.0) var max_pitch_deg: float = 75.0
+## 最大俯仰角 (度数)。控制最大抬枪/压枪角度 (限制为 45.0 度，保证射程单调递增绝不回缩)
+@export_range(15.0, 45.0, 1.0) var max_pitch_deg: float = 45.0
 ## 俯仰角手感响应曲线指数 (默认 y = x^2 平滑二次曲线，手感平滑响应均匀)
 @export_range(1.0, 8.0, 0.5) var pitch_curve_power: float = 2.0
 
@@ -27,6 +27,20 @@ extends Node
 @export var laser_color: Color = Color(1.0, 0.95, 0.2, 0.85)
 ## 激光瞄准虚线长度 (像素)
 @export var laser_length: float = 180.0
+
+@export_group("弹道与下坠参数 (Ballistics & Drop)")
+## 抛射物初速度 (像素/秒，控制射击初始冲力，默认与 MagicOrb 520.0 对齐)
+@export var projectile_speed: float = 520.0
+## 物品重力/下坠值 (像素/秒²，下坠值越大，弹道弧度越陡峭，默认与 MagicOrb 800.0 对齐)
+@export var drop_value: float = 800.0
+## 出膛点到地面判定平面的垂直总落差高度 (像素，默认手部+10px至地面地表，共10.0px)
+@export var launch_height: float = 10.0
+## 弹道采样分段数 (数值越大折线越平滑)
+@export var trajectory_segments: int = 32
+## 弹道指示线颜色 (浅蓝色细线)
+@export var trajectory_color: Color = Color(0.4, 0.8, 1.0, 0.85)
+## 弹道指示线线宽 (像素)
+@export var trajectory_width: float = 1.5
 
 # 向后兼容别名属性
 var radius_deadzone: float:
@@ -74,6 +88,12 @@ func _save_defaults() -> void:
 		"cursor_color": cursor_color,
 		"laser_color": laser_color,
 		"laser_length": laser_length,
+		"projectile_speed": projectile_speed,
+		"drop_value": drop_value,
+		"launch_height": launch_height,
+		"trajectory_segments": trajectory_segments,
+		"trajectory_color": trajectory_color,
+		"trajectory_width": trajectory_width,
 	}
 
 # 动态应用道具专属的瞄准参数 (如不同武器具有不同基准环大小或射程)
@@ -92,6 +112,12 @@ func apply_aim_config(config: Dictionary) -> void:
 		cursor_color = _default_config["cursor_color"]
 		laser_color = _default_config["laser_color"]
 		laser_length = _default_config["laser_length"]
+		projectile_speed = _default_config["projectile_speed"]
+		drop_value = _default_config["drop_value"]
+		launch_height = _default_config["launch_height"]
+		trajectory_segments = _default_config["trajectory_segments"]
+		trajectory_color = _default_config["trajectory_color"]
+		trajectory_width = _default_config["trajectory_width"]
 
 	if config.has("radius_min"):
 		radius_min = float(config["radius_min"])
@@ -120,6 +146,22 @@ func apply_aim_config(config: Dictionary) -> void:
 		laser_color = config["laser_color"]
 	if config.has("laser_length"):
 		laser_length = float(config["laser_length"])
+	if config.has("projectile_speed"):
+		projectile_speed = float(config["projectile_speed"])
+	elif config.has("speed"):
+		projectile_speed = float(config["speed"])
+	if config.has("drop_value"):
+		drop_value = float(config["drop_value"])
+	elif config.has("gravity"):
+		drop_value = float(config["gravity"])
+	if config.has("launch_height"):
+		launch_height = float(config["launch_height"])
+	if config.has("trajectory_segments"):
+		trajectory_segments = int(config["trajectory_segments"])
+	if config.has("trajectory_color"):
+		trajectory_color = config["trajectory_color"]
+	if config.has("trajectory_width"):
+		trajectory_width = float(config["trajectory_width"])
 
 # 清除道具覆盖，重置为 Inspector 默认参数并关闭瞄准
 func clear_aim_config() -> void:
@@ -137,15 +179,55 @@ func clear_aim_config() -> void:
 	cursor_color = _default_config["cursor_color"]
 	laser_color = _default_config["laser_color"]
 	laser_length = _default_config["laser_length"]
+	projectile_speed = _default_config["projectile_speed"]
+	drop_value = _default_config["drop_value"]
+	launch_height = _default_config["launch_height"]
+	trajectory_segments = _default_config["trajectory_segments"]
+	trajectory_color = _default_config["trajectory_color"]
+	trajectory_width = _default_config["trajectory_width"]
 
 func get_effective_radius_min() -> float:
 	return maxf(radius_min, 10.0)
 
+# 水平射击距离 (θ = 0°): 由手部出膛高度与下坠值决定的平射落地距离
 func get_effective_radius_horizontal() -> float:
+	if drop_value > 0.001 and projectile_speed > 0.001 and launch_height > 0.0:
+		return projectile_speed * sqrt(2.0 * launch_height / drop_value)
 	return maxf(radius_horizontal, get_effective_radius_min() + 20.0)
 
+# 极限最大射程 (θ ≈ 44°-45°): 武器物理极限距离
 func get_effective_radius_max() -> float:
-	return maxf(radius_max, get_effective_radius_horizontal() + 20.0)
+	return get_max_physical_range()
+
+# 计算当前武器在重力与初速物理限制下的最大绝对极限射程 R_max (发生在 ~44°-45° 仰角时)
+func get_max_physical_range() -> float:
+	if drop_value <= 0.001 or projectile_speed <= 0.001:
+		return maxf(radius_max, 400.0)
+	var factor := 1.0 + (2.0 * drop_value * launch_height) / (projectile_speed * projectile_speed)
+	return (projectile_speed * projectile_speed / drop_value) * sqrt(maxf(factor, 1.0))
+
+# 经典弹道逆解核心算法：给定目标地面距离 R，依据初速度、下坠与出膛落差，精确反求所需仰角 theta (<= 45°)
+func solve_pitch_for_distance(target_distance: float) -> float:
+	if drop_value <= 0.001 or projectile_speed <= 0.001:
+		return 0.0
+
+	var r_max := get_max_physical_range()
+	var r := clampf(target_distance, 1.0, r_max)
+
+	# 求解一元二次方程: A * u^2 - R * u + (A - h) = 0, 其中 u = tan(theta)
+	var v0_sq := projectile_speed * projectile_speed
+	var A := (drop_value * r * r) / (2.0 * v0_sq)
+	var disc := r * r - 4.0 * A * (A - launch_height)
+
+	# 若刚好等于或超过物理极限，取最大射程仰角 (44°-45°)
+	if disc <= 0.0 or A <= 0.0001:
+		var u_max := r / (2.0 * maxf(A, 0.0001))
+		return minf(atan(u_max), deg_to_rad(max_pitch_deg))
+
+	# 取低弹道平滑单调解 (theta <= 45°)
+	var u := (r - sqrt(maxf(disc, 0.0))) / (2.0 * A)
+	var pitch := atan(u)
+	return clampf(pitch, deg_to_rad(-max_pitch_deg), deg_to_rad(max_pitch_deg))
 
 func _process(_delta: float) -> void:
 	if not is_aim_active or entity == null:
@@ -174,33 +256,18 @@ func update_aim(ground_center: Vector2, mouse_screen: Vector2) -> void:
 	# 1. 2:1 等距椭圆等效距离 (r_iso) 与 360° 方位角
 	var r_iso: float = sqrt(dx * dx + 4.0 * dy * dy)
 	
-	# 2. 取消死区：无论鼠标距离多近，全向自由跟踪方位角
+	# 2. 全向自由跟踪方位角
 	if r_iso > 0.001:
 		azimuth_rad = atan2(2.0 * dy, dx)
 		_last_valid_azimuth = azimuth_rad
 	else:
 		azimuth_rad = _last_valid_azimuth
 	
-	# 3. 三环俯仰角手感响应计算
+	# 3. 弹道逆解：直接将鼠标瞄准距离反算为所需仰角 (<= 45°，单调递增绝不回缩，鼠标指哪打哪)
 	var eff_min := get_effective_radius_min()
-	var eff_horiz := get_effective_radius_horizontal()
-	var eff_max := get_effective_radius_max()
-
-	if r_iso >= eff_horiz:
-		# 外侧仰角区间 [R_horiz, R_max] -> norm_x ∈ [0.0, 1.0]
-		var norm_x := (r_iso - eff_horiz) / maxf(eff_max - eff_horiz, 1.0)
-		norm_x = clampf(norm_x, 0.0, 1.0)
-		# 平滑 U 形响应曲线
-		var curve_y := pow(norm_x, pitch_curve_power)
-		pitch_rad = deg_to_rad(curve_y * max_pitch_deg)
-	else:
-		# 内侧俯角区间 [R_min, R_horiz] -> norm_x ∈ [-1.0, 0.0]
-		# 当鼠标落在此内环以内 (r_iso <= eff_min) 时，norm_x 被 clamp 到 -1.0，俯角达到最大 (-max_pitch_deg)
-		var norm_x := (r_iso - eff_horiz) / maxf(eff_horiz - eff_min, 1.0)
-		norm_x = clampf(norm_x, -1.0, 0.0)
-		# 深度 U 形响应曲线
-		var curve_y := pow(absf(norm_x), pitch_curve_power)
-		pitch_rad = deg_to_rad(-curve_y * max_pitch_deg)
+	var max_range := get_max_physical_range()
+	var target_r := clampf(r_iso, eff_min, max_range)
+	pitch_rad = solve_pitch_for_distance(target_r)
 
 	# 4. 合成标准的 3D 空间单位朝向向量 (X: 东, Y: 南, Z: 上)
 	var cos_p := cos(pitch_rad)
@@ -227,4 +294,66 @@ func get_screen_aim_direction() -> Vector2:
 # 获取当前俯仰角度（度数，用于 UI 或调试显示）
 func get_pitch_degrees() -> float:
 	return rad_to_deg(pitch_rad)
+
+# 获取当前弹道在 3D 物理空间从出膛点至真实地面接触点的屏幕离散采样点集
+# 精确考虑了出膛点（手部+10px）到地面判定平面（-2px）的垂直落差 launch_height (12px)
+# 使得弹道指示线末端与游戏内真实飞弹 (MagicOrb) 的落地位置 100% 像素级对齐！
+func get_trajectory_points(origin: Vector2) -> PackedVector2Array:
+	var points := PackedVector2Array()
+	if drop_value <= 0.001 or projectile_speed <= 0.001:
+		return points
+
+	var cos_p := cos(pitch_rad)
+	var sin_p := sin(pitch_rad)
+	var cos_a := cos(azimuth_rad)
+	var sin_a := sin(azimuth_rad)
+
+	var vx := projectile_speed * cos_p
+	var vy := projectile_speed * sin_p
+
+	# 求解飞弹触地时刻：vy * t - 0.5 * drop_value * t^2 = -launch_height
+	# 即 0.5 * drop_value * t^2 - vy * t - launch_height = 0
+	var disc := vy * vy + 2.0 * drop_value * launch_height
+	if disc < 0.0:
+		return points
+	var t_impact := (vy + sqrt(disc)) / drop_value
+	if t_impact <= 0.0001:
+		return points
+
+	var segs := maxi(trajectory_segments, 8)
+	points.resize(segs + 1)
+
+	for i in range(segs + 1):
+		var frac := float(i) / float(segs)
+		var t := t_impact * frac
+		var x_dist := vx * t
+		var y_height := vy * t - 0.5 * drop_value * t * t
+
+		# 投影至 2:1 等距地面与垂直 Z 轴 (屏幕负 Y 方向)
+		var screen_pt := origin + Vector2(x_dist * cos_a, x_dist * sin_a * 0.5 - y_height)
+		points[i] = screen_pt
+
+	return points
+
+# 获取当前弹道飞行物理数据 (用于 UI 或调试)
+func get_trajectory_flight_info() -> Dictionary:
+	if drop_value <= 0.001 or projectile_speed <= 0.001:
+		return { "is_valid": false, "t_land": 0.0, "x_land": 0.0, "max_height": 0.0 }
+
+	var cos_p := cos(pitch_rad)
+	var sin_p := sin(pitch_rad)
+	var vx := projectile_speed * cos_p
+	var vy := projectile_speed * sin_p
+	var disc := vy * vy + 2.0 * drop_value * launch_height
+	var t_impact := (vy + sqrt(maxf(disc, 0.0))) / drop_value
+	var x_land := vx * t_impact
+	var max_height := (vy * vy) / (2.0 * drop_value) if vy > 0.0 else 0.0
+
+	return {
+		"is_valid": true,
+		"t_land": t_impact,
+		"x_land": x_land,
+		"max_height": max_height
+	}
+
 

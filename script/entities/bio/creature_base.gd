@@ -11,6 +11,7 @@ var foot_y: float = 0.0
 @onready var mover_comp: Node = find_child("MoverComponent", true, false)
 @onready var anim_comp: Node = find_child("IsoAnimComponent", true, false)
 @onready var weapon_comp: Node = find_child("WeaponHolderComponent", true, false)
+@onready var step_limit_comp: Node = find_child("HeightStepLimitComponent", true, false)
 
 # 大脑/输入决策组件 (自动识别 PlayerInputComponent 或各类 AI 组件)
 @onready var brain_comp: Node = _find_brain_component()

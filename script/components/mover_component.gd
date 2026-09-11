@@ -42,7 +42,18 @@ func move(target_dir: Vector2, delta: float) -> Vector2:
 	else:
 		parent_body.velocity = parent_body.velocity.move_toward(Vector2.ZERO, friction * delta)
 
+	# 楼层高低差跨越限制插件预处理：阻挡超过 4 层的格子并沿切向平滑滑动
+	var step_limit: Node = parent_body.find_child("HeightStepLimitComponent", true, false) if parent_body else null
+	if step_limit and step_limit.get("is_enabled"):
+		parent_body.velocity = step_limit.call("constrain_velocity", parent_body.global_position, parent_body.velocity, delta)
+
+	var prev_pos := parent_body.global_position
 	parent_body.move_and_slide()
+
+	# 物理移动后二次保险校验
+	if step_limit and step_limit.get("is_enabled"):
+		step_limit.call("enforce_boundary", parent_body, prev_pos)
+
 	return parent_body.velocity
 
 # 立即刹车停下
