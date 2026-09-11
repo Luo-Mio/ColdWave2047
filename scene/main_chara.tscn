@@ -220,10 +220,12 @@ fog_edge_softness = 8.0
 
 [node name="AimController" type="Node" parent="LogicScript" unique_id=1587239102]
 script = ExtResource("13_aim")
-radius_min = 16.0
 radius_horizontal = 300.0
 radius_max = 560.0
-pitch_curve_power = 2.0
+trajectory_occluded_alpha_ratio = 0.15
+camera_aim_offset_distance = 240.0
+camera_aim_edge_threshold = 0.85
+camera_aim_smooth_speed = 4.0
 
 [node name="HeightStepLimitComponent" type="Node" parent="LogicScript" unique_id=1789234501]
 script = ExtResource("14_step")

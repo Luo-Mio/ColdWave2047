@@ -41,6 +41,20 @@ extends Node
 @export var trajectory_color: Color = Color(0.4, 0.8, 1.0, 0.85)
 ## 弹道指示线线宽 (像素，像素风格推荐 1.0 像素细线)
 @export var trajectory_width: float = 1.0
+## 弹道指示线被瓷砖遮挡时的透明度保留比例 (默认 0.5 即 50% 半透明透视，0.0 为完全隐藏，1.0 为无透视效果)
+@export_range(0.0, 1.0, 0.05) var trajectory_occluded_alpha_ratio: float = 0.5
+
+@export_group("视角辅助参数 (Camera Aim Assist)")
+## 是否启用瞄准时的视角边缘拉扯辅助
+@export var enable_camera_aim_assist: bool = true
+## 视角横向平移拉扯的最大距离 (像素，可在检查器动态调节测试，推荐 180.0 ~ 300.0)
+@export var camera_aim_offset_distance: float = 240.0
+## 视角竖向与横向平移比例 (默认 0.5 即 2:1 等距比例。横向最大拉扯 240px 时竖向为 120px)
+@export_range(0.1, 1.0, 0.05) var camera_aim_vertical_ratio: float = 0.5
+## 触发视角平移的屏幕边缘死区阈值 (0.0 ~ 0.9，默认 0.4 表示鼠标在屏幕中心 40% 区域内镜头保持居中稳定)
+@export_range(0.0, 0.9, 0.05) var camera_aim_edge_threshold: float = 0.4
+## 视角平移与回中的平滑插值速度 (数值越大越灵敏，数值越小越柔和，推荐 4.0 ~ 12.0)
+@export var camera_aim_smooth_speed: float = 6.0
 
 @export_group("性能与更新频率 (Performance & Tick Rate)")
 ## 瞄准计算与准星刷新目标频率 (Hz，默认 60.0 次/秒；若 <= 0 则无限制跟随渲染帧率)
@@ -58,6 +72,10 @@ var deadzone_color: Color:
 var is_aim_active: bool = false
 var _was_aim_active: bool = false
 var _update_timer: float = 0.0
+
+# 视角辅助状态
+var _camera: Camera2D = null
+var _current_cam_offset: Vector2 = Vector2.ZERO
 
 # 当前计算状态
 var azimuth_rad: float = 0.0                 # 地面 360° 水平方位角 (0 ~ 2π)
@@ -100,12 +118,20 @@ func _save_defaults() -> void:
 		"trajectory_segments": trajectory_segments,
 		"trajectory_color": trajectory_color,
 		"trajectory_width": trajectory_width,
+		"trajectory_occluded_alpha_ratio": trajectory_occluded_alpha_ratio,
 		"update_rate_hz": update_rate_hz,
+		"enable_camera_aim_assist": enable_camera_aim_assist,
+		"camera_aim_offset_distance": camera_aim_offset_distance,
+		"camera_aim_vertical_ratio": camera_aim_vertical_ratio,
+		"camera_aim_edge_threshold": camera_aim_edge_threshold,
+		"camera_aim_smooth_speed": camera_aim_smooth_speed,
 	}
 
 # 动态应用道具专属的瞄准参数 (如不同武器具有不同基准环大小或射程)
 func apply_aim_config(config: Dictionary) -> void:
 	is_aim_active = true
+	if _default_config.is_empty():
+		_save_defaults()
 	# 先重置为默认值，保证省略未指定的参数能平滑继承 Inspector 默认配置
 	if not _default_config.is_empty():
 		radius_min = _default_config["radius_min"]
@@ -125,6 +151,20 @@ func apply_aim_config(config: Dictionary) -> void:
 		trajectory_segments = _default_config["trajectory_segments"]
 		trajectory_color = _default_config["trajectory_color"]
 		trajectory_width = _default_config["trajectory_width"]
+		if _default_config.has("trajectory_occluded_alpha_ratio"):
+			trajectory_occluded_alpha_ratio = _default_config["trajectory_occluded_alpha_ratio"]
+		if _default_config.has("update_rate_hz"):
+			update_rate_hz = _default_config["update_rate_hz"]
+		if _default_config.has("enable_camera_aim_assist"):
+			enable_camera_aim_assist = _default_config["enable_camera_aim_assist"]
+		if _default_config.has("camera_aim_offset_distance"):
+			camera_aim_offset_distance = _default_config["camera_aim_offset_distance"]
+		if _default_config.has("camera_aim_vertical_ratio"):
+			camera_aim_vertical_ratio = _default_config["camera_aim_vertical_ratio"]
+		if _default_config.has("camera_aim_edge_threshold"):
+			camera_aim_edge_threshold = _default_config["camera_aim_edge_threshold"]
+		if _default_config.has("camera_aim_smooth_speed"):
+			camera_aim_smooth_speed = _default_config["camera_aim_smooth_speed"]
 
 	if config.has("radius_min"):
 		radius_min = float(config["radius_min"])
@@ -169,8 +209,24 @@ func apply_aim_config(config: Dictionary) -> void:
 		trajectory_color = config["trajectory_color"]
 	if config.has("trajectory_width"):
 		trajectory_width = float(config["trajectory_width"])
+	if config.has("trajectory_occluded_alpha_ratio"):
+		trajectory_occluded_alpha_ratio = float(config["trajectory_occluded_alpha_ratio"])
 	if config.has("update_rate_hz"):
 		update_rate_hz = float(config["update_rate_hz"])
+	if config.has("enable_camera_aim_assist"):
+		enable_camera_aim_assist = bool(config["enable_camera_aim_assist"])
+	if config.has("camera_aim_offset_distance"):
+		camera_aim_offset_distance = float(config["camera_aim_offset_distance"])
+	elif config.has("aim_offset_distance"):
+		camera_aim_offset_distance = float(config["aim_offset_distance"])
+	if config.has("camera_aim_vertical_ratio"):
+		camera_aim_vertical_ratio = float(config["camera_aim_vertical_ratio"])
+	elif config.has("vertical_ratio"):
+		camera_aim_vertical_ratio = float(config["vertical_ratio"])
+	if config.has("camera_aim_edge_threshold"):
+		camera_aim_edge_threshold = float(config["camera_aim_edge_threshold"])
+	if config.has("camera_aim_smooth_speed"):
+		camera_aim_smooth_speed = float(config["camera_aim_smooth_speed"])
 
 # 清除道具覆盖，重置为 Inspector 默认参数并关闭瞄准
 func clear_aim_config() -> void:
@@ -194,8 +250,20 @@ func clear_aim_config() -> void:
 	trajectory_segments = _default_config["trajectory_segments"]
 	trajectory_color = _default_config["trajectory_color"]
 	trajectory_width = _default_config["trajectory_width"]
+	if _default_config.has("trajectory_occluded_alpha_ratio"):
+		trajectory_occluded_alpha_ratio = _default_config["trajectory_occluded_alpha_ratio"]
 	if _default_config.has("update_rate_hz"):
 		update_rate_hz = _default_config["update_rate_hz"]
+	if _default_config.has("enable_camera_aim_assist"):
+		enable_camera_aim_assist = _default_config["enable_camera_aim_assist"]
+	if _default_config.has("camera_aim_offset_distance"):
+		camera_aim_offset_distance = _default_config["camera_aim_offset_distance"]
+	if _default_config.has("camera_aim_vertical_ratio"):
+		camera_aim_vertical_ratio = _default_config["camera_aim_vertical_ratio"]
+	if _default_config.has("camera_aim_edge_threshold"):
+		camera_aim_edge_threshold = _default_config["camera_aim_edge_threshold"]
+	if _default_config.has("camera_aim_smooth_speed"):
+		camera_aim_smooth_speed = _default_config["camera_aim_smooth_speed"]
 
 func get_effective_radius_min() -> float:
 	return maxf(radius_min, 1.0)
@@ -240,7 +308,67 @@ func solve_pitch_for_distance(target_distance: float) -> float:
 	var pitch := atan(u)
 	return clampf(pitch, deg_to_rad(-max_pitch_deg), deg_to_rad(max_pitch_deg))
 
+func _exit_tree() -> void:
+	if is_instance_valid(_camera):
+		_camera.offset = Vector2.ZERO
+
+func _get_camera() -> Camera2D:
+	if is_instance_valid(_camera):
+		return _camera
+	if entity and is_instance_valid(entity):
+		if entity.get_viewport():
+			_camera = entity.get_viewport().get_camera_2d()
+		if not is_instance_valid(_camera):
+			_camera = entity.find_child("Camera2D", true, false) as Camera2D
+	elif get_tree() and get_tree().root:
+		_camera = get_tree().root.find_child("Camera2D", true, false) as Camera2D
+	return _camera
+
+func _update_camera_aim_assist(delta: float) -> void:
+	var cam := _get_camera()
+	if cam == null:
+		return
+
+	var target_offset := Vector2.ZERO
+
+	if enable_camera_aim_assist and is_aim_active and entity and entity.is_inside_tree():
+		var vp := entity.get_viewport()
+		if vp:
+			var vp_rect := vp.get_visible_rect()
+			var vp_size := vp_rect.size
+			if vp_size.x > 1.0 and vp_size.y > 1.0:
+				var vp_center := vp_size * 0.5
+				var mouse_vp := vp.get_mouse_position()
+				var delta_mouse := mouse_vp - vp_center
+				var norm_vec := Vector2(
+					delta_mouse.x / vp_center.x,
+					delta_mouse.y / vp_center.y
+				)
+				var dist := minf(norm_vec.length(), 1.0)
+				if dist > camera_aim_edge_threshold:
+					var u := clampf((dist - camera_aim_edge_threshold) / maxf(1.0 - camera_aim_edge_threshold, 0.001), 0.0, 1.0)
+					var factor := u * u * (3.0 - 2.0 * u)
+					var dir := delta_mouse.normalized()
+					target_offset = Vector2(
+						dir.x * camera_aim_offset_distance,
+						dir.y * (camera_aim_offset_distance * camera_aim_vertical_ratio)
+					) * factor
+
+	# 平滑插值 (指数平滑衰减，不受渲染帧率波动影响)
+	if _current_cam_offset.distance_squared_to(target_offset) > 0.01:
+		var t := 1.0 - exp(-camera_aim_smooth_speed * delta)
+		_current_cam_offset = _current_cam_offset.lerp(target_offset, t)
+		if _current_cam_offset.distance_squared_to(target_offset) < 0.01:
+			_current_cam_offset = target_offset
+		cam.offset = _current_cam_offset
+	elif cam.offset != target_offset:
+		_current_cam_offset = target_offset
+		cam.offset = target_offset
+
 func _process(delta: float) -> void:
+	# 1. 视角辅助平滑更新 (每帧执行，确保镜头平移与回中丝滑无顿挫)
+	_update_camera_aim_assist(delta)
+
 	if not is_aim_active or entity == null:
 		_was_aim_active = false
 		return
