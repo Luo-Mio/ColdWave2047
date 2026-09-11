@@ -3,8 +3,8 @@ class_name AimController
 extends Node
 
 @export_group("基准环与手感参数 (Base & Sensitivity)")
-## 最小有效射击半径 (像素，默认 30.0)。鼠标拉至此半径以内时贴附在脚底近距离
-@export var radius_min: float = 30.0
+## 最小有效射击半径 (像素，默认 16.0)。鼠标拉至此半径以内时贴附在脚底近距离
+@export var radius_min: float = 16.0
 ## 基准水平射击半径 (像素，θ = 0°)。鼠标光标落在此环上时俯仰角刚好为 0°
 @export var radius_horizontal: float = 240.0
 ## 最大仰角外环半径 (像素)。鼠标拉到此半径时达到最大仰角 (+max_pitch_deg)
@@ -198,7 +198,7 @@ func clear_aim_config() -> void:
 		update_rate_hz = _default_config["update_rate_hz"]
 
 func get_effective_radius_min() -> float:
-	return maxf(radius_min, 10.0)
+	return maxf(radius_min, 1.0)
 
 # 水平射击距离 (θ = 0°): 由手部出膛高度与下坠值决定的平射落地距离
 func get_effective_radius_horizontal() -> float:
@@ -442,7 +442,6 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 	primary_points.push_back(chest_origin)
 
 	var segs := maxi(trajectory_segments, 16)
-	var dt := t_base / float(segs)
 	var high_floor_hit := false
 	var prev_t := 0.0
 	var prev_z := z_start
@@ -451,7 +450,7 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 		var t := t_base * (float(i) / float(segs))
 		var g_t := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t)
 		var z_t := z_start + vy * t - 0.5 * drop_value * t * t
-		var p_screen := chest_origin + Vector2(vx * t * cos_a, 0.5 * vx * t * sin_a - (vy * t - 0.5 * drop_value * t * t))
+		var p_screen := g_t - Vector2(0.0, z_t)
 
 		var fl := p_floor
 		var surface_h := h_player
@@ -470,10 +469,20 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 			hit_type = 1
 			hit_floor = fl
 			
-			var denom := (prev_z - z_t)
-			var frac := clampf((prev_z - surface_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
-			var t_hit := lerpf(prev_t, t, frac)
-			var p_hit := chest_origin + Vector2(vx * t_hit * cos_a, 0.5 * vx * t_hit * sin_a - (vy * t_hit - 0.5 * drop_value * t_hit * t_hit))
+			var z_hit := surface_h
+			var t_hit := t
+			if prev_z >= surface_h:
+				# 从高空俯冲降落至高台顶面
+				var denom := (prev_z - z_t)
+				var frac := clampf((prev_z - surface_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
+				t_hit = lerpf(prev_t, t, frac)
+			else:
+				# 撞击高台垂直侧面墙体：高度保持为真实弹道飞抵侧壁的高度，不发生天台瞬移
+				t_hit = lerpf(prev_t, t, 0.5)
+				z_hit = clampf(lerpf(prev_z, z_t, 0.5), 0.0, surface_h)
+
+			var g_hit := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_hit)
+			var p_hit := g_hit - Vector2(0.0, z_hit)
 			primary_points.push_back(p_hit)
 			hit_screen_pos = p_hit
 			break
@@ -496,24 +505,31 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 				surface_base = 0.0
 
 		if fl_base >= p_floor:
-			# 同层着弹
+			# 同层着弹：精确对齐真实地表屏幕位置
 			hit_type = 0
 			hit_floor = fl_base
-			hit_screen_pos = primary_points[-1]
+			hit_screen_pos = g_base - Vector2(0.0, surface_base)
+			primary_points[-1] = hit_screen_pos
 		else:
-			# 悬崖低层情况：实线到达角色基准面，随后向低层延伸为虚线
+			# 悬崖低层情况：实线到达角色基准面，随后向低层解析延伸为虚线
 			hit_type = -1
 			dashed_points.push_back(primary_points[-1])
+
+			# 计算到达绝对地面 (z = 0) 的解析极限时间，避免步长过小在半空超时腰斩
+			var disc_max := vy * vy + 2.0 * drop_value * z_start
+			var t_max := (vy + sqrt(maxf(disc_max, 0.0))) / drop_value
+			var cliff_segs := maxi(segs, 24)
+			var dt_cliff := maxf((t_max - t_base) / float(cliff_segs), 0.001)
+
 			var curr_t := t_base
 			var curr_z := h_player
-			var max_steps := 80
 			var low_hit := false
 
-			for s in range(max_steps):
-				var next_t := curr_t + dt
+			for s in range(1, cliff_segs + 1):
+				var next_t := t_base + dt_cliff * float(s)
 				var g_next := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * next_t)
 				var z_next := z_start + vy * next_t - 0.5 * drop_value * next_t * next_t
-				var p_next := chest_origin + Vector2(vx * next_t * cos_a, 0.5 * vx * next_t * sin_a - (vy * next_t - 0.5 * drop_value * next_t * next_t))
+				var p_next := g_next - Vector2(0.0, z_next)
 
 				var s_fl := 0
 				var s_h := 0.0
@@ -524,10 +540,20 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 						s_h = float(s_fl) * 16.0
 
 				if z_next <= s_h:
-					var denom := (curr_z - z_next)
-					var frac := clampf((curr_z - s_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
-					var t_hit := lerpf(curr_t, next_t, frac)
-					var p_hit := chest_origin + Vector2(vx * t_hit * cos_a, 0.5 * vx * t_hit * sin_a - (vy * t_hit - 0.5 * drop_value * t_hit * t_hit))
+					var z_hit := s_h
+					var t_hit := next_t
+					if curr_z >= s_h:
+						# 从空中下落至该地表顶面
+						var denom := (curr_z - z_next)
+						var frac := clampf((curr_z - s_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
+						t_hit = lerpf(curr_t, next_t, frac)
+					else:
+						# 撞击前方阻挡体垂直侧壁：高度为飞弹实际飞行高度
+						t_hit = lerpf(curr_t, next_t, 0.5)
+						z_hit = clampf(lerpf(curr_z, z_next, 0.5), 0.0, s_h)
+
+					var g_hit := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_hit)
+					var p_hit := g_hit - Vector2(0.0, z_hit)
 					dashed_points.push_back(p_hit)
 					hit_floor = s_fl
 					hit_screen_pos = p_hit
@@ -539,8 +565,10 @@ func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest
 				curr_z = z_next
 
 			if not low_hit and not dashed_points.is_empty():
+				var g_max := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_max)
 				hit_floor = 0
-				hit_screen_pos = dashed_points[-1]
+				hit_screen_pos = g_max - Vector2(0.0, 0.0)
+				dashed_points.push_back(hit_screen_pos)
 
 	return {
 		"is_valid": true,

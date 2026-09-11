@@ -4,6 +4,7 @@ extends Node2D
 
 @export var speed: float = 420.0             # 飞行初速度 (像素/秒)
 @export var gravity: float = 0.0             # 3D 垂直重力下坠 (0 = 直线魔法流, >0 = 抛物线)
+@export var launch_height: float = 10.0       # 出膛落差高度 (像素，默认 10px)
 
 # 3D 物理状态
 var ground_pos: Vector2 = Vector2.ZERO       # 地面投影坐标 (像素)
@@ -20,8 +21,8 @@ var foot_y: float = 0.0
 # 3D 发射接口：接收 3D 单位瞄准向量、角色地面坐标与站立楼层
 func launch_3d(aim_3d: Vector3, start_ground: Vector2, start_floor: int) -> void:
 	ground_pos = start_ground
-	# 站在 start_floor 楼层时，飞弹从该楼层表面上方 +10 像素（胸口位置）出膛
-	height_px = float(start_floor) * 16.0 + 10.0
+	# 站在 start_floor 楼层时，飞弹从该楼层表面上方 +launch_height 像素（胸口/手部位置）出膛
+	height_px = float(start_floor) * 16.0 + launch_height
 	
 	# 1. 纯净 3D 物理速度分解
 	var horiz_length := sqrt(aim_3d.x * aim_3d.x + aim_3d.y * aim_3d.y)
@@ -45,23 +46,75 @@ func launch(dir_2d: Vector2, start_ground: Vector2, start_floor: int) -> void:
 	launch_3d(Vector3(dir_2d.x, dir_2d.y, 0.0).normalized(), start_ground, start_floor)
 
 func _physics_process(delta: float) -> void:
-	# 1. 3D 空间物理推进
-	ground_pos += velocity_ground * delta
-	height_px += velocity_z * delta
-	velocity_z -= gravity * delta
+	# 1. 3D 空间精确运动学步进 (二阶 Verlet 积分)
+	var next_ground := ground_pos + velocity_ground * delta
+	var next_height := height_px + (velocity_z - 0.5 * gravity * delta) * delta
+	var next_vz := velocity_z - gravity * delta
 
-	# 2. 更新 2.5D 屏幕位置与 3D 空间深度
+	# 2. 地形高度与连续触地截断检测 (Continuous Impact Clamping)
+	var prev_cell := GridData.world_to_cell(ground_pos)
+	var prev_surf := float(GridData.get_highest_floor(prev_cell)) * 16.0 if GridData.has_any_tile(prev_cell) else 0.0
+
+	var next_cell := GridData.world_to_cell(next_ground)
+	var next_surf := float(GridData.get_highest_floor(next_cell)) * 16.0 if GridData.has_any_tile(next_cell) else 0.0
+
+	var hit := false
+	var hit_surf := 0.0
+	var hit_ground := next_ground
+
+	# 优先检测当前平面下穿触地：若本帧高度下穿至或低于当前所在地面高度 prev_surf
+	if next_height <= prev_surf:
+		var denom := maxf(height_px - next_height, 0.0001)
+		var frac := clampf((height_px - prev_surf) / denom, 0.0, 1.0)
+		var test_g := ground_pos.lerp(next_ground, frac)
+		var test_cell := GridData.world_to_cell(test_g)
+		var test_surf := float(GridData.get_highest_floor(test_cell)) * 16.0 if GridData.has_any_tile(test_cell) else 0.0
+
+		if test_surf <= prev_surf:
+			# 在飞入前方任何更高障碍前，已精确落在当前地面上
+			hit_ground = test_g
+			hit_surf = test_surf
+			hit = true
+		else:
+			# 着地点处于更高格子，撞击高台侧面
+			hit_ground = test_g
+			hit_surf = height_px
+			hit = true
+	elif next_surf > prev_surf:
+		# 前方地表高于当前地表
+		if height_px >= next_surf and next_height <= next_surf:
+			# 从上方降落到高台台面
+			var denom := maxf(height_px - next_height, 0.0001)
+			var frac := clampf((height_px - next_surf) / denom, 0.0, 1.0)
+			hit_ground = ground_pos.lerp(next_ground, frac)
+			hit_surf = next_surf
+			hit = true
+		elif height_px < next_surf and next_height <= next_surf:
+			# 飞弹高度低于高台台面，撞击高台侧面墙体截断：取跨格接触中点，与瞄准线预测一致
+			hit_ground = ground_pos.lerp(next_ground, 0.5)
+			hit_surf = clampf(lerpf(height_px, next_height, 0.5), 0.0, next_surf)
+			hit = true
+	elif next_height <= next_surf:
+		# 下落触及次级较低地面
+		var denom := maxf(height_px - next_height, 0.0001)
+		var frac := clampf((height_px - next_surf) / denom, 0.0, 1.0)
+		hit_ground = ground_pos.lerp(next_ground, frac)
+		hit_surf = next_surf
+		hit = true
+
+	if hit:
+		ground_pos = hit_ground
+		height_px = hit_surf
+		_update_3d_transform_and_sorting()
+		queue_free()
+		return
+
+	ground_pos = next_ground
+	height_px = next_height
+	velocity_z = next_vz
+
+	# 3. 更新 2.5D 屏幕位置与 3D 空间深度
 	_update_3d_transform_and_sorting()
-
-	# 3. 地形高度与触地/撞墙检测
-	var current_cell := GridData.world_to_cell(ground_pos)
-	if GridData.has_any_tile(current_cell):
-		var terrain_floor := GridData.get_highest_floor(current_cell)
-		var terrain_surface_px := float(terrain_floor) * 16.0
-		# 只有当高度跌落至当前格子的地表表面时判定为撞地销毁
-		if height_px <= terrain_surface_px:
-			queue_free()
-			return
 
 	# 4. 超时销毁
 	lifetime -= delta

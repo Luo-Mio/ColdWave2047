@@ -102,8 +102,13 @@ func _draw() -> void:
 	else:
 		chest_origin = player_ground + Vector2(0.0, floor_y_lift - 8.0)
 
+	# 动态手部出膛高度与弹道物理落差同步
+	var hand_height := maxf(ground_center.y - chest_origin.y, 4.0)
+	if "launch_height" in aim_controller:
+		aim_controller.launch_height = hand_height
+
 	# 4. 获取三环尺寸
-	var r_min: float = aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 8.0
+	var r_min: float = aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 16.0
 	var r0: float = aim_controller.call("get_effective_radius_horizontal") if aim_controller.has_method("get_effective_radius_horizontal") else aim_controller.radius_horizontal
 	var r_max: float = aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max
 
