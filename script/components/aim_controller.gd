@@ -11,7 +11,7 @@ extends Node
 @export var radius_max: float = 360.0
 ## 最大俯仰角 (度数)。控制最大抬枪/压枪角度 (限制为 45.0 度，保证射程单调递增绝不回缩)
 @export_range(15.0, 45.0, 1.0) var max_pitch_deg: float = 45.0
-## 俯仰角手感响应曲线指数 (默认 y = x^2 平滑二次曲线，手感平滑响应均匀)
+## 俯角手感缓出响应曲线指数 (默认 2.0 二次缓出曲线：0° 起点线性响应，越靠近死区变化率越小、越平缓)
 @export_range(1.0, 8.0, 0.5) var pitch_curve_power: float = 2.0
 
 @export_group("视觉准心配置 (Visual Reticle)")
@@ -39,8 +39,8 @@ extends Node
 @export var trajectory_segments: int = 32
 ## 弹道指示线颜色 (浅蓝色细线)
 @export var trajectory_color: Color = Color(0.4, 0.8, 1.0, 0.85)
-## 弹道指示线线宽 (像素)
-@export var trajectory_width: float = 1.5
+## 弹道指示线线宽 (像素，像素风格推荐 1.0 像素细线)
+@export var trajectory_width: float = 1.0
 
 @export_group("性能与更新频率 (Performance & Tick Rate)")
 ## 瞄准计算与准星刷新目标频率 (Hz，默认 60.0 次/秒；若 <= 0 则无限制跟随渲染帧率)
@@ -289,18 +289,35 @@ func update_aim(ground_center: Vector2, mouse_screen: Vector2) -> void:
 	# 1. 2:1 等距椭圆等效距离 (r_iso) 与 360° 方位角
 	var r_iso: float = sqrt(dx * dx + 4.0 * dy * dy)
 	
-	# 2. 全向自由跟踪方位角
-	if r_iso > 0.001:
+	# 2. 全向自由跟踪方位角 (小于 3px 时防抖锁定，避免圆心角速度奇点)
+	if r_iso > 3.0:
 		azimuth_rad = atan2(2.0 * dy, dx)
 		_last_valid_azimuth = azimuth_rad
 	else:
 		azimuth_rad = _last_valid_azimuth
 	
-	# 3. 弹道逆解：直接将鼠标瞄准距离反算为所需仰角 (<= 45°，单调递增绝不回缩，鼠标指哪打哪)
+	# 3. 混合式俯仰角计算：
+	#    - 仰角区间 (r_iso >= r0)：采用物理弹道精确反解，鼠标位置即为同层着弹点 (1:1 指哪打哪)
+	#    - 俯角区间 (r_iso < r0)：采用缓出手感响应曲线 (Ease-Out Curve)，越靠近死区影响越小，防止角速度暴冲与灵敏度发散
 	var eff_min := get_effective_radius_min()
+	var eff_horiz := get_effective_radius_horizontal()
 	var max_range := get_max_physical_range()
-	var target_r := clampf(r_iso, eff_min, max_range)
-	pitch_rad = solve_pitch_for_distance(target_r)
+
+	if r_iso >= eff_horiz:
+		if drop_value > 0.001 and projectile_speed > 0.001:
+			var target_r := clampf(r_iso, eff_horiz, max_range)
+			pitch_rad = solve_pitch_for_distance(target_r)
+		else:
+			var norm_x := clampf((r_iso - eff_horiz) / maxf(max_range - eff_horiz, 1.0), 0.0, 1.0)
+			pitch_rad = deg_to_rad(pow(norm_x, pitch_curve_power) * max_pitch_deg)
+	else:
+		# 归一化向内收缩距离 u: r_iso 从 eff_horiz (u=0) 缩进到 eff_min (u=1)
+		var span := maxf(eff_horiz - eff_min, 1.0)
+		var u := clampf((eff_horiz - r_iso) / span, 0.0, 1.0)
+		# 缓出响应曲线 (Ease-Out): u=0 处初始斜率良好接近线性，u->1 处导数平缓趋于 0，消除靠近死区时的暴跳
+		var power := maxf(pitch_curve_power, 1.0)
+		var f_u := 1.0 - pow(1.0 - u, power)
+		pitch_rad = deg_to_rad(-f_u * max_pitch_deg)
 
 	# 4. 合成标准的 3D 空间单位朝向向量 (X: 东, Y: 南, Z: 上)
 	var cos_p := cos(pitch_rad)
