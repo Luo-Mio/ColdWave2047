@@ -17,9 +17,11 @@ var foot_y: float = 0.0
 # 大脑/输入决策组件 (自动识别 PlayerInputComponent 或各类 AI 组件)
 @onready var brain_comp: Node = _find_brain_component()
 
-@export_group("物理视线高度 (Line of Sight)")
-## 生物站立时的视线/眼睛离地物理高度 (像素)。用于 2.5D 视线投射与跨障碍俯视判断。
-## 主角站立约为 18.0px；野狼等四足生物约为 10.0px；巨型生物可设更高。
+@export_group("物理立体受击与视线高度 (Physical 3D Height)")
+## 生物站立时的身体立体高度/视线高度 (像素，未缩放值)。
+## 用于：1. 飞弹 3D 飞行拦截碰撞判定；2. 2.5D 视线投射与跨障碍俯视判断。
+## 实际 3D 受击立体高度 = (eye_height * scale.y) + 6.0px。
+## 主角站立约为 18.0px；野狼等四足生物建议设为 12.0~14.0px；巨型生物可设为 32.0px 以上。
 @export var eye_height: float = 18.0
 
 # 透视遮罩参数 (方便玩家在视野内锁定被物体遮挡的目标)
@@ -35,6 +37,12 @@ var foot_y: float = 0.0
 ## 透视边缘透明度渐变曲线弧度 (0.0=45度直线线性渐变, 1.0=1/4圆弧先平缓大范围透光再边缘陡降)
 @export_range(0.0, 1.0, 0.05) var xray_curve: float = 0.0
 
+const CREATURE_OUTLINE_MATERIAL = preload("res://resources/materials/creature_outline.tres")
+
+# 瞄准高亮受击状态
+var is_aim_highlighted: bool = false
+var _sprite_node: CanvasItem = null
+
 func _ready() -> void:
 	# 统一 2.5D 生物物理碰撞规则：
 	# Layer 3 (数值 4): 活体生物层
@@ -44,6 +52,7 @@ func _ready() -> void:
 	collision_mask = 6
 	motion_mode = CharacterBody2D.MOTION_MODE_FLOATING
 	add_to_group("creatures")
+	_init_outline_material()
 
 func _physics_process(delta: float) -> void:
 	# 1. 询问大脑当前的期望移动意图 (无论是按键输入、AI漫步、追击或骑乘接管)
@@ -146,5 +155,41 @@ func get_health_ratio() -> float:
 	if hc and hc.has_method("get_health_ratio"):
 		return hc.call("get_health_ratio")
 	return 1.0
+
+# === 瞄准高亮与外轮廓显示接口 ===
+func _find_sprite_node() -> CanvasItem:
+	if _sprite_node and is_instance_valid(_sprite_node):
+		return _sprite_node
+	var anim_sprite := find_child("AnimatedSprite2D", true, false) as CanvasItem
+	if anim_sprite:
+		_sprite_node = anim_sprite
+		return _sprite_node
+	var sprite := find_child("Sprite2D", true, false) as CanvasItem
+	if sprite:
+		_sprite_node = sprite
+		return _sprite_node
+	return null
+
+## 初始化轮廓着色器材质 (零侵入：若未显式配置材质则自动赋予全局共享材质)
+func _init_outline_material() -> void:
+	var sp := _find_sprite_node()
+	if sp == null:
+		return
+	if sp.material == null:
+		sp.material = CREATURE_OUTLINE_MATERIAL
+	# 确保初始状态为未被瞄准
+	sp.set_instance_shader_parameter("is_targeted", false)
+
+## 设置生物受瞄准高亮状态
+func set_aim_highlight(is_highlighted: bool, color: Color = Color(0.2, 1.0, 0.4, 1.0), outline_width: float = 1.0) -> void:
+	is_aim_highlighted = is_highlighted
+	var sp := _find_sprite_node()
+	if sp:
+		if sp.material == null:
+			_init_outline_material()
+		sp.set_instance_shader_parameter("is_targeted", is_highlighted)
+		if is_highlighted:
+			sp.set_instance_shader_parameter("outline_color", color)
+			sp.set_instance_shader_parameter("outline_width", outline_width)
 
 

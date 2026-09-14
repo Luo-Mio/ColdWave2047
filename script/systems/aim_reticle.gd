@@ -171,7 +171,11 @@ func _draw() -> void:
 	if show_ray:
 		var ray_col: Color = aim_controller.ground_ray_color if "ground_ray_color" in aim_controller else Color(ring_col.r, ring_col.g, ring_col.b, 0.4)
 		var ray_occ_ratio: float = float(aim_controller.ground_ray_occluded_alpha_ratio) if "ground_ray_occluded_alpha_ratio" in aim_controller else 0.5
-		var req_same_fl: bool = bool(aim_controller.ground_ray_require_same_floor) if "ground_ray_require_same_floor" in aim_controller else true
+		var req_same_fl: bool = false
+		if "ground_ray_require_same_floor" in aim_controller and aim_controller.ground_ray_require_same_floor:
+			req_same_fl = true
+		elif "ground_ray_truncate_only_on_high" in aim_controller and not aim_controller.ground_ray_truncate_only_on_high:
+			req_same_fl = true
 		AimPixelDrawer.draw_terrain_adaptive_ground_ray(
 			self, ground_center, active_cursor_pos, p_floor,
 			ray_col, aim_controller, _grid_data,

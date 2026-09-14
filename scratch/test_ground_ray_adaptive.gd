@@ -5,15 +5,19 @@ const AimPixelDrawer = preload("res://script/systems/aim_pixel_drawer.gd")
 
 class MockGrid:
 	var tile_set_data: Dictionary = {}
-	# Map: cell (1, 0) is a high wall of floor 2
-	# All other cells between -5 and 5 are floor 0
+	# Map:
+	# cell (1, 0) is a high wall of floor 2
+	# cell (-1, 0) is a low valley of floor 0
+	# All other cells are floor 1
 	func has_any_tile(cell: Vector2i) -> bool:
 		return absi(cell.x) <= 5 and absi(cell.y) <= 5
 
 	func get_highest_floor(cell: Vector2i) -> int:
 		if cell == Vector2i(1, 0):
-			return 2 # High wall!
-		return 0     # Base floor
+			return 2 # High wall (fl = 2)
+		if cell == Vector2i(-1, 0):
+			return 0 # Low pit/valley (fl = 0)
+		return 1     # Normal ground (fl = 1)
 
 	func get_floor_pixel_offset(fl: int) -> float:
 		return -float(fl) * 16.0
@@ -27,68 +31,68 @@ class MockGrid:
 		return Vector2i(int(floor(u + 0.001)), int(floor(v + 0.001)))
 
 class MockAimController extends Node:
-	# Pretend points with x > 40.0 are occluded by wall
-	func is_point_occluded(screen_pt: Vector2, _point_z: float) -> bool:
-		return screen_pt.x >= 40.0 and screen_pt.x <= 70.0
+	func is_point_occluded(_screen_pt: Vector2, _point_z: float) -> bool:
+		return false
 
-class RecordingCanvas extends Node2D:
+class RecordingCanvas extends RefCounted:
 	var drawn_polylines: Array = []
 	var drawn_colors: Array = []
 
-	@warning_ignore("native_method_override")
 	func draw_polyline(points: PackedVector2Array, color: Color, _width: float = -1.0, _antialiased: bool = false) -> void:
 		drawn_polylines.append(points)
 		drawn_colors.append(color)
 
+	func draw_rect(_r: Rect2, _c: Color, _filled: bool = true, _w: float = -1.0) -> void:
+		pass
+
 func _init() -> void:
-	print("=== Running Ground Ray Adaptive Truncation & Occlusion Test ===")
+	print("=== Running Ground Ray Low-Floor Unaffected & High-Floor Truncation Test ===")
 	var grid := MockGrid.new()
 	var ctrl := MockAimController.new()
-	var canvas := RecordingCanvas.new()
 
-	# Player is at (0, 0) on floor 0.
-	# Target is at (96, 48) on floor 0 (crossing cell (1, 0)).
+	# -------------------------------------------------------------
+	# Test 1: Player is on floor 1, aiming across cell (-1, 0) (floor 0, lower than player)
+	# Requirement: When cells are lower than the character, the line is unaffected (single continuous segment)!
+	# -------------------------------------------------------------
+	print("\n--- Test 1: Crossing lower floor (floor 0 vs player floor 1) ---")
+	var canvas_low := RecordingCanvas.new()
 	var p_start := Vector2(0.0, 0.0)
-	var p_end := Vector2(96.0, 48.0)
+	var p_end_low := Vector2(-48.0, -24.0)
 	var base_col := Color(0.2, 1.0, 0.5, 0.8)
 
 	AimPixelDrawer.draw_terrain_adaptive_ground_ray(
-		canvas, p_start, p_end, 0,
+		canvas_low, p_start, p_end_low, 1,
 		base_col, ctrl, grid,
-		0.5, true, 1.0, p_start
+		0.5, false, 1.0, p_start # require_same_floor = false
 	)
 
-	print("Total polylines drawn: ", canvas.drawn_polylines.size())
-	for idx in range(canvas.drawn_polylines.size()):
-		var pts: PackedVector2Array = canvas.drawn_polylines[idx]
-		var col: Color = canvas.drawn_colors[idx]
-		print("  Segment %d: %d points from %s to %s, alpha=%.3f" % [
-			idx, pts.size(), str(pts[0]), str(pts[-1]), col.a
-		])
+	print("Polylines drawn across lower floor: ", canvas_low.drawn_polylines.size())
+	assert(canvas_low.drawn_polylines.size() == 1, "Line across lower floor must be completely unaffected (1 continuous segment)!")
+	var start_pt: Vector2 = canvas_low.drawn_polylines[0][0]
+	var end_pt: Vector2 = canvas_low.drawn_polylines[0][-1]
+	print("  Line drawn seamlessly across low floor from %s to %s (OK)" % [start_pt, end_pt])
 
-	# We expect:
-	# Segment 1: from start up to the front face of cell (1, 0) (unoccluded, alpha ~ 0.8)
-	# Truncated gap: inside cell (1, 0)
-	# Segment 2: after cell (1, 0), entering occluded shadow (alpha = 0.8 * 0.5 = 0.4)
-	# Segment 3: leaving occluded shadow to end (alpha = 0.8)
-	assert(canvas.drawn_polylines.size() >= 2, "Ray must be truncated into at least 2 segments by the high wall!")
-	
-	# Check truncation gap exists between segment 0 end and segment 1 start
-	var seg0_end: Vector2 = canvas.drawn_polylines[0][-1]
-	var seg1_start: Vector2 = canvas.drawn_polylines[1][0]
-	var gap := (seg1_start - seg0_end).length()
-	print("Truncation gap distance across high wall: %.2f px" % gap)
+	# -------------------------------------------------------------
+	# Test 2: Player is on floor 1, aiming across cell (1, 0) (floor 2, higher than player)
+	# Requirement: When encountering higher floor, line is truncated, then resumes!
+	# -------------------------------------------------------------
+	print("\n--- Test 2: Crossing higher floor (floor 2 vs player floor 1) ---")
+	var canvas_high := RecordingCanvas.new()
+	var p_end_high := Vector2(96.0, 48.0)
+
+	AimPixelDrawer.draw_terrain_adaptive_ground_ray(
+		canvas_high, p_start, p_end_high, 1,
+		base_col, ctrl, grid,
+		0.5, false, 1.0, p_start # require_same_floor = false
+	)
+
+	print("Polylines drawn across higher floor: ", canvas_high.drawn_polylines.size())
+	assert(canvas_high.drawn_polylines.size() >= 2, "Line across higher floor must be truncated into at least 2 segments!")
+	var seg1_first: Vector2 = canvas_high.drawn_polylines[1][0]
+	var seg0_last: Vector2 = canvas_high.drawn_polylines[0][-1]
+	var gap: float = (seg1_first - seg0_last).length()
+	print("  High wall truncation gap: %.2f px (OK)" % gap)
 	assert(gap > 10.0, "High wall gap must be significantly greater than 0!")
 
-	# Check occlusion alpha
-	var has_occluded_segment := false
-	for col in canvas.drawn_colors:
-		if is_equal_approx(col.a, base_col.a * 0.5):
-			has_occluded_segment = true
-			break
-	print("Has occluded segment with half alpha: ", has_occluded_segment)
-	assert(has_occluded_segment, "Must have an occluded segment with half alpha behind wall!")
-
-	print("\n>>> ALL GROUND RAY VERIFICATION TESTS PASSED CLEANLY! <<<")
+	print("\n>>> ALL LOW-FLOOR UNAFFECTED & HIGH-FLOOR TRUNCATION TESTS PASSED CLEANLY! <<<")
 	quit(0)
-

@@ -10,6 +10,7 @@
 [ext_resource type="Script" path="res://script/components/height_step_limit_component.gd" id="8_step"]
 [ext_resource type="Script" path="res://script/components/health_component.gd" id="9_health"]
 [ext_resource type="PackedScene" path="res://scene/ui/health_bar.tscn" id="10_healthbar"]
+[ext_resource type="Material" path="res://resources/materials/creature_outline.tres" id="11_outline"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_fidek"]
 atlas = ExtResource("1_g3h8a")
@@ -394,11 +395,13 @@ animations = [{
 texture_filter = 1
 scale = Vector2(2, 2)
 script = ExtResource("3_wolfscript")
+eye_height = 14.0
 xray_radius = Vector2(90, 60)
 xray_max_transparency = 1.0
 xray_curve = 1.0
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=2097517203]
+material = ExtResource("11_outline")
 sprite_frames = SubResource("SpriteFrames_lfxu0")
 animation = &"runWestSouth"
 offset = Vector2(0, -9)

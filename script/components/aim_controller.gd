@@ -42,8 +42,10 @@ const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
 @export var ground_ray_color: Color = Color(0.2, 1.0, 0.5, 0.5)
 ## 地面引导射线被高墙/瓷砖遮挡时的透明度保留比例 (默认 0.5，与弹道线一致在墙后半透明透视)
 @export_range(0.0, 1.0, 0.05) var ground_ray_occluded_alpha_ratio: float = 0.5
-## 地面引导射线是否仅在同层地表显示 (碰到高层或高度不一致地表时截断，高度一致后恢复)
-@export var ground_ray_require_same_floor: bool = true
+## 地面引导射线截断规则：只在遭遇高于角色平面的格子时截断 (默认 true：比角色矮的格子不受影响保持绘制，高层截断并在出墙后恢复)
+@export var ground_ray_truncate_only_on_high: bool = true
+## (兼容模式) 地面引导射线是否仅在同层地表显示 (默认 false)
+@export var ground_ray_require_same_floor: bool = false
 ## 是否显示同层绿色准星点 (默认 true，角色同层投影参考点，强化 2.5D 空间感)
 @export var show_ground_cursor_point: bool = true
 ## 是否显示 0° 参考十字 (默认 false，视觉极简)
@@ -103,6 +105,16 @@ const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
 ## 截面封顶适用范围 (0: 仅高墙底部 fl > hit_floor; 1: 高墙底与地表全部 fl >= hit_floor; 2: 仅地表 fl == hit_floor)
 @export_enum("仅高墙底 (Walls Only)", "高墙底与地表 (Walls & Floor)", "仅地表 (Floor Only)") var impact_cap_target: int = 0
 
+@export_group("目标锁敌与高亮 (Target Highlight)")
+## 是否在准星瞄准活体生物碰撞箱时显示描边高亮
+@export var enable_target_highlight: bool = true
+## 目标生物高亮描边颜色 (默认青绿色像素描边)
+@export var target_highlight_color: Color = Color(0.2, 1.0, 0.4, 1.0)
+## 瞄准生物吸附辅助检测半径 (像素，默认 6.0px。为 0 时严格点碰撞)
+@export var target_query_radius: float = 6.0
+## 目标描边线宽 (默认 1.0 像素)
+@export var target_outline_width: float = 1.0
+
 @export_group("性能与更新频率 (Performance & Tick Rate)")
 ## 瞄准计算与准星刷新目标频率 (Hz，默认 60.0 次/秒；若 <= 0 则无限制跟随渲染帧率)
 @export var update_rate_hz: float = 60.0
@@ -118,8 +130,9 @@ const CONFIG_PROPERTIES: Array[String] = [
 	"show_impact_grid", "impact_grid_range", "impact_grid_radius_x", "impact_grid_radius_y", "impact_grid_color",
 	"impact_grid_occluded_alpha_ratio", "show_impact_cap", "impact_cap_color", "impact_cap_target",
 	"show_deadzone_ring", "show_horizontal_ring", "show_max_pitch_arc", "max_pitch_arc_angle", "max_pitch_arc_segments",
-	"show_ground_ray", "ground_ray_color", "ground_ray_occluded_alpha_ratio", "ground_ray_require_same_floor",
-	"show_ground_cursor_point", "show_zero_cross"
+	"show_ground_ray", "ground_ray_color", "ground_ray_occluded_alpha_ratio", "ground_ray_truncate_only_on_high", "ground_ray_require_same_floor",
+	"show_ground_cursor_point", "show_zero_cross",
+	"enable_target_highlight", "target_highlight_color", "target_query_radius", "target_outline_width"
 ]
 
 # 兼容旧代码字段的别名映射字典
@@ -152,6 +165,12 @@ var aim_vector_3d: Vector3 = Vector3.ZERO    # 纯净 3D 单位瞄准朝向
 var is_in_deadzone: bool = false             # 兼容旧代码字段
 var _last_valid_azimuth: float = 0.0
 
+# 目标生物状态与信号
+signal target_creature_changed(new_target: Node2D, old_target: Node2D)
+
+var current_target: Node2D = null
+var active_cursor_pos: Vector2 = Vector2.ZERO
+
 # 默认参数备份与所属实体
 var _default_config: Dictionary = {}
 var entity: CharacterBody2D = null
@@ -171,6 +190,7 @@ func _ready() -> void:
 		curr = curr.get_parent()
 
 func _exit_tree() -> void:
+	clear_targeted_creature()
 	if _camera_assist:
 		_camera_assist.reset_offset()
 
@@ -210,6 +230,7 @@ func apply_aim_config(config: Dictionary) -> void:
 
 ## 清除道具覆盖，重置为 Inspector 默认参数并关闭瞄准
 func clear_aim_config() -> void:
+	clear_targeted_creature()
 	is_aim_active = false
 	if _default_config.is_empty():
 		_save_defaults()
@@ -271,6 +292,8 @@ func _process(delta: float) -> void:
 	)
 
 	if not is_aim_active or entity == null:
+		if is_instance_valid(current_target):
+			clear_targeted_creature()
 		_was_aim_active = false
 		return
 
@@ -335,6 +358,20 @@ func update_aim(ground_center: Vector2, mouse_screen: Vector2) -> void:
 	# 4. 合成标准的 3D 空间单位朝向向量
 	aim_vector_3d = Ballistics.compose_aim_vector_3d(pitch_rad, azimuth_rad)
 
+	# 5. 计算准星在基准地面的投影位置
+	var r_clamped := clampf(r_iso, eff_min, max_range)
+	if r_iso > 0.001:
+		active_cursor_pos = ground_center + delta * (r_clamped / r_iso)
+	else:
+		active_cursor_pos = ground_center + Vector2(eff_min, 0.0)
+
+	# 6. 生物碰撞箱瞄准检测与高亮控制
+	if enable_target_highlight:
+		var found_target := _detect_targeted_creature(active_cursor_pos, mouse_screen)
+		_update_target_highlight(found_target)
+	elif is_instance_valid(current_target):
+		clear_targeted_creature()
+
 func _get_grid_data() -> Node:
 	if not is_inside_tree():
 		return null
@@ -344,3 +381,104 @@ func _get_grid_data() -> Node:
 	elif Engine.has_singleton("GridData"):
 		return Engine.get_singleton("GridData")
 	return null
+
+# ==================== 目标生物检测与高亮管理 ====================
+
+## 检测当前准星所瞄准的活体生物 (Layer 3: 活体生物层)
+func _detect_targeted_creature(cursor_pos: Vector2, mouse_pos: Vector2) -> Node2D:
+	if not is_inside_tree() or entity == null or not entity.is_inside_tree():
+		return null
+	var space := entity.get_world_2d().direct_space_state
+	if space == null:
+		return null
+
+	var target: Node2D = null
+
+	# 1. 严格点检测：优先检测准星地面落点 (active_cursor_pos)
+	target = _query_creature_at_point(space, cursor_pos)
+
+	# 2. 严格点检测：其次检测鼠标屏幕真实位置 (mouse_pos)
+	if target == null and mouse_pos.distance_squared_to(cursor_pos) > 1.0:
+		target = _query_creature_at_point(space, mouse_pos)
+
+	# 3. 容差辅助吸附：若严格点未命中且启用了微半径 (默认 6.0px)
+	if target == null and target_query_radius > 0.0:
+		target = _query_creature_in_radius(space, cursor_pos, target_query_radius)
+		if target == null and mouse_pos.distance_squared_to(cursor_pos) > 1.0:
+			target = _query_creature_in_radius(space, mouse_pos, target_query_radius)
+
+	return target
+
+func _query_creature_at_point(space: PhysicsDirectSpaceState2D, pos: Vector2) -> Node2D:
+	var param := PhysicsPointQueryParameters2D.new()
+	param.position = pos
+	param.collision_mask = 4  # Layer 3: 活体生物层
+	param.collide_with_bodies = true
+	param.collide_with_areas = false
+	if entity:
+		param.exclude = [entity.get_rid()]
+
+	var hits := space.intersect_point(param, 4)
+	for hit in hits:
+		var col: Node2D = hit.get("collider") as Node2D
+		if is_instance_valid(col) and col != entity:
+			if col.has_method("is_alive") and not col.is_alive():
+				continue
+			return col
+	return null
+
+func _query_creature_in_radius(space: PhysicsDirectSpaceState2D, pos: Vector2, radius: float) -> Node2D:
+	var shape_param := PhysicsShapeQueryParameters2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = radius
+	shape_param.shape = circle
+	shape_param.transform = Transform2D(0.0, pos)
+	shape_param.collision_mask = 4  # Layer 3: 活体生物层
+	shape_param.collide_with_bodies = true
+	shape_param.collide_with_areas = false
+	if entity:
+		shape_param.exclude = [entity.get_rid()]
+
+	var hits := space.intersect_shape(shape_param, 8)
+	var best_col: Node2D = null
+	var best_dist_sq: float = INF
+
+	for hit in hits:
+		var col: Node2D = hit.get("collider") as Node2D
+		if is_instance_valid(col) and col != entity:
+			if col.has_method("is_alive") and not col.is_alive():
+				continue
+			var d_sq := col.global_position.distance_squared_to(pos)
+			if d_sq < best_dist_sq:
+				best_dist_sq = d_sq
+				best_col = col
+
+	return best_col
+
+## 更新目标高亮状态
+func _update_target_highlight(new_target: Node2D) -> void:
+	if current_target == new_target:
+		# 目标未改变时，检测其存活状态
+		if is_instance_valid(current_target) and current_target.has_method("is_alive") and not current_target.is_alive():
+			clear_targeted_creature()
+		return
+
+	var old_target := current_target
+	if is_instance_valid(old_target) and old_target.has_method("set_aim_highlight"):
+		old_target.set_aim_highlight(false)
+
+	current_target = new_target
+
+	if is_instance_valid(current_target) and current_target.has_method("set_aim_highlight"):
+		current_target.set_aim_highlight(true, target_highlight_color, target_outline_width)
+
+	target_creature_changed.emit(new_target, old_target)
+
+## 清除当前瞄准的生物高亮
+func clear_targeted_creature() -> void:
+	if is_instance_valid(current_target) and current_target.has_method("set_aim_highlight"):
+		current_target.set_aim_highlight(false)
+	var old_target := current_target
+	current_target = null
+	if old_target != null:
+		target_creature_changed.emit(null, old_target)

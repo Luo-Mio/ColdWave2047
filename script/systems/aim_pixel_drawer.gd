@@ -391,11 +391,11 @@ static func draw_occlusion_aware_gradient_trajectory(ci: CanvasItem, pts: Packed
 # =========================================================================
 
 ## 绘制地形自适应地面引导射线：
-## - 当经过高层瓷砖(fl > p_floor 或高度不一致)时自动截断，不画在高墙上破坏空间感；
-## - 离开高层且地表高度一致后自动恢复绘制；
+## - 只在有高于角色平面的格子 (fl > p_floor) 时截断，离开高层后恢复绘制；
+## - 当有格子比角色矮或悬崖空隙时，线段不受影响保持绘制 (可在检查器切换 require_same_floor)；
 ## - 穿行于瓷砖高墙阴影/背面时，自动将不透明度降低至 occluded_ratio (默认 50% 半透明透视)。
 static func draw_terrain_adaptive_ground_ray(
-	ci: CanvasItem,
+	ci: Object,
 	ground_center: Vector2,
 	active_cursor_pos: Vector2,
 	p_floor: int,
@@ -403,7 +403,7 @@ static func draw_terrain_adaptive_ground_ray(
 	aim_controller: Node,
 	grid_data: Object,
 	occluded_ratio: float = 0.5,
-	require_same_floor: bool = true,
+	require_same_floor: bool = false,
 	width: float = 1.0,
 	player_ground_override: Vector2 = Vector2.ZERO
 ) -> void:
@@ -525,7 +525,7 @@ static func _eval_ground_point_state(
 	return 0
 
 ## 提交绘制单条地面线段条带
-static func _flush_ground_strip(ci: CanvasItem, strip: PackedVector2Array, is_occluded: bool, normal_col: Color, occluded_col: Color, width: float = 1.0) -> void:
+static func _flush_ground_strip(ci: Object, strip: PackedVector2Array, is_occluded: bool, normal_col: Color, occluded_col: Color, width: float = 1.0) -> void:
 	if strip.is_empty():
 		return
 	var col := occluded_col if is_occluded else normal_col
