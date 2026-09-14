@@ -38,6 +38,12 @@ const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
 @export var max_pitch_arc_segments: int = 16
 ## 是否显示地面引导射线 (默认 true，连接角色原点与准星点，强化空间感)
 @export var show_ground_ray: bool = true
+## 地面引导射线颜色 (默认带有一定透明度的绿色/青色)
+@export var ground_ray_color: Color = Color(0.2, 1.0, 0.5, 0.5)
+## 地面引导射线被高墙/瓷砖遮挡时的透明度保留比例 (默认 0.5，与弹道线一致在墙后半透明透视)
+@export_range(0.0, 1.0, 0.05) var ground_ray_occluded_alpha_ratio: float = 0.5
+## 地面引导射线是否仅在同层地表显示 (碰到高层或高度不一致地表时截断，高度一致后恢复)
+@export var ground_ray_require_same_floor: bool = true
 ## 是否显示同层绿色准星点 (默认 true，角色同层投影参考点，强化 2.5D 空间感)
 @export var show_ground_cursor_point: bool = true
 ## 是否显示 0° 参考十字 (默认 false，视觉极简)
@@ -112,7 +118,8 @@ const CONFIG_PROPERTIES: Array[String] = [
 	"show_impact_grid", "impact_grid_range", "impact_grid_radius_x", "impact_grid_radius_y", "impact_grid_color",
 	"impact_grid_occluded_alpha_ratio", "show_impact_cap", "impact_cap_color", "impact_cap_target",
 	"show_deadzone_ring", "show_horizontal_ring", "show_max_pitch_arc", "max_pitch_arc_angle", "max_pitch_arc_segments",
-	"show_ground_ray", "show_ground_cursor_point", "show_zero_cross"
+	"show_ground_ray", "ground_ray_color", "ground_ray_occluded_alpha_ratio", "ground_ray_require_same_floor",
+	"show_ground_cursor_point", "show_zero_cross"
 ]
 
 # 兼容旧代码字段的别名映射字典

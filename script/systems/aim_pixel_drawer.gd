@@ -386,4 +386,153 @@ static func draw_occlusion_aware_gradient_trajectory(ci: CanvasItem, pts: Packed
 	if current_strip.size() >= 2:
 		ci.draw_polyline_colors(current_strip, current_cols, 1.0)
 
+# =========================================================================
+# 5. 地面引导射线自适应绘制 (高层截断 + 同层恢复 + 墙后遮挡半透明透视)
+# =========================================================================
+
+## 绘制地形自适应地面引导射线：
+## - 当经过高层瓷砖(fl > p_floor 或高度不一致)时自动截断，不画在高墙上破坏空间感；
+## - 离开高层且地表高度一致后自动恢复绘制；
+## - 穿行于瓷砖高墙阴影/背面时，自动将不透明度降低至 occluded_ratio (默认 50% 半透明透视)。
+static func draw_terrain_adaptive_ground_ray(
+	ci: CanvasItem,
+	ground_center: Vector2,
+	active_cursor_pos: Vector2,
+	p_floor: int,
+	color: Color,
+	aim_controller: Node,
+	grid_data: Object,
+	occluded_ratio: float = 0.5,
+	require_same_floor: bool = true,
+	width: float = 1.0,
+	player_ground_override: Vector2 = Vector2.ZERO
+) -> void:
+	var delta := active_cursor_pos - ground_center
+	var total_len := delta.length()
+	if total_len < 1.0:
+		return
+
+	# 若无网格数据，直接降级为普通直线绘制
+	if grid_data == null:
+		ci.draw_line(ground_center.round(), active_cursor_pos.round(), color, width, false)
+		return
+
+	var floor_lift: float = -float(p_floor) * 16.0
+	if grid_data.has_method("get_floor_pixel_offset"):
+		floor_lift = grid_data.get_floor_pixel_offset(p_floor)
+
+	var player_ground: Vector2 = player_ground_override if player_ground_override != Vector2.ZERO else (ground_center - Vector2(0.0, floor_lift))
+	var target_ground: Vector2 = active_cursor_pos - Vector2(0.0, floor_lift)
+	var z_player: float = float(p_floor) * 16.0
+	var color_occluded := Color(color.r, color.g, color.b, color.a * occluded_ratio)
+
+	# 采样步长约 4.0 像素，动态约束采样数在 12 ~ 64 之间
+	var num_steps := clampi(int(ceil(total_len / 4.0)), 12, 64)
+	var pts := PackedVector2Array()
+	pts.resize(num_steps + 1)
+	var t_vals := PackedFloat32Array()
+	t_vals.resize(num_steps + 1)
+	var states: Array[int] = []
+	states.resize(num_steps + 1)
+
+	for i in range(num_steps + 1):
+		var t := float(i) / float(num_steps)
+		t_vals[i] = t
+		var pt := ground_center.lerp(active_cursor_pos, t)
+		var g := player_ground.lerp(target_ground, t)
+		pts[i] = pt
+		states[i] = _eval_ground_point_state(pt, g, p_floor, z_player, require_same_floor, occluded_ratio, aim_controller, grid_data)
+
+	# 逐段遍历与状态分流（交界处使用 3 轮二分精确定位边缘）
+	var current_mode: int = -1
+	var current_strip := PackedVector2Array()
+
+	var s0 := states[0]
+	if s0 != -1:
+		current_mode = s0
+		current_strip.push_back(pts[0].round())
+
+	for i in range(num_steps):
+		var s_curr := states[i]
+		var s_next := states[i + 1]
+		var p1 := pts[i + 1]
+
+		if s_curr == s_next:
+			if s_next != -1:
+				var p1_round := p1.round()
+				if current_strip.is_empty() or current_strip[-1] != p1_round:
+					current_strip.push_back(p1_round)
+		else:
+			# 状态交界点二分查找 (误差 <= 0.5px)
+			var ta := t_vals[i]
+			var tb := t_vals[i + 1]
+			for iter in range(3):
+				var tm := (ta + tb) * 0.5
+				var pm := ground_center.lerp(active_cursor_pos, tm)
+				var gm := player_ground.lerp(target_ground, tm)
+				var sm := _eval_ground_point_state(pm, gm, p_floor, z_player, require_same_floor, occluded_ratio, aim_controller, grid_data)
+				if sm == s_curr:
+					ta = tm
+				else:
+					tb = tm
+
+			var t_split := (ta + tb) * 0.5
+			var split_pt := ground_center.lerp(active_cursor_pos, t_split).round()
+
+			# 结束上一段条带
+			if s_curr != -1:
+				if current_strip.is_empty() or current_strip[-1] != split_pt:
+					current_strip.push_back(split_pt)
+				_flush_ground_strip(ci, current_strip, current_mode == 1, color, color_occluded, width)
+				current_strip.clear()
+
+			# 开启下一段条带
+			if s_next != -1:
+				current_mode = s_next
+				current_strip.push_back(split_pt)
+				var p1_round := p1.round()
+				if split_pt != p1_round:
+					current_strip.push_back(p1_round)
+			else:
+				current_mode = -1
+
+	# 绘制最后剩余的有效条带
+	if not current_strip.is_empty() and current_mode != -1:
+		_flush_ground_strip(ci, current_strip, current_mode == 1, color, color_occluded, width)
+
+## 判定采样点状态：-1 截断(高度不一致/高层阻挡)；0 正常显示；1 墙后遮挡半透明
+static func _eval_ground_point_state(
+	pt: Vector2,
+	g: Vector2,
+	p_floor: int,
+	z_player: float,
+	require_same_floor: bool,
+	occluded_ratio: float,
+	aim_controller: Node,
+	grid_data: Object
+) -> int:
+	var c: Vector2i = grid_data.world_to_cell(g)
+	var fl: int = grid_data.get_highest_floor(c) if grid_data.has_any_tile(c) else 0
+
+	var is_blocked: bool = (fl != p_floor) if require_same_floor else (fl > p_floor)
+	if is_blocked:
+		return -1
+
+	if occluded_ratio < 0.99 and aim_controller != null and aim_controller.has_method("is_point_occluded"):
+		if aim_controller.is_point_occluded(pt, z_player):
+			return 1
+
+	return 0
+
+## 提交绘制单条地面线段条带
+static func _flush_ground_strip(ci: CanvasItem, strip: PackedVector2Array, is_occluded: bool, normal_col: Color, occluded_col: Color, width: float = 1.0) -> void:
+	if strip.is_empty():
+		return
+	var col := occluded_col if is_occluded else normal_col
+	if strip.size() >= 2:
+		ci.draw_polyline(strip, col, width, false)
+	elif strip.size() == 1:
+		ci.draw_rect(Rect2(strip[0], Vector2(1, 1)), col)
+
+
 

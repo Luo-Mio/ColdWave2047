@@ -163,19 +163,36 @@ func _draw() -> void:
 
 	var hit_type: int = traj_info.get("hit_type", 0) if traj_info.get("is_valid", false) else 0
 
-	# 4. 地面引导射线与同层绿色准星点 (角色原点到准星点连线，强化 2.5D 空间感)
+	# 4. 地面引导射线与同层绿色准星点 (角色原点到准星点连线，强化 2.5D 空间感；遇到高层截断并在同层恢复，墙后半透明)
 	var show_ray: bool = bool(aim_controller.show_ground_ray) if "show_ground_ray" in aim_controller else true
 	var show_point: bool = bool(aim_controller.show_ground_cursor_point) if "show_ground_cursor_point" in aim_controller else true
 	var show_cross: bool = bool(aim_controller.show_zero_cross) if "show_zero_cross" in aim_controller else false
 
 	if show_ray:
-		draw_line(ground_center.round(), active_cursor_pos.round(), Color(ring_col.r, ring_col.g, ring_col.b, 0.4), 1.0, false)
+		var ray_col: Color = aim_controller.ground_ray_color if "ground_ray_color" in aim_controller else Color(ring_col.r, ring_col.g, ring_col.b, 0.4)
+		var ray_occ_ratio: float = float(aim_controller.ground_ray_occluded_alpha_ratio) if "ground_ray_occluded_alpha_ratio" in aim_controller else 0.5
+		var req_same_fl: bool = bool(aim_controller.ground_ray_require_same_floor) if "ground_ray_require_same_floor" in aim_controller else true
+		AimPixelDrawer.draw_terrain_adaptive_ground_ray(
+			self, ground_center, active_cursor_pos, p_floor,
+			ray_col, aim_controller, _grid_data,
+			ray_occ_ratio, req_same_fl, 1.0, player_ground
+		)
 	if show_cross and show_horiz:
 		AimPixelDrawer.draw_pixel_cross(self, r0_ref_pos, Color(ring_col.r, ring_col.g, ring_col.b, 0.65))
 
-	# 同层绿色准星点 (基准平面投影参考点，空间感核心)
+	# 同层绿色准星点 (基准平面投影参考点，空间感核心；若被高墙遮挡同样降低不透明度)
 	if show_point:
-		AimPixelDrawer.draw_pixel_diamond(self, active_cursor_pos, Color(0.2, 1.0, 0.5, 0.85), Color(0.1, 0.85, 0.35, 0.95), Color(0.85, 1.0, 0.85, 0.95))
+		var pt_is_occ: bool = false
+		if _grid_data and aim_controller != null and aim_controller.has_method("is_point_occluded"):
+			pt_is_occ = aim_controller.is_point_occluded(active_cursor_pos, float(p_floor) * 16.0)
+		var pt_occ_ratio: float = float(aim_controller.ground_ray_occluded_alpha_ratio) if "ground_ray_occluded_alpha_ratio" in aim_controller else 0.5
+		var pt_alpha_scale: float = pt_occ_ratio if pt_is_occ else 1.0
+		AimPixelDrawer.draw_pixel_diamond(
+			self, active_cursor_pos,
+			Color(0.2, 1.0, 0.5, 0.85 * pt_alpha_scale),
+			Color(0.1, 0.85, 0.35, 0.95 * pt_alpha_scale),
+			Color(0.85, 1.0, 0.85, 0.95 * pt_alpha_scale)
+		)
 
 	# 5. 角色身旁俯仰角 HUD 显示
 	var pitch_deg: float = aim_controller.get_pitch_degrees()
