@@ -30,17 +30,14 @@ static func draw_cached_solid_ellipse(ci: CanvasItem, center: Vector2, rx: float
 		ci.draw_polyline(pts, color, 1.0, false)
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-# 生成局部相对 (0, 0) 的整像素椭圆点序列
+# 生成局部相对 (0, 0) 的整像素椭圆点序列 (步长自适应，单次生成仅 ~70us)
 static func _generate_solid_ellipse(rx: float, ry: float) -> PackedVector2Array:
-	var steps := maxi(int(TAU * rx), 72)
+	var steps := clampi(int(TAU * rx * 0.35), 64, 256)
 	var pts := PackedVector2Array()
-	var last_p := Vector2(-99999, -99999)
+	pts.resize(steps + 1)
 	for i in range(steps + 1):
 		var th := (float(i) / float(steps)) * TAU
-		var p := Vector2(round(cos(th) * rx), round(sin(th) * ry))
-		if p != last_p:
-			pts.push_back(p)
-			last_p = p
+		pts[i] = Vector2(round(cos(th) * rx), round(sin(th) * ry))
 	return pts
 
 # 绘制 2:1 像素风格等距虚线椭圆 (缓存各虚线段，单帧 0 次几何计算)
@@ -177,7 +174,7 @@ static func draw_pixel_dashed_polyline(ci: CanvasItem, points: PackedVector2Arra
 static func draw_occlusion_aware_trajectory(ci: CanvasItem, pts: PackedVector2Array, z_vals: PackedFloat32Array, color: Color, aim_controller: Node, is_dashed: bool = false, occluded_ratio: float = 0.5) -> void:
 	if pts.size() < 2:
 		return
-	if z_vals.size() != pts.size() or aim_controller == null or not aim_controller.has_method("is_point_occluded"):
+	if occluded_ratio >= 0.99 or z_vals.size() != pts.size() or aim_controller == null or not aim_controller.has_method("is_point_occluded"):
 		var snapped := PackedVector2Array()
 		snapped.resize(pts.size())
 		for i in range(pts.size()):
@@ -190,11 +187,11 @@ static func draw_occlusion_aware_trajectory(ci: CanvasItem, pts: PackedVector2Ar
 
 	var color_occluded := Color(color.r, color.g, color.b, color.a * occluded_ratio)
 
-	# 1. 预先获取每个顶点的遮挡状态
+	# 1. 预先获取每个顶点的遮挡状态 (直接方法调用，消除动态反射 call 开销)
 	var occ_status: Array[bool] = []
 	occ_status.resize(pts.size())
 	for i in range(pts.size()):
-		occ_status[i] = aim_controller.call("is_point_occluded", pts[i], z_vals[i])
+		occ_status[i] = aim_controller.is_point_occluded(pts[i], z_vals[i])
 
 	# 2. 逐段切分并按条带批次绘制（交界处 3 轮二分查找，实现 +-0.5px 精准无缝衔接）
 	var current_mode: bool = occ_status[0]
@@ -220,7 +217,7 @@ static func draw_occlusion_aware_trajectory(ci: CanvasItem, pts: PackedVector2Ar
 				var t_mid := (t0 + t1) * 0.5
 				var s_mid := p0.lerp(p1, t_mid)
 				var z_mid := lerpf(z0, z1, t_mid)
-				var occ_mid: bool = aim_controller.call("is_point_occluded", s_mid, z_mid)
+				var occ_mid: bool = aim_controller.is_point_occluded(s_mid, z_mid)
 				if occ_mid == occ0:
 					t0 = t_mid
 				else:
@@ -245,9 +242,109 @@ static func draw_occlusion_aware_trajectory(ci: CanvasItem, pts: PackedVector2Ar
 static func _flush_trajectory_strip(ci: CanvasItem, strip: PackedVector2Array, is_occluded: bool, normal_col: Color, occluded_col: Color, is_dashed: bool) -> void:
 	if strip.size() < 2:
 		return
+	if is_occluded and occluded_col.a <= 0.001:
+		return
 	var col := occluded_col if is_occluded else normal_col
 	if is_dashed:
 		draw_pixel_dashed_polyline(ci, strip, col, 1.0, 4.0, 3.5)
 	else:
 		ci.draw_polyline(strip, col, 1.0, false)
+
+# 绘制自适应遮挡渐变实线弹道（用于悬崖延长段等，从起点到终点平滑颜色渐变，遮挡处自动半透明透视）
+static func draw_occlusion_aware_gradient_trajectory(ci: CanvasItem, pts: PackedVector2Array, z_vals: PackedFloat32Array, start_color: Color, end_color: Color, aim_controller: Node, occluded_ratio: float = 0.5) -> void:
+	var n := pts.size()
+	if n < 2:
+		return
+	if occluded_ratio >= 0.99 or z_vals.size() != n or aim_controller == null or not aim_controller.has_method("is_point_occluded"):
+		var snapped := PackedVector2Array()
+		snapped.resize(n)
+		var cols := PackedColorArray()
+		cols.resize(n)
+		for i in range(n):
+			snapped[i] = pts[i].round()
+			var t := float(i) / float(n - 1)
+			cols[i] = start_color.lerp(end_color, t)
+		ci.draw_polyline_colors(snapped, cols, 1.0)
+		return
+
+	var occ_status: Array[bool] = []
+	occ_status.resize(n)
+	for i in range(n):
+		occ_status[i] = aim_controller.is_point_occluded(pts[i], z_vals[i])
+
+	var current_mode: bool = occ_status[0]
+	var current_strip := PackedVector2Array()
+	var current_cols := PackedColorArray()
+
+	var col0 := start_color
+	if current_mode:
+		col0.a *= occluded_ratio
+	current_strip.push_back(pts[0].round())
+	current_cols.push_back(col0)
+
+	for i in range(n - 1):
+		var p0 := pts[i]
+		var p1 := pts[i + 1]
+		var z0 := z_vals[i]
+		var z1 := z_vals[i + 1]
+		var occ0 := occ_status[i]
+		var occ1 := occ_status[i + 1]
+		var t1 := float(i + 1) / float(n - 1)
+		var col1 := start_color.lerp(end_color, t1)
+
+		if occ0 == occ1:
+			var p1_round := p1.round()
+			if occ1:
+				col1.a *= occluded_ratio
+			if current_strip.is_empty() or current_strip[-1] != p1_round:
+				current_strip.push_back(p1_round)
+				current_cols.push_back(col1)
+		else:
+			var s0 := 0.0
+			var s1 := 1.0
+			for iter in range(3):
+				var s_mid := (s0 + s1) * 0.5
+				var pt_mid := p0.lerp(p1, s_mid)
+				var zm := lerpf(z0, z1, s_mid)
+				var om: bool = aim_controller.is_point_occluded(pt_mid, zm)
+				if om == occ0:
+					s0 = s_mid
+				else:
+					s1 = s_mid
+
+			var split_s := (s0 + s1) * 0.5
+			var split_pt := p0.lerp(p1, split_s).round()
+			var split_t := (float(i) + split_s) / float(n - 1)
+			var split_col := start_color.lerp(end_color, split_t)
+
+			var split_col_curr := split_col
+			if current_mode:
+				split_col_curr.a *= occluded_ratio
+			if current_strip.is_empty() or current_strip[-1] != split_pt:
+				current_strip.push_back(split_pt)
+				current_cols.push_back(split_col_curr)
+
+			if current_strip.size() >= 2:
+				ci.draw_polyline_colors(current_strip, current_cols, 1.0)
+
+			current_mode = occ1
+			current_strip.clear()
+			current_cols.clear()
+
+			var split_col_next := split_col
+			if current_mode:
+				split_col_next.a *= occluded_ratio
+			current_strip.push_back(split_pt)
+			current_cols.push_back(split_col_next)
+
+			var p1_round := p1.round()
+			if split_pt != p1_round:
+				if occ1:
+					col1.a *= occluded_ratio
+				current_strip.push_back(p1_round)
+				current_cols.push_back(col1)
+
+	if current_strip.size() >= 2:
+		ci.draw_polyline_colors(current_strip, current_cols, 1.0)
+
 

@@ -73,7 +73,10 @@ func _process(delta: float) -> void:
 	var chest_o := _hand_node.global_position if is_instance_valid(_hand_node) else (ground_c + Vector2(0.0, -8.0))
 
 	if "launch_height" in aim_controller:
-		aim_controller.launch_height = maxf(ground_c.y - chest_o.y, 4.0)
+		var raw_lh: float = maxf(ground_c.y - chest_o.y, 4.0)
+		# 滞后消抖滤波：角色微幅呼吸/跑动动画不改变出膛高，防止高频击穿椭圆几何缓存
+		if absf(raw_lh - aim_controller.launch_height) >= 2.0:
+			aim_controller.launch_height = roundf(raw_lh)
 
 	# 刷新率节流控制
 	var target_hz: float = float(aim_controller.update_rate_hz) if ("update_rate_hz" in aim_controller) else update_rate_hz
@@ -104,14 +107,14 @@ func _draw() -> void:
 	var ground_center := player_ground + Vector2(0.0, floor_y_lift)
 	var chest_origin: Vector2 = _hand_node.global_position if is_instance_valid(_hand_node) else (ground_center + Vector2(0.0, -8.0))
 
-	var r_min: float = aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 16.0
-	var r0: float = aim_controller.call("get_effective_radius_horizontal") if aim_controller.has_method("get_effective_radius_horizontal") else aim_controller.radius_horizontal
-	var r_max: float = aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max
+	var r_min: float = snappedf(aim_controller.call("get_effective_radius_min") if aim_controller.has_method("get_effective_radius_min") else 16.0, 2.0)
+	var r0: float = snappedf(aim_controller.call("get_effective_radius_horizontal") if aim_controller.has_method("get_effective_radius_horizontal") else aim_controller.radius_horizontal, 4.0)
+	var r_max: float = snappedf(aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max, 4.0)
 
-	# 2. 绘制地面三环 (享元缓存 + GPU 变换，单帧 0 次三角运算)
-	AimPixelDrawer.draw_cached_dashed_ellipse(self, ground_center, r_min, r_min * 0.5, inner_ring_col, 1.0, 4.0, 4.0)
+	# 2. 绘制地面三环 (全量实线化 + 享元缓存 + GPU 变换，单帧 3 次 GPU 渲染调用，0 次虚线切片循环)
+	AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r_min, r_min * 0.5, inner_ring_col, 1.0)
 	AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r0, r0 * 0.5, ring_col, 1.0)
-	AimPixelDrawer.draw_cached_dashed_ellipse(self, ground_center, r_max, r_max * 0.5, outer_ring_col, 1.0, 6.0, 5.0)
+	AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r_max, r_max * 0.5, outer_ring_col, 1.0)
 
 	# 3. 鼠标等距投影与基准标记计算
 	var mouse_screen: Vector2 = get_global_mouse_position()
@@ -174,9 +177,11 @@ func _draw() -> void:
 		# 6.1 实线主弹道 (遮挡感知切分)
 		AimPixelDrawer.draw_occlusion_aware_trajectory(self, primary_pts, primary_z, traj_col, aim_controller, false, occ_ratio)
 
-		# 6.2 悬崖下坠虚线段 (遮挡感知切分)
+		# 6.2 悬崖下坠延长实线段 (黄到红渐变 + 遮挡感知切分)
 		if hit_type == -1 and dashed_pts.size() >= 2:
-			AimPixelDrawer.draw_occlusion_aware_trajectory(self, dashed_pts, dashed_z, Color(traj_col.r, traj_col.g, traj_col.b, 0.85), aim_controller, true, occ_ratio)
+			var cliff_start_col := Color(1.0, 0.88, 0.25, 0.9)  # 醒目金黄色
+			var cliff_end_col := Color(1.0, 0.22, 0.22, 0.95)   # 警示鲜红色
+			AimPixelDrawer.draw_occlusion_aware_gradient_trajectory(self, dashed_pts, dashed_z, cliff_start_col, cliff_end_col, aim_controller, occ_ratio)
 
 		# 6.3 着弹点 2:1 像素红色宝石 (若被瓷砖遮挡同步以透视比例渲染)
 		var dot_scale := occ_ratio if is_hit_occluded else 1.0

@@ -1,10 +1,15 @@
-# aim_controller.gd —— 2.5D 等距极坐标 3D 瞄准控制器
+# aim_controller.gd —— 2.5D 等距极坐标 3D 瞄准控制器 (核心协调器)
 class_name AimController
 extends Node
 
+# 依赖子系统模块
+const Ballistics = preload("res://script/systems/aim_ballistics.gd")
+const TerrainSolver = preload("res://script/systems/aim_terrain_solver.gd")
+const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
+
 @export_group("基准环与手感参数 (Base & Sensitivity)")
-## 最小有效射击半径 (像素，默认 16.0)。鼠标拉至此半径以内时贴附在脚底近距离
-@export var radius_min: float = 16.0
+## 最小有效射击半径 (像素，默认 48.0)。鼠标拉至此半径以内时贴附在脚底近距离
+@export var radius_min: float = 48.0
 ## 基准水平射击半径 (像素，θ = 0°)。鼠标光标落在此环上时俯仰角刚好为 0°
 @export var radius_horizontal: float = 240.0
 ## 最大仰角外环半径 (像素)。鼠标拉到此半径时达到最大仰角 (+max_pitch_deg)
@@ -60,7 +65,27 @@ extends Node
 ## 瞄准计算与准星刷新目标频率 (Hz，默认 60.0 次/秒；若 <= 0 则无限制跟随渲染帧率)
 @export var update_rate_hz: float = 60.0
 
-# 向后兼容别名属性
+# 声明式可配置属性列表 (用于武器切换时的快速备份、重置与覆盖)
+const CONFIG_PROPERTIES: Array[String] = [
+	"radius_min", "radius_horizontal", "radius_max", "max_pitch_deg", "pitch_curve_power",
+	"ring_color", "inner_ring_color", "outer_ring_color", "cursor_color", "laser_color", "laser_length",
+	"projectile_speed", "drop_value", "launch_height", "trajectory_segments",
+	"trajectory_color", "trajectory_width", "trajectory_occluded_alpha_ratio", "update_rate_hz",
+	"enable_camera_aim_assist", "camera_aim_offset_distance", "camera_aim_vertical_ratio",
+	"camera_aim_edge_threshold", "camera_aim_smooth_speed"
+]
+
+# 兼容旧代码字段的别名映射字典
+const ALIAS_MAP: Dictionary = {
+	"radius_deadzone": "radius_min",
+	"deadzone_color": "inner_ring_color",
+	"speed": "projectile_speed",
+	"gravity": "drop_value",
+	"aim_offset_distance": "camera_aim_offset_distance",
+	"vertical_ratio": "camera_aim_vertical_ratio"
+}
+
+# 向后兼容属性别名
 var radius_deadzone: float:
 	get: return radius_min
 	set(v): radius_min = v
@@ -73,20 +98,19 @@ var is_aim_active: bool = false
 var _was_aim_active: bool = false
 var _update_timer: float = 0.0
 
-# 视角辅助状态
-var _camera: Camera2D = null
-var _current_cam_offset: Vector2 = Vector2.ZERO
-
 # 当前计算状态
 var azimuth_rad: float = 0.0                 # 地面 360° 水平方位角 (0 ~ 2π)
 var pitch_rad: float = 0.0                   # 3D 俯仰角 (-max_pitch ~ +max_pitch)
 var aim_vector_3d: Vector3 = Vector3.ZERO    # 纯净 3D 单位瞄准朝向
-var is_in_deadzone: bool = false             # 兼容旧代码字段，死区已取消
+var is_in_deadzone: bool = false             # 兼容旧代码字段
 var _last_valid_azimuth: float = 0.0
 
-# 默认参数备份 (用于道具卸下后恢复默认)
+# 默认参数备份与所属实体
 var _default_config: Dictionary = {}
 var entity: CharacterBody2D = null
+
+# 视角辅助子处理器
+var _camera_assist: CameraAssist = CameraAssist.new()
 
 func _ready() -> void:
 	_save_defaults()
@@ -99,275 +123,105 @@ func _ready() -> void:
 			break
 		curr = curr.get_parent()
 
-func _save_defaults() -> void:
-	_default_config = {
-		"radius_min": radius_min,
-		"radius_horizontal": radius_horizontal,
-		"radius_max": radius_max,
-		"max_pitch_deg": max_pitch_deg,
-		"pitch_curve_power": pitch_curve_power,
-		"ring_color": ring_color,
-		"inner_ring_color": inner_ring_color,
-		"outer_ring_color": outer_ring_color,
-		"cursor_color": cursor_color,
-		"laser_color": laser_color,
-		"laser_length": laser_length,
-		"projectile_speed": projectile_speed,
-		"drop_value": drop_value,
-		"launch_height": launch_height,
-		"trajectory_segments": trajectory_segments,
-		"trajectory_color": trajectory_color,
-		"trajectory_width": trajectory_width,
-		"trajectory_occluded_alpha_ratio": trajectory_occluded_alpha_ratio,
-		"update_rate_hz": update_rate_hz,
-		"enable_camera_aim_assist": enable_camera_aim_assist,
-		"camera_aim_offset_distance": camera_aim_offset_distance,
-		"camera_aim_vertical_ratio": camera_aim_vertical_ratio,
-		"camera_aim_edge_threshold": camera_aim_edge_threshold,
-		"camera_aim_smooth_speed": camera_aim_smooth_speed,
-	}
+func _exit_tree() -> void:
+	if _camera_assist:
+		_camera_assist.reset_offset()
 
-# 动态应用道具专属的瞄准参数 (如不同武器具有不同基准环大小或射程)
+func _save_defaults() -> void:
+	_default_config.clear()
+	for prop in CONFIG_PROPERTIES:
+		_default_config[prop] = get(prop)
+
+## 动态应用道具专属的瞄准参数 (如不同武器具有不同基准环大小或射程)
 func apply_aim_config(config: Dictionary) -> void:
 	is_aim_active = true
 	if _default_config.is_empty():
 		_save_defaults()
+
 	# 先重置为默认值，保证省略未指定的参数能平滑继承 Inspector 默认配置
-	if not _default_config.is_empty():
-		radius_min = _default_config["radius_min"]
-		radius_horizontal = _default_config["radius_horizontal"]
-		radius_max = _default_config["radius_max"]
-		max_pitch_deg = _default_config["max_pitch_deg"]
-		pitch_curve_power = _default_config["pitch_curve_power"]
-		ring_color = _default_config["ring_color"]
-		inner_ring_color = _default_config["inner_ring_color"]
-		outer_ring_color = _default_config["outer_ring_color"]
-		cursor_color = _default_config["cursor_color"]
-		laser_color = _default_config["laser_color"]
-		laser_length = _default_config["laser_length"]
-		projectile_speed = _default_config["projectile_speed"]
-		drop_value = _default_config["drop_value"]
-		launch_height = _default_config["launch_height"]
-		trajectory_segments = _default_config["trajectory_segments"]
-		trajectory_color = _default_config["trajectory_color"]
-		trajectory_width = _default_config["trajectory_width"]
-		if _default_config.has("trajectory_occluded_alpha_ratio"):
-			trajectory_occluded_alpha_ratio = _default_config["trajectory_occluded_alpha_ratio"]
-		if _default_config.has("update_rate_hz"):
-			update_rate_hz = _default_config["update_rate_hz"]
-		if _default_config.has("enable_camera_aim_assist"):
-			enable_camera_aim_assist = _default_config["enable_camera_aim_assist"]
-		if _default_config.has("camera_aim_offset_distance"):
-			camera_aim_offset_distance = _default_config["camera_aim_offset_distance"]
-		if _default_config.has("camera_aim_vertical_ratio"):
-			camera_aim_vertical_ratio = _default_config["camera_aim_vertical_ratio"]
-		if _default_config.has("camera_aim_edge_threshold"):
-			camera_aim_edge_threshold = _default_config["camera_aim_edge_threshold"]
-		if _default_config.has("camera_aim_smooth_speed"):
-			camera_aim_smooth_speed = _default_config["camera_aim_smooth_speed"]
+	for prop in CONFIG_PROPERTIES:
+		if _default_config.has(prop):
+			set(prop, _default_config[prop])
 
-	if config.has("radius_min"):
-		radius_min = float(config["radius_min"])
-	elif config.has("radius_deadzone"):
-		radius_min = float(config["radius_deadzone"])
-	if config.has("radius_horizontal"):
-		radius_horizontal = float(config["radius_horizontal"])
+	# 自动类型转换并应用传入的参数
+	for key in config:
+		var target_prop: String = ALIAS_MAP.get(key, key)
+		if target_prop in CONFIG_PROPERTIES:
+			var val = config[key]
+			var cur = get(target_prop)
+			if cur is float:
+				set(target_prop, float(val))
+			elif cur is int:
+				set(target_prop, int(val))
+			elif cur is bool:
+				set(target_prop, bool(val))
+			else:
+				set(target_prop, val)
+
+	if config.has("radius_horizontal") and not config.has("radius_max"):
 		radius_max = maxf(radius_max, radius_horizontal * 1.5)
-	if config.has("radius_max"):
-		radius_max = float(config["radius_max"])
-	if config.has("max_pitch_deg"):
-		max_pitch_deg = float(config["max_pitch_deg"])
-	if config.has("pitch_curve_power"):
-		pitch_curve_power = float(config["pitch_curve_power"])
-	if config.has("ring_color"):
-		ring_color = config["ring_color"]
-	if config.has("inner_ring_color"):
-		inner_ring_color = config["inner_ring_color"]
-	elif config.has("deadzone_color"):
-		inner_ring_color = config["deadzone_color"]
-	if config.has("outer_ring_color"):
-		outer_ring_color = config["outer_ring_color"]
-	if config.has("cursor_color"):
-		cursor_color = config["cursor_color"]
-	if config.has("laser_color"):
-		laser_color = config["laser_color"]
-	if config.has("laser_length"):
-		laser_length = float(config["laser_length"])
-	if config.has("projectile_speed"):
-		projectile_speed = float(config["projectile_speed"])
-	elif config.has("speed"):
-		projectile_speed = float(config["speed"])
-	if config.has("drop_value"):
-		drop_value = float(config["drop_value"])
-	elif config.has("gravity"):
-		drop_value = float(config["gravity"])
-	if config.has("launch_height"):
-		launch_height = float(config["launch_height"])
-	if config.has("trajectory_segments"):
-		trajectory_segments = int(config["trajectory_segments"])
-	if config.has("trajectory_color"):
-		trajectory_color = config["trajectory_color"]
-	if config.has("trajectory_width"):
-		trajectory_width = float(config["trajectory_width"])
-	if config.has("trajectory_occluded_alpha_ratio"):
-		trajectory_occluded_alpha_ratio = float(config["trajectory_occluded_alpha_ratio"])
-	if config.has("update_rate_hz"):
-		update_rate_hz = float(config["update_rate_hz"])
-	if config.has("enable_camera_aim_assist"):
-		enable_camera_aim_assist = bool(config["enable_camera_aim_assist"])
-	if config.has("camera_aim_offset_distance"):
-		camera_aim_offset_distance = float(config["camera_aim_offset_distance"])
-	elif config.has("aim_offset_distance"):
-		camera_aim_offset_distance = float(config["aim_offset_distance"])
-	if config.has("camera_aim_vertical_ratio"):
-		camera_aim_vertical_ratio = float(config["camera_aim_vertical_ratio"])
-	elif config.has("vertical_ratio"):
-		camera_aim_vertical_ratio = float(config["vertical_ratio"])
-	if config.has("camera_aim_edge_threshold"):
-		camera_aim_edge_threshold = float(config["camera_aim_edge_threshold"])
-	if config.has("camera_aim_smooth_speed"):
-		camera_aim_smooth_speed = float(config["camera_aim_smooth_speed"])
 
-# 清除道具覆盖，重置为 Inspector 默认参数并关闭瞄准
+## 清除道具覆盖，重置为 Inspector 默认参数并关闭瞄准
 func clear_aim_config() -> void:
 	is_aim_active = false
 	if _default_config.is_empty():
-		return
-	radius_min = _default_config["radius_min"]
-	radius_horizontal = _default_config["radius_horizontal"]
-	radius_max = _default_config["radius_max"]
-	max_pitch_deg = _default_config["max_pitch_deg"]
-	pitch_curve_power = _default_config["pitch_curve_power"]
-	ring_color = _default_config["ring_color"]
-	inner_ring_color = _default_config["inner_ring_color"]
-	outer_ring_color = _default_config["outer_ring_color"]
-	cursor_color = _default_config["cursor_color"]
-	laser_color = _default_config["laser_color"]
-	laser_length = _default_config["laser_length"]
-	projectile_speed = _default_config["projectile_speed"]
-	drop_value = _default_config["drop_value"]
-	launch_height = _default_config["launch_height"]
-	trajectory_segments = _default_config["trajectory_segments"]
-	trajectory_color = _default_config["trajectory_color"]
-	trajectory_width = _default_config["trajectory_width"]
-	if _default_config.has("trajectory_occluded_alpha_ratio"):
-		trajectory_occluded_alpha_ratio = _default_config["trajectory_occluded_alpha_ratio"]
-	if _default_config.has("update_rate_hz"):
-		update_rate_hz = _default_config["update_rate_hz"]
-	if _default_config.has("enable_camera_aim_assist"):
-		enable_camera_aim_assist = _default_config["enable_camera_aim_assist"]
-	if _default_config.has("camera_aim_offset_distance"):
-		camera_aim_offset_distance = _default_config["camera_aim_offset_distance"]
-	if _default_config.has("camera_aim_vertical_ratio"):
-		camera_aim_vertical_ratio = _default_config["camera_aim_vertical_ratio"]
-	if _default_config.has("camera_aim_edge_threshold"):
-		camera_aim_edge_threshold = _default_config["camera_aim_edge_threshold"]
-	if _default_config.has("camera_aim_smooth_speed"):
-		camera_aim_smooth_speed = _default_config["camera_aim_smooth_speed"]
+		_save_defaults()
+	for prop in CONFIG_PROPERTIES:
+		if _default_config.has(prop):
+			set(prop, _default_config[prop])
+
+# ==================== 物理与几何计算门面 (API Facades) ====================
 
 func get_effective_radius_min() -> float:
-	return maxf(radius_min, 1.0)
+	return Ballistics.calc_effective_radius_min(radius_min)
 
-# 水平射击距离 (θ = 0°): 由手部出膛高度与下坠值决定的平射落地距离
 func get_effective_radius_horizontal() -> float:
-	if drop_value > 0.001 and projectile_speed > 0.001 and launch_height > 0.0:
-		return projectile_speed * sqrt(2.0 * launch_height / drop_value)
-	return maxf(radius_horizontal, get_effective_radius_min() + 20.0)
+	return Ballistics.calc_effective_radius_horizontal(projectile_speed, drop_value, launch_height, radius_horizontal)
 
-# 极限最大射程 (θ ≈ 44°-45°): 武器物理极限距离
 func get_effective_radius_max() -> float:
-	return get_max_physical_range()
+	return Ballistics.calc_max_physical_range(projectile_speed, drop_value, launch_height, radius_max)
 
-# 计算当前武器在重力与初速物理限制下的最大绝对极限射程 R_max (发生在 ~44°-45° 仰角时)
 func get_max_physical_range() -> float:
-	if drop_value <= 0.001 or projectile_speed <= 0.001:
-		return maxf(radius_max, 400.0)
-	var factor := 1.0 + (2.0 * drop_value * launch_height) / (projectile_speed * projectile_speed)
-	return (projectile_speed * projectile_speed / drop_value) * sqrt(maxf(factor, 1.0))
+	return Ballistics.calc_max_physical_range(projectile_speed, drop_value, launch_height, radius_max)
 
-# 经典弹道逆解核心算法：给定目标地面距离 R，依据初速度、下坠与出膛落差，精确反求所需仰角 theta (<= 45°)
 func solve_pitch_for_distance(target_distance: float) -> float:
-	if drop_value <= 0.001 or projectile_speed <= 0.001:
-		return 0.0
+	return Ballistics.solve_pitch_for_distance(target_distance, projectile_speed, drop_value, launch_height, max_pitch_deg)
 
-	var r_max := get_max_physical_range()
-	var r := clampf(target_distance, 1.0, r_max)
+func get_screen_aim_direction() -> Vector2:
+	return Ballistics.calc_screen_aim_direction(pitch_rad, azimuth_rad)
 
-	# 求解一元二次方程: A * u^2 - R * u + (A - h) = 0, 其中 u = tan(theta)
-	var v0_sq := projectile_speed * projectile_speed
-	var A := (drop_value * r * r) / (2.0 * v0_sq)
-	var disc := r * r - 4.0 * A * (A - launch_height)
+func get_pitch_degrees() -> float:
+	return rad_to_deg(pitch_rad)
 
-	# 若刚好等于或超过物理极限，取最大射程仰角 (44°-45°)
-	if disc <= 0.0 or A <= 0.0001:
-		var u_max := r / (2.0 * maxf(A, 0.0001))
-		return minf(atan(u_max), deg_to_rad(max_pitch_deg))
+func get_trajectory_points(origin: Vector2) -> PackedVector2Array:
+	return Ballistics.calc_trajectory_points(origin, pitch_rad, azimuth_rad, projectile_speed, drop_value, launch_height, trajectory_segments)
 
-	# 取低弹道平滑单调解 (theta <= 45°)
-	var u := (r - sqrt(maxf(disc, 0.0))) / (2.0 * A)
-	var pitch := atan(u)
-	return clampf(pitch, deg_to_rad(-max_pitch_deg), deg_to_rad(max_pitch_deg))
+func get_trajectory_flight_info() -> Dictionary:
+	return Ballistics.calc_flight_info(pitch_rad, projectile_speed, drop_value, launch_height)
 
-func _exit_tree() -> void:
-	if is_instance_valid(_camera):
-		_camera.offset = Vector2.ZERO
+func is_point_occluded(screen_pt: Vector2, point_z: float, custom_grid = null) -> bool:
+	var grid = custom_grid if custom_grid else _get_grid_data()
+	return TerrainSolver.is_point_occluded(screen_pt, point_z, grid)
 
-func _get_camera() -> Camera2D:
-	if is_instance_valid(_camera):
-		return _camera
-	if entity and is_instance_valid(entity):
-		if entity.get_viewport():
-			_camera = entity.get_viewport().get_camera_2d()
-		if not is_instance_valid(_camera):
-			_camera = entity.find_child("Camera2D", true, false) as Camera2D
-	elif get_tree() and get_tree().root:
-		_camera = get_tree().root.find_child("Camera2D", true, false) as Camera2D
-	return _camera
+func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest_origin: Vector2, custom_grid = null) -> Dictionary:
+	var grid = custom_grid if custom_grid else _get_grid_data()
+	return TerrainSolver.solve_adaptive_trajectory(
+		player_ground, p_floor, chest_origin,
+		pitch_rad, azimuth_rad,
+		projectile_speed, drop_value, launch_height,
+		trajectory_segments, grid
+	)
 
-func _update_camera_aim_assist(delta: float) -> void:
-	var cam := _get_camera()
-	if cam == null:
-		return
-
-	var target_offset := Vector2.ZERO
-
-	if enable_camera_aim_assist and is_aim_active and entity and entity.is_inside_tree():
-		var vp := entity.get_viewport()
-		if vp:
-			var vp_rect := vp.get_visible_rect()
-			var vp_size := vp_rect.size
-			if vp_size.x > 1.0 and vp_size.y > 1.0:
-				var vp_center := vp_size * 0.5
-				var mouse_vp := vp.get_mouse_position()
-				var delta_mouse := mouse_vp - vp_center
-				var norm_vec := Vector2(
-					delta_mouse.x / vp_center.x,
-					delta_mouse.y / vp_center.y
-				)
-				var dist := minf(norm_vec.length(), 1.0)
-				if dist > camera_aim_edge_threshold:
-					var u := clampf((dist - camera_aim_edge_threshold) / maxf(1.0 - camera_aim_edge_threshold, 0.001), 0.0, 1.0)
-					var factor := u * u * (3.0 - 2.0 * u)
-					var dir := delta_mouse.normalized()
-					target_offset = Vector2(
-						dir.x * camera_aim_offset_distance,
-						dir.y * (camera_aim_offset_distance * camera_aim_vertical_ratio)
-					) * factor
-
-	# 平滑插值 (指数平滑衰减，不受渲染帧率波动影响)
-	if _current_cam_offset.distance_squared_to(target_offset) > 0.01:
-		var t := 1.0 - exp(-camera_aim_smooth_speed * delta)
-		_current_cam_offset = _current_cam_offset.lerp(target_offset, t)
-		if _current_cam_offset.distance_squared_to(target_offset) < 0.01:
-			_current_cam_offset = target_offset
-		cam.offset = _current_cam_offset
-	elif cam.offset != target_offset:
-		_current_cam_offset = target_offset
-		cam.offset = target_offset
+# ==================== 运行周期与瞄准逻辑 ====================
 
 func _process(delta: float) -> void:
 	# 1. 视角辅助平滑更新 (每帧执行，确保镜头平移与回中丝滑无顿挫)
-	_update_camera_aim_assist(delta)
+	_camera_assist.update(
+		delta, is_aim_active, entity, get_tree(),
+		enable_camera_aim_assist, camera_aim_offset_distance,
+		camera_aim_vertical_ratio, camera_aim_edge_threshold,
+		camera_aim_smooth_speed
+	)
 
 	if not is_aim_active or entity == null:
 		_was_aim_active = false
@@ -393,391 +247,53 @@ func _process(delta: float) -> void:
 func _do_update_aim() -> void:
 	if not is_inside_tree() or entity == null or not entity.is_inside_tree():
 		return
-	# 自动计算实体脚底中心与鼠标坐标
+
 	var p_pos := entity.global_position
-	var tree := get_tree()
-	if tree and tree.root and tree.root.has_node("GridData"):
-		var gd = tree.root.get_node("GridData")
-		if gd.has_method("world_to_cell") and gd.has_method("get_highest_floor") and gd.has_method("get_floor_pixel_offset"):
-			var p_cell: Vector2i = gd.world_to_cell(p_pos)
-			var p_floor: int = gd.get_highest_floor(p_cell)
-			p_pos += Vector2(0.0, gd.get_floor_pixel_offset(p_floor))
-	
+	var gd = _get_grid_data()
+	if gd and gd.has_method("world_to_cell") and gd.has_method("get_highest_floor") and gd.has_method("get_floor_pixel_offset"):
+		var p_cell: Vector2i = gd.world_to_cell(p_pos)
+		var p_floor: int = gd.get_highest_floor(p_cell)
+		p_pos += Vector2(0.0, gd.get_floor_pixel_offset(p_floor))
+
 	var mouse_pos := entity.get_global_mouse_position()
 	update_aim(p_pos, mouse_pos)
 
-# 每一帧更新瞄准计算
-# ground_center: 角色脚底地面等距基准点
-# mouse_screen: 鼠标屏幕世界坐标
+## 每一帧更新瞄准计算
 func update_aim(ground_center: Vector2, mouse_screen: Vector2) -> void:
 	var delta := mouse_screen - ground_center
 	var dx: float = delta.x
 	var dy: float = delta.y
-	
+
 	# 1. 2:1 等距椭圆等效距离 (r_iso) 与 360° 方位角
 	var r_iso: float = sqrt(dx * dx + 4.0 * dy * dy)
-	
+
 	# 2. 全向自由跟踪方位角 (小于 3px 时防抖锁定，避免圆心角速度奇点)
 	if r_iso > 3.0:
 		azimuth_rad = atan2(2.0 * dy, dx)
 		_last_valid_azimuth = azimuth_rad
 	else:
 		azimuth_rad = _last_valid_azimuth
-	
-	# 3. 混合式俯仰角计算：
-	#    - 仰角区间 (r_iso >= r0)：采用物理弹道精确反解，鼠标位置即为同层着弹点 (1:1 指哪打哪)
-	#    - 俯角区间 (r_iso < r0)：采用缓出手感响应曲线 (Ease-Out Curve)，越靠近死区影响越小，防止角速度暴冲与灵敏度发散
+
+	# 3. 混合式俯仰角计算
 	var eff_min := get_effective_radius_min()
 	var eff_horiz := get_effective_radius_horizontal()
 	var max_range := get_max_physical_range()
 
-	if r_iso >= eff_horiz:
-		if drop_value > 0.001 and projectile_speed > 0.001:
-			var target_r := clampf(r_iso, eff_horiz, max_range)
-			pitch_rad = solve_pitch_for_distance(target_r)
-		else:
-			var norm_x := clampf((r_iso - eff_horiz) / maxf(max_range - eff_horiz, 1.0), 0.0, 1.0)
-			pitch_rad = deg_to_rad(pow(norm_x, pitch_curve_power) * max_pitch_deg)
-	else:
-		# 归一化向内收缩距离 u: r_iso 从 eff_horiz (u=0) 缩进到 eff_min (u=1)
-		var span := maxf(eff_horiz - eff_min, 1.0)
-		var u := clampf((eff_horiz - r_iso) / span, 0.0, 1.0)
-		# 缓出响应曲线 (Ease-Out): u=0 处初始斜率良好接近线性，u->1 处导数平缓趋于 0，消除靠近死区时的暴跳
-		var power := maxf(pitch_curve_power, 1.0)
-		var f_u := 1.0 - pow(1.0 - u, power)
-		pitch_rad = deg_to_rad(-f_u * max_pitch_deg)
+	pitch_rad = Ballistics.calc_pitch_angle(
+		r_iso, eff_min, eff_horiz, max_range,
+		projectile_speed, drop_value, launch_height,
+		max_pitch_deg, pitch_curve_power
+	)
 
-	# 4. 合成标准的 3D 空间单位朝向向量 (X: 东, Y: 南, Z: 上)
-	var cos_p := cos(pitch_rad)
-	var sin_p := sin(pitch_rad)
-	var cos_a := cos(azimuth_rad)
-	var sin_a := sin(azimuth_rad)
-	
-	var grid_x := cos_a + sin_a
-	var grid_y := -cos_a + sin_a
-	var grid_dir_2d := Vector2(grid_x, grid_y).normalized()
-	
-	aim_vector_3d = Vector3(grid_dir_2d.x * cos_p, grid_dir_2d.y * cos_p, sin_p).normalized()
+	# 4. 合成标准的 3D 空间单位朝向向量
+	aim_vector_3d = Ballistics.compose_aim_vector_3d(pitch_rad, azimuth_rad)
 
-# 获取 2D 屏幕投影的射击方向向量 (严格 2:1 等距地面与垂直 Z 轴合成)
-func get_screen_aim_direction() -> Vector2:
-	var cos_p := cos(pitch_rad)
-	var sin_p := sin(pitch_rad)
-	var cos_a := cos(azimuth_rad)
-	var sin_a := sin(azimuth_rad)
-	
-	var screen_v := Vector2(cos_p * cos_a, cos_p * sin_a * 0.5 - sin_p)
-	return screen_v.normalized()
-
-# 获取当前俯仰角度（度数，用于 UI 或调试显示）
-func get_pitch_degrees() -> float:
-	return rad_to_deg(pitch_rad)
-
-# 获取当前弹道在 3D 物理空间从出膛点至真实地面接触点的屏幕离散采样点集
-# 精确考虑了出膛点（手部+10px）到地面判定平面（-2px）的垂直落差 launch_height (12px)
-# 使得弹道指示线末端与游戏内真实飞弹 (MagicOrb) 的落地位置 100% 像素级对齐！
-func get_trajectory_points(origin: Vector2) -> PackedVector2Array:
-	var points := PackedVector2Array()
-	if drop_value <= 0.001 or projectile_speed <= 0.001:
-		return points
-
-	var cos_p := cos(pitch_rad)
-	var sin_p := sin(pitch_rad)
-	var cos_a := cos(azimuth_rad)
-	var sin_a := sin(azimuth_rad)
-
-	var vx := projectile_speed * cos_p
-	var vy := projectile_speed * sin_p
-
-	# 求解飞弹触地时刻：vy * t - 0.5 * drop_value * t^2 = -launch_height
-	# 即 0.5 * drop_value * t^2 - vy * t - launch_height = 0
-	var disc := vy * vy + 2.0 * drop_value * launch_height
-	if disc < 0.0:
-		return points
-	var t_impact := (vy + sqrt(disc)) / drop_value
-	if t_impact <= 0.0001:
-		return points
-
-	var segs := maxi(trajectory_segments, 8)
-	points.resize(segs + 1)
-
-	for i in range(segs + 1):
-		var frac := float(i) / float(segs)
-		var t := t_impact * frac
-		var x_dist := vx * t
-		var y_height := vy * t - 0.5 * drop_value * t * t
-
-		# 投影至 2:1 等距地面与垂直 Z 轴 (屏幕负 Y 方向)
-		var screen_pt := origin + Vector2(x_dist * cos_a, x_dist * sin_a * 0.5 - y_height)
-		points[i] = screen_pt
-
-	return points
-
-# 获取当前弹道飞行物理数据 (用于 UI 或调试)
-func get_trajectory_flight_info() -> Dictionary:
-	if drop_value <= 0.001 or projectile_speed <= 0.001:
-		return { "is_valid": false, "t_land": 0.0, "x_land": 0.0, "max_height": 0.0 }
-
-	var cos_p := cos(pitch_rad)
-	var sin_p := sin(pitch_rad)
-	var vx := projectile_speed * cos_p
-	var vy := projectile_speed * sin_p
-	var disc := vy * vy + 2.0 * drop_value * launch_height
-	var t_impact := (vy + sqrt(maxf(disc, 0.0))) / drop_value
-	var x_land := vx * t_impact
-	var max_height := (vy * vy) / (2.0 * drop_value) if vy > 0.0 else 0.0
-
-	return {
-		"is_valid": true,
-		"t_land": t_impact,
-		"x_land": x_land,
-		"max_height": max_height
-	}
-
-# 获取考虑真实 3D 地形高度的自适应弹道数据：
-# - 若遭遇前方高层/高台阻挡：实线主弹道提前在撞击点截断，不穿模穿透地表，返回 hit_type = 1
-# - 若落在角色同层地表：保持常规平滑实线，返回 hit_type = 0
-# - 若飞离高台/跌入悬崖低层：角色层高以上为实线，跌出层高后平滑延伸为虚线，返回 hit_type = -1
-# 返回数据结构:
-# {
-#     "is_valid": bool,
-#     "hit_type": int,                 # 0: 同层, 1: 高层提前截断, -1: 低层悬崖延伸
-#     "primary_points": PackedVector2Array, # 实线轨迹点 (高层时自动提前截断)
-#     "dashed_points": PackedVector2Array,  # 虚线延伸轨迹点 (低层时向下延伸)
-#     "hit_screen_pos": Vector2,       # 真实着弹屏幕坐标 (用于绘制 2:1 椭圆小红点)
-#     "hit_floor": int,                # 最终着弹楼层
-#     "primary_z": PackedFloat32Array, # 各实线点的 3D 空间高度 (用于判断是否被瓷砖遮挡)
-#     "dashed_z": PackedFloat32Array,  # 各虚线点的 3D 空间高度
-#     "hit_z": float,                  # 着弹点 3D 高度
-#     "is_hit_occluded": bool          # 着弹点是否被前方瓷砖遮挡
-# }
-func get_terrain_adaptive_trajectory(player_ground: Vector2, p_floor: int, chest_origin: Vector2, custom_grid = null) -> Dictionary:
-	if drop_value <= 0.001 or projectile_speed <= 0.001:
-		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor, "primary_z": PackedFloat32Array(), "dashed_z": PackedFloat32Array(), "hit_z": 0.0, "is_hit_occluded": false }
-
-	var grid = custom_grid
-	if grid == null:
-		var tree := get_tree()
-		if tree and tree.root and tree.root.has_node("GridData"):
-			grid = tree.root.get_node("GridData")
-		elif Engine.has_singleton("GridData"):
-			grid = Engine.get_singleton("GridData")
-
-	var cos_p := cos(pitch_rad)
-	var sin_p := sin(pitch_rad)
-	var cos_a := cos(azimuth_rad)
-	var sin_a := sin(azimuth_rad)
-
-	var vx := projectile_speed * cos_p
-	var vy := projectile_speed * sin_p
-
-	var h_player := float(p_floor) * 16.0
-	var z_start := h_player + launch_height
-
-	# 计算下落到角色当前层高基准面 (z = h_player) 的基准时间
-	var disc_base := vy * vy + 2.0 * drop_value * launch_height
-	if disc_base < 0.0:
-		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor, "primary_z": PackedFloat32Array(), "dashed_z": PackedFloat32Array(), "hit_z": 0.0, "is_hit_occluded": false }
-	var t_base := (vy + sqrt(disc_base)) / drop_value
-	if t_base <= 0.0001:
-		return { "is_valid": false, "hit_type": 0, "primary_points": PackedVector2Array(), "dashed_points": PackedVector2Array(), "hit_screen_pos": Vector2.ZERO, "hit_floor": p_floor, "primary_z": PackedFloat32Array(), "dashed_z": PackedFloat32Array(), "hit_z": 0.0, "is_hit_occluded": false }
-
-	var primary_points := PackedVector2Array()
-	var primary_z := PackedFloat32Array()
-	var dashed_points := PackedVector2Array()
-	var dashed_z := PackedFloat32Array()
-	var hit_type := 0
-	var hit_screen_pos := Vector2.ZERO
-	var hit_floor := p_floor
-	var hit_z := 0.0
-
-	primary_points.push_back(chest_origin)
-	primary_z.push_back(z_start)
-
-	var segs := maxi(trajectory_segments, 16)
-	var high_floor_hit := false
-	var prev_t := 0.0
-	var prev_z := z_start
-
-	for i in range(1, segs + 1):
-		var t := t_base * (float(i) / float(segs))
-		var g_t := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t)
-		var z_t := z_start + vy * t - 0.5 * drop_value * t * t
-		var p_screen := g_t - Vector2(0.0, z_t)
-
-		var fl := p_floor
-		var surface_h := h_player
-		if grid:
-			var c: Vector2i = grid.world_to_cell(g_t)
-			if grid.has_any_tile(c):
-				fl = grid.get_highest_floor(c)
-				surface_h = float(fl) * 16.0
-			else:
-				fl = 0
-				surface_h = 0.0
-
-		# 撞击高层检测：地表高于角色基准层，且当前飞弹高度低于或等于该地表
-		if surface_h > h_player and z_t <= surface_h:
-			high_floor_hit = true
-			hit_type = 1
-			hit_floor = fl
-			
-			var z_hit := surface_h
-			var t_hit := t
-			if prev_z >= surface_h:
-				# 从高空俯冲降落至高台顶面
-				var denom := (prev_z - z_t)
-				var frac := clampf((prev_z - surface_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
-				t_hit = lerpf(prev_t, t, frac)
-			else:
-				# 撞击高台垂直侧面墙体：高度保持为真实弹道飞抵侧壁的高度，不发生天台瞬移
-				t_hit = lerpf(prev_t, t, 0.5)
-				z_hit = clampf(lerpf(prev_z, z_t, 0.5), 0.0, surface_h)
-
-			var g_hit := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_hit)
-			var p_hit := g_hit - Vector2(0.0, z_hit)
-			primary_points.push_back(p_hit)
-			primary_z.push_back(z_hit)
-			hit_screen_pos = p_hit
-			hit_z = z_hit
-			break
-
-		primary_points.push_back(p_screen)
-		primary_z.push_back(z_t)
-		prev_t = t
-		prev_z = z_t
-
-	if not high_floor_hit:
-		var g_base := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_base)
-		var fl_base := p_floor
-		var surface_base := h_player
-		if grid:
-			var c_base: Vector2i = grid.world_to_cell(g_base)
-			if grid.has_any_tile(c_base):
-				fl_base = grid.get_highest_floor(c_base)
-				surface_base = float(fl_base) * 16.0
-			else:
-				fl_base = 0
-				surface_base = 0.0
-
-		if fl_base >= p_floor:
-			# 同层着弹：精确对齐真实地表屏幕位置
-			hit_type = 0
-			hit_floor = fl_base
-			hit_screen_pos = g_base - Vector2(0.0, surface_base)
-			hit_z = surface_base
-			primary_points[-1] = hit_screen_pos
-			primary_z[-1] = surface_base
-		else:
-			# 悬崖低层情况：实线到达角色基准面，随后向低层解析延伸为虚线
-			hit_type = -1
-			dashed_points.push_back(primary_points[-1])
-			dashed_z.push_back(primary_z[-1])
-
-			# 计算到达绝对地面 (z = 0) 的解析极限时间，避免步长过小在半空超时腰斩
-			var disc_max := vy * vy + 2.0 * drop_value * z_start
-			var t_max := (vy + sqrt(maxf(disc_max, 0.0))) / drop_value
-			var cliff_segs := maxi(segs, 24)
-			var dt_cliff := maxf((t_max - t_base) / float(cliff_segs), 0.001)
-
-			var curr_t := t_base
-			var curr_z := h_player
-			var low_hit := false
-
-			for s in range(1, cliff_segs + 1):
-				var next_t := t_base + dt_cliff * float(s)
-				var g_next := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * next_t)
-				var z_next := z_start + vy * next_t - 0.5 * drop_value * next_t * next_t
-				var p_next := g_next - Vector2(0.0, z_next)
-
-				var s_fl := 0
-				var s_h := 0.0
-				if grid:
-					var c_next: Vector2i = grid.world_to_cell(g_next)
-					if grid.has_any_tile(c_next):
-						s_fl = grid.get_highest_floor(c_next)
-						s_h = float(s_fl) * 16.0
-
-				if z_next <= s_h:
-					var z_hit := s_h
-					var t_hit := next_t
-					if curr_z >= s_h:
-						# 从空中下落至该地表顶面
-						var denom := (curr_z - z_next)
-						var frac := clampf((curr_z - s_h) / denom, 0.0, 1.0) if absf(denom) > 0.0001 else 0.5
-						t_hit = lerpf(curr_t, next_t, frac)
-					else:
-						# 撞击前方阻挡体垂直侧壁：高度为飞弹实际飞行高度
-						t_hit = lerpf(curr_t, next_t, 0.5)
-						z_hit = clampf(lerpf(curr_z, z_next, 0.5), 0.0, s_h)
-
-					var g_hit := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_hit)
-					var p_hit := g_hit - Vector2(0.0, z_hit)
-					dashed_points.push_back(p_hit)
-					dashed_z.push_back(z_hit)
-					hit_floor = s_fl
-					hit_screen_pos = p_hit
-					hit_z = z_hit
-					low_hit = true
-					break
-
-				dashed_points.push_back(p_next)
-				dashed_z.push_back(z_next)
-				curr_t = next_t
-				curr_z = z_next
-
-			if not low_hit and not dashed_points.is_empty():
-				var g_max := player_ground + Vector2(cos_a, 0.5 * sin_a) * (vx * t_max)
-				hit_floor = 0
-				hit_screen_pos = g_max - Vector2(0.0, 0.0)
-				hit_z = 0.0
-				dashed_points.push_back(hit_screen_pos)
-				dashed_z.push_back(0.0)
-
-	var is_hit_occluded: bool = is_point_occluded(hit_screen_pos, hit_z, grid)
-
-	return {
-		"is_valid": true,
-		"hit_type": hit_type,
-		"primary_points": primary_points,
-		"primary_z": primary_z,
-		"dashed_points": dashed_points,
-		"dashed_z": dashed_z,
-		"hit_screen_pos": hit_screen_pos,
-		"hit_floor": hit_floor,
-		"hit_z": hit_z,
-		"is_hit_occluded": is_hit_occluded
-	}
-
-# 检查屏幕某点在 3D 高度 point_z 处是否被前方高层瓷砖遮挡 (2.5D 等距视线步进)
-func is_point_occluded(screen_pt: Vector2, point_z: float, custom_grid = null) -> bool:
-	var grid = custom_grid
-	if grid == null:
-		var tree := get_tree()
-		if tree and tree.root and tree.root.has_node("GridData"):
-			grid = tree.root.get_node("GridData")
-		elif Engine.has_singleton("GridData"):
-			grid = Engine.get_singleton("GridData")
-	if grid == null:
-		return false
-
-	var max_layers: int = grid.layers.size() if ("layers" in grid and grid.layers is Array) else 6
-	var max_h := float(maxi(max_layers, 4)) * 16.0
-	if point_z >= max_h:
-		return false
-
-	var z := max_h
-	var step_z := 4.0
-	while z > point_z + 0.5 and z > 0.5:
-		var test_ground := Vector2(screen_pt.x, screen_pt.y + z)
-		var c: Vector2i = grid.world_to_cell(test_ground)
-		if grid.has_any_tile(c):
-			var h_floor := float(grid.get_highest_floor(c)) * 16.0
-			if h_floor >= z:
-				return true
-		z -= step_z
-	return false
-
-
-
-
+func _get_grid_data() -> Node:
+	if not is_inside_tree():
+		return null
+	var tree := get_tree()
+	if tree and tree.root and tree.root.has_node("GridData"):
+		return tree.root.get_node("GridData")
+	elif Engine.has_singleton("GridData"):
+		return Engine.get_singleton("GridData")
+	return null

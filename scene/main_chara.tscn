@@ -222,8 +222,7 @@ fog_edge_softness = 8.0
 script = ExtResource("13_aim")
 radius_horizontal = 300.0
 radius_max = 560.0
-trajectory_occluded_alpha_ratio = 0.15
-camera_aim_offset_distance = 240.0
+trajectory_occluded_alpha_ratio = 0.3
 camera_aim_edge_threshold = 0.85
 camera_aim_smooth_speed = 4.0
 

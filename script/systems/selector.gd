@@ -3,6 +3,7 @@ extends Node2D
 
 @export var player_path: NodePath          # 指向玩家节点
 @export var interaction_range: int = 2     # 几何范围半径 (1 = 对称 3x3 菱形 9格, 2 = 对称 5x5 菱形 25格)
+@export var snap_2x2_to_quadrants: bool = true # 2x2 物体是否对齐到 4 个象限 (0,0), (2,0), (0,2), (2,2)
 
 var target_cell: Vector2i = Vector2i(-99999, -99999)      # 当前选中的大格
 var target_sub_cell: Vector2i = Vector2i(0, 0)            # 当前选中的微格 (0~3, 0~3)
@@ -87,6 +88,11 @@ func _update_mouse_selection() -> void:
 	if item_changed:
 		_last_item_key = current_item_key
 
+	var item_type: int = active_item.get("type", -1)
+	var grid_size: Vector2i = active_item.get("grid_size", Vector2i(4, 4))
+	if item_type == 0:
+		grid_size = Vector2i(4, 4)
+
 	var mouse_pos := get_global_mouse_position()
 	var found_cell := Vector2i(-99999, -99999)
 	var found_sub := Vector2i(0, 0)
@@ -95,7 +101,15 @@ func _update_mouse_selection() -> void:
 		var rel: Vector2 = mouse_pos - tile_data["top"]
 		if (absf(rel.x) / 32.0) + (absf(rel.y) / 16.0) <= 1.0:
 			found_cell = tile_data["cell"]
-			found_sub = GridData.world_to_sub_cell(mouse_pos, found_cell)
+			var raw_sub := GridData.world_to_sub_cell(mouse_pos, found_cell)
+			if grid_size == Vector2i(4, 4):
+				found_sub = Vector2i.ZERO
+			elif grid_size == Vector2i(2, 2) and snap_2x2_to_quadrants:
+				# 2x2 象限对齐 (0或2, 0或2)，将大格平分4份
+				found_sub = Vector2i((raw_sub.x / 2) * 2, (raw_sub.y / 2) * 2)
+			else:
+				# 1x1 自由选择任意微格 (0~3, 0~3)，其他尺寸边界裁剪
+				found_sub = Vector2i(clampi(raw_sub.x, 0, 4 - grid_size.x), clampi(raw_sub.y, 0, 4 - grid_size.y))
 			break
 
 	target_cell = found_cell
@@ -122,85 +136,89 @@ func _draw() -> void:
 	if item_type != 0 and item_type != 1:
 		return
 
-	var is_micro_crop: bool = (active_item.get("grid_size", Vector2i(4, 4)) == Vector2i(1, 1))
+	var grid_size: Vector2i = active_item.get("grid_size", Vector2i(4, 4))
+	if item_type == 0:
+		grid_size = Vector2i(4, 4)
 
+	var is_full_cell: bool = (grid_size == Vector2i(4, 4))
+
+	# 1. 绘制所有周围有效大格的外边框线（干净极简，周围格子一律不画微格小点）
 	var grid_lines := PackedVector2Array()
-	var green_dots := PackedVector2Array()
-	var red_dots := PackedVector2Array()
-
-	# 直接复用缓存中的格子数据，不再做任何重复计算
 	for tile_data in _cached_tiles:
-		var cell: Vector2i = tile_data["cell"]
 		var cell_top: Vector2 = tile_data["top"]
 
-		# 绘制 64x32 外边框
-		var p_top := cell_top + Vector2(0, -16)    # 原本是 -8
-		var p_right := cell_top + Vector2(32, 0)   # 原本是 16
-		var p_bot := cell_top + Vector2(0, 16)     # 原本是 8
-		var p_left := cell_top + Vector2(-32, 0)   # 原本是 -16
+		# 绘制 64x32 菱形外边框
+		var p_top := cell_top + Vector2(0, -16)
+		var p_right := cell_top + Vector2(32, 0)
+		var p_bot := cell_top + Vector2(0, 16)
+		var p_left := cell_top + Vector2(-32, 0)
 		grid_lines.push_back(p_top); grid_lines.push_back(p_right)
 		grid_lines.push_back(p_right); grid_lines.push_back(p_bot)
 		grid_lines.push_back(p_bot); grid_lines.push_back(p_left)
 		grid_lines.push_back(p_left); grid_lines.push_back(p_top)
 
-		# 16 个微槽位点阵
-		var occupancies := GridData.get_cell_sub_occupancies(cell)
-		for sy in 4:
-			for sx in 4:
-				var sp := Vector2i(sx, sy)
-				if cell == target_cell and sp == target_sub_cell and is_micro_crop:
-					continue
-				var sub_center := cell_top + GridData.sub_cell_to_local_offset(sp, Vector2i(1, 1))
-				if occupancies[sy * 4 + sx]:
-					red_dots.push_back(sub_center + Vector2(-1, 0))
-					red_dots.push_back(sub_center + Vector2(1, 0))
-				else:
-					green_dots.push_back(sub_center + Vector2(-1, 0))
-					green_dots.push_back(sub_center + Vector2(1, 0))
-
 	if not grid_lines.is_empty():
 		draw_multiline(grid_lines, Color(1.0, 1.0, 1.0, 0.15), 1.0)
-	if not green_dots.is_empty():
-		draw_multiline(green_dots, Color(0.2, 1.0, 0.4, 0.45), 1.0)
-	if not red_dots.is_empty():
-		draw_multiline(red_dots, Color(1.0, 0.25, 0.25, 0.65), 1.0)
 
-	# 绘制当前目标高亮
+	# 2. 当前鼠标所指的大格 (target_cell) 专属微格与高亮展示
 	if target_cell != Vector2i(-99999, -99999):
 		var target_floor := GridData.get_highest_floor(target_cell)
 		var t_center := GridData.cell_to_world(target_cell) + Vector2(0.0, GridData.get_floor_pixel_offset(target_floor))
 
-		if is_micro_crop:
-			# 1. 1x1 微格高亮菱形 (16x8)
-			var sub_c := t_center + GridData.sub_cell_to_local_offset(target_sub_cell, Vector2i(1, 1))
-			var is_occ := GridData.is_slot_occupied(target_cell, target_sub_cell, Vector2i(1, 1))
-			var h_color := Color(1.0, 0.2, 0.2, 0.5) if is_occ else Color(0.2, 1.0, 0.4, 0.6)
+		# A. 微格提示：只有手持微格物体（1x1、2x2 等非整格）时，才只在当前鼠标所指的大格内部绘制微槽位小点！
+		if not is_full_cell:
+			var occupancies := GridData.get_cell_sub_occupancies(target_cell)
+			var green_dots := PackedVector2Array()
+			var red_dots := PackedVector2Array()
 
-			var highlight_pts := PackedVector2Array([
-				sub_c + Vector2(0, -4), sub_c + Vector2(8, 0),
-				sub_c + Vector2(0, 4), sub_c + Vector2(-8, 0)
-			])
-			draw_polygon(highlight_pts, PackedColorArray([h_color]))
+			for sy in 4:
+				for sx in 4:
+					var sp := Vector2i(sx, sy)
+					# 若当前微槽位落在高亮光标覆盖范围内，跳过绘制以避免颜色重叠干扰
+					var is_in_cursor := (sx >= target_sub_cell.x and sx < target_sub_cell.x + grid_size.x
+									and sy >= target_sub_cell.y and sy < target_sub_cell.y + grid_size.y)
+					if is_in_cursor:
+						continue
+					var sub_center := t_center + GridData.sub_cell_to_local_offset(sp, Vector2i(1, 1))
+					if occupancies[sy * 4 + sx]:
+						red_dots.push_back(sub_center + Vector2(-1, 0))
+						red_dots.push_back(sub_center + Vector2(1, 0))
+					else:
+						green_dots.push_back(sub_center + Vector2(-1, 0))
+						green_dots.push_back(sub_center + Vector2(1, 0))
 
-			var border_pts := PackedVector2Array([
-				sub_c + Vector2(0, -4), sub_c + Vector2(8, 0),
-				sub_c + Vector2(0, 4), sub_c + Vector2(-8, 0),
-				sub_c + Vector2(0, -4)
-			])
-			draw_polyline(border_pts, Color(1.0, 1.0, 1.0, 0.9), 1.0)
+			if not green_dots.is_empty():
+				draw_multiline(green_dots, Color(0.2, 1.0, 0.4, 0.45), 1.0)
+			if not red_dots.is_empty():
+				draw_multiline(red_dots, Color(1.0, 0.25, 0.25, 0.65), 1.0)
+
+		# B. 统一绘制当前目标高亮菱形 (支持 1x1 小麦、2x2 灌木、4x4 大树/瓷砖等所有尺寸)
+		var is_occ := GridData.is_slot_occupied(target_cell, target_sub_cell, grid_size)
+		var h_color: Color
+		if is_full_cell:
+			# 整格大物体/瓷砖：占用呈半透明红，可放呈半透明淡黄
+			h_color = Color(1.0, 0.2, 0.2, 0.4) if is_occ else Color(1.0, 1.0, 0.0, 0.4)
 		else:
-			# 2. 4x4 整格 / 瓷砖高亮菱形 (64x32)（补回这一段！）
-			var is_full_occ := GridData.is_slot_occupied(target_cell, Vector2i.ZERO, Vector2i(4, 4))
-			var t_color := Color(1.0, 0.2, 0.2, 0.4) if is_full_occ else Color(1.0, 1.0, 0.0, 0.4)
-			var big_diamond := PackedVector2Array([
-				t_center + Vector2(0, -16), t_center + Vector2(32, 0),
-				t_center + Vector2(0, 16), t_center + Vector2(-32, 0)
-			])
-			draw_polygon(big_diamond, PackedColorArray([t_color]))
+			# 1x1 或 2x2 微格物体：占用呈半透明红，可放呈半透明翠绿
+			h_color = Color(1.0, 0.2, 0.2, 0.5) if is_occ else Color(0.2, 1.0, 0.4, 0.6)
 
-			var big_border := PackedVector2Array([
-				t_center + Vector2(0, -16), t_center + Vector2(32, 0),
-				t_center + Vector2(0, 16), t_center + Vector2(-32, 0),
-				t_center + Vector2(0, -16)
-			])
-			draw_polyline(big_border, Color(1.0, 1.0, 1.0, 0.9), 1.0)
+		var sub_c := t_center + GridData.sub_cell_to_local_offset(target_sub_cell, grid_size)
+		var hw := float(grid_size.x) * 8.0
+		var hh := float(grid_size.y) * 4.0
+
+		var highlight_pts := PackedVector2Array([
+			sub_c + Vector2(0, -hh),
+			sub_c + Vector2(hw, 0),
+			sub_c + Vector2(0, hh),
+			sub_c + Vector2(-hw, 0)
+		])
+		draw_polygon(highlight_pts, PackedColorArray([h_color]))
+
+		var border_pts := PackedVector2Array([
+			sub_c + Vector2(0, -hh),
+			sub_c + Vector2(hw, 0),
+			sub_c + Vector2(0, hh),
+			sub_c + Vector2(-hw, 0),
+			sub_c + Vector2(0, -hh)
+		])
+		draw_polyline(border_pts, Color(1.0, 1.0, 1.0, 0.9), 1.0)
