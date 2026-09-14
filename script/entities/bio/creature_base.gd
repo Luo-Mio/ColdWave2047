@@ -12,6 +12,7 @@ var foot_y: float = 0.0
 @onready var anim_comp: Node = find_child("IsoAnimComponent", true, false)
 @onready var weapon_comp: Node = find_child("WeaponHolderComponent", true, false)
 @onready var step_limit_comp: Node = find_child("HeightStepLimitComponent", true, false)
+@onready var health_comp: Node = find_child("HealthComponent", true, false)
 
 # 大脑/输入决策组件 (自动识别 PlayerInputComponent 或各类 AI 组件)
 @onready var brain_comp: Node = _find_brain_component()
@@ -117,3 +118,33 @@ func _find_brain_component() -> Node:
 	if wander_ai:
 		return wander_ai
 	return null
+
+# === 生命值与伤害结算接口 ===
+func _ensure_health_comp() -> Node:
+	if health_comp == null:
+		health_comp = find_child("HealthComponent", true, false)
+	return health_comp
+
+func take_damage(amount: float, source: Node = null) -> void:
+	var hc := _ensure_health_comp()
+	if hc and hc.has_method("take_damage"):
+		hc.call("take_damage", amount, source)
+
+func heal(amount: float, source: Node = null) -> void:
+	var hc := _ensure_health_comp()
+	if hc and hc.has_method("heal"):
+		hc.call("heal", amount, source)
+
+func is_alive() -> bool:
+	var hc := _ensure_health_comp()
+	if hc and hc.has_method("is_alive"):
+		return hc.call("is_alive")
+	return true
+
+func get_health_ratio() -> float:
+	var hc := _ensure_health_comp()
+	if hc and hc.has_method("get_health_ratio"):
+		return hc.call("get_health_ratio")
+	return 1.0
+
+

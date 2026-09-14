@@ -109,6 +109,8 @@ func _unhandled_input(event: InputEvent) -> void:
 							orb.gravity = aim_controller.drop_value
 						if "launch_height" in orb and "launch_height" in aim_controller:
 							orb.launch_height = aim_controller.launch_height
+						if "shooter" in orb:
+							orb.shooter = player
 						sort_world.add_child(orb)
 						orb.call("launch_3d", aim_3d, player_ground, p_floor)
 			return # 武器模式下不触发地砖建造

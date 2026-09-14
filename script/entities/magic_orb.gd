@@ -5,6 +5,8 @@ extends Node2D
 @export var speed: float = 420.0             # 飞行初速度 (像素/秒)
 @export var gravity: float = 0.0             # 3D 垂直重力下坠 (0 = 直线魔法流, >0 = 抛物线)
 @export var launch_height: float = 10.0       # 出膛落差高度 (像素，默认 10px)
+@export var damage: float = 35.0              # 伤害数值 (每次命中造成的生命值扣减)
+@export var shooter: Node = null              # 发射者引用 (防止发射瞬间自伤)
 
 # 3D 物理状态
 var ground_pos: Vector2 = Vector2.ZERO       # 地面投影坐标 (像素)
@@ -51,7 +53,15 @@ func _physics_process(delta: float) -> void:
 	var next_height := height_px + (velocity_z - 0.5 * gravity * delta) * delta
 	var next_vz := velocity_z - gravity * delta
 
-	# 2. 地形高度与连续触地截断检测 (Continuous Impact Clamping)
+	# 2. 命中生物碰撞箱检测 (Layer 3: 活体生物层)
+	if _check_creature_hit(ground_pos, next_ground, next_height):
+		ground_pos = next_ground
+		height_px = next_height
+		_update_3d_transform_and_sorting()
+		queue_free()
+		return
+
+	# 3. 地形高度与连续触地截断检测 (Continuous Impact Clamping)
 	var prev_cell := GridData.world_to_cell(ground_pos)
 	var prev_surf := float(GridData.get_highest_floor(prev_cell)) * 16.0 if GridData.has_any_tile(prev_cell) else 0.0
 
@@ -147,3 +157,51 @@ func _update_3d_transform_and_sorting() -> void:
 	var parent_sort := get_parent()
 	if parent_sort and parent_sort.has_method("insert_sort"):
 		parent_sort.call("insert_sort", self)
+
+## 检测飞弹是否与场景中的活体生物发生碰撞
+func _check_creature_hit(from_ground: Vector2, to_ground: Vector2, current_h: float) -> bool:
+	var space := get_world_2d().direct_space_state
+	if space == null:
+		return false
+
+	# 1. 沿地面位移线段检测 Layer 3 (数值 4: 活体生物层)
+	var ray_param := PhysicsRayQueryParameters2D.create(from_ground, to_ground, 4)
+	ray_param.collide_with_bodies = true
+	ray_param.collide_with_areas = false
+	if shooter and shooter is CollisionObject2D:
+		ray_param.exclude = [shooter.get_rid()]
+
+	var hit_dict := space.intersect_ray(ray_param)
+	var target_body: Node2D = null
+
+	if not hit_dict.is_empty():
+		target_body = hit_dict.get("collider") as Node2D
+	else:
+		# 2. 射线未命中时，点检测终点位置
+		var point_param := PhysicsPointQueryParameters2D.new()
+		point_param.position = to_ground
+		point_param.collision_mask = 4
+		if shooter and shooter is CollisionObject2D:
+			point_param.exclude = [shooter.get_rid()]
+		var point_hits := space.intersect_point(point_param, 1)
+		if not point_hits.is_empty():
+			target_body = point_hits[0].get("collider") as Node2D
+
+	if target_body and is_instance_valid(target_body) and target_body != shooter:
+		# 3. 2.5D 垂直高度判定：飞弹离地高度必须处于生物垂直高度范围内
+		var target_floor: int = target_body.call("get_current_floor") if target_body.has_method("get_current_floor") else 0
+		var ground_h := float(target_floor) * 16.0
+		var eye_h: float = float(target_body.get("eye_height")) if ("eye_height" in target_body) else 18.0
+		var body_scale: float = target_body.scale.y if ("scale" in target_body) else 1.0
+		var top_h := ground_h + eye_h * body_scale + 6.0
+
+		if current_h >= ground_h - 6.0 and current_h <= top_h:
+			if target_body.has_method("take_damage"):
+				target_body.call("take_damage", damage, shooter if shooter else self)
+			else:
+				var health: Node = target_body.find_child("HealthComponent", true, false)
+				if health and health.has_method("take_damage"):
+					health.call("take_damage", damage, shooter if shooter else self)
+			return true
+
+	return false

@@ -8,6 +8,8 @@
 [ext_resource type="Script" uid="uid://c8ud3seb7jpr1" path="res://script/components/iso_anim_component.gd" id="6_anim"]
 [ext_resource type="Script" uid="uid://dvtwp428cbc7p" path="res://script/components/wander_ai_component.gd" id="7_ai"]
 [ext_resource type="Script" path="res://script/components/height_step_limit_component.gd" id="8_step"]
+[ext_resource type="Script" path="res://script/components/health_component.gd" id="9_health"]
+[ext_resource type="PackedScene" path="res://scene/ui/health_bar.tscn" id="10_healthbar"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_fidek"]
 atlas = ExtResource("1_g3h8a")
@@ -424,3 +426,14 @@ enable_wander = true
 
 [node name="HeightStepLimitComponent" type="Node" parent="LogicScript" unique_id=1849201934]
 script = ExtResource("8_step")
+
+[node name="HealthComponent" type="Node" parent="LogicScript" unique_id=1928374650]
+script = ExtResource("9_health")
+max_health = 100.0
+current_health = 100.0
+
+[node name="HealthBar" parent="." unique_id=1928374651 instance=ExtResource("10_healthbar")]
+offset_top = -22.0
+offset_bottom = -18.0
+overhead_offset_y = -22.0
+
