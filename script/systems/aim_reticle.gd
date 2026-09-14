@@ -111,10 +111,15 @@ func _draw() -> void:
 	var r0: float = snappedf(aim_controller.call("get_effective_radius_horizontal") if aim_controller.has_method("get_effective_radius_horizontal") else aim_controller.radius_horizontal, 4.0)
 	var r_max: float = snappedf(aim_controller.call("get_effective_radius_max") if aim_controller.has_method("get_effective_radius_max") else aim_controller.radius_max, 4.0)
 
-	# 2. 绘制地面三环 (全量实线化 + 享元缓存 + GPU 变换，单帧 3 次 GPU 渲染调用，0 次虚线切片循环)
-	AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r_min, r_min * 0.5, inner_ring_col, 1.0)
-	AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r0, r0 * 0.5, ring_col, 1.0)
-	AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r_max, r_max * 0.5, outer_ring_col, 1.0)
+	# 2. 地面基准环绘制 (死区环与 0° 水平环已默认禁用；45° 环改为仅在达到最大仰角时在准星两侧渐变显示)
+	var show_deadzone: bool = bool(aim_controller.show_deadzone_ring) if "show_deadzone_ring" in aim_controller else false
+	var show_horiz: bool = bool(aim_controller.show_horizontal_ring) if "show_horizontal_ring" in aim_controller else false
+	var show_max_arc: bool = bool(aim_controller.show_max_pitch_arc) if "show_max_pitch_arc" in aim_controller else true
+
+	if show_deadzone:
+		AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r_min, r_min * 0.5, inner_ring_col, 1.0)
+	if show_horiz:
+		AimPixelDrawer.draw_cached_solid_ellipse(self, ground_center, r0, r0 * 0.5, ring_col, 1.0)
 
 	# 3. 鼠标等距投影与基准标记计算
 	var mouse_screen: Vector2 = get_global_mouse_position()
@@ -131,6 +136,26 @@ func _draw() -> void:
 		active_cursor_pos = ground_center + Vector2(r_min, 0.0)
 		r0_ref_pos = ground_center + Vector2(r0, 0.0)
 
+	# 45° 最大仰角限制弧 (仅在达到/逼近 45° 最大仰角时在准星两侧平滑透明渐变显示)
+	if show_max_arc:
+		var max_pitch: float = float(aim_controller.max_pitch_deg) if "max_pitch_deg" in aim_controller else 45.0
+		var pitch_deg: float = aim_controller.get_pitch_degrees()
+		var activation: float = 0.0
+		if pitch_deg >= max_pitch - 1.5:
+			activation = clampf((pitch_deg - (max_pitch - 1.5)) / 1.5, 0.0, 1.0)
+		elif r_iso >= r_max - 2.0:
+			activation = 1.0
+
+		if activation > 0.001:
+			var arc_angle: float = float(aim_controller.max_pitch_arc_angle) if "max_pitch_arc_angle" in aim_controller else 0.35
+			var arc_segs: int = int(aim_controller.max_pitch_arc_segments) if "max_pitch_arc_segments" in aim_controller else 16
+			var center_angle: float = float(aim_controller.azimuth_rad) if "azimuth_rad" in aim_controller else atan2(2.0 * delta_ground.y, delta_ground.x)
+			AimPixelDrawer.draw_radial_gradient_ellipse_arc(
+				self, ground_center, r_max, r_max * 0.5,
+				center_angle, arc_angle, outer_ring_col,
+				arc_segs, 1.5, activation
+			)
+
 	# 获取 3D 地形自适应重力弹道数据
 	var traj_info: Dictionary = {}
 	if aim_controller.has_method("get_terrain_adaptive_trajectory"):
@@ -138,12 +163,18 @@ func _draw() -> void:
 
 	var hit_type: int = traj_info.get("hit_type", 0) if traj_info.get("is_valid", false) else 0
 
-	# 4. 地面引导射线与 0° 参考十字
-	draw_line(ground_center.round(), active_cursor_pos.round(), Color(ring_col.r, ring_col.g, ring_col.b, 0.35), 1.0, false)
-	AimPixelDrawer.draw_pixel_cross(self, r0_ref_pos, Color(ring_col.r, ring_col.g, ring_col.b, 0.65))
+	# 4. 地面引导射线与同层绿色准星点 (角色原点到准星点连线，强化 2.5D 空间感)
+	var show_ray: bool = bool(aim_controller.show_ground_ray) if "show_ground_ray" in aim_controller else true
+	var show_point: bool = bool(aim_controller.show_ground_cursor_point) if "show_ground_cursor_point" in aim_controller else true
+	var show_cross: bool = bool(aim_controller.show_zero_cross) if "show_zero_cross" in aim_controller else false
 
-	# 跨层时 (高台截断 hit_type==1 或 悬崖下坠 hit_type==-1) 在基准环显示 2:1 绿色瞄准原点
-	if hit_type != 0:
+	if show_ray:
+		draw_line(ground_center.round(), active_cursor_pos.round(), Color(ring_col.r, ring_col.g, ring_col.b, 0.4), 1.0, false)
+	if show_cross and show_horiz:
+		AimPixelDrawer.draw_pixel_cross(self, r0_ref_pos, Color(ring_col.r, ring_col.g, ring_col.b, 0.65))
+
+	# 同层绿色准星点 (基准平面投影参考点，空间感核心)
+	if show_point:
 		AimPixelDrawer.draw_pixel_diamond(self, active_cursor_pos, Color(0.2, 1.0, 0.5, 0.85), Color(0.1, 0.85, 0.35, 0.95), Color(0.85, 1.0, 0.85, 0.95))
 
 	# 5. 角色身旁俯仰角 HUD 显示
@@ -183,7 +214,25 @@ func _draw() -> void:
 			var cliff_end_col := Color(1.0, 0.22, 0.22, 0.95)   # 警示鲜红色
 			AimPixelDrawer.draw_occlusion_aware_gradient_trajectory(self, dashed_pts, dashed_z, cliff_start_col, cliff_end_col, aim_controller, occ_ratio)
 
-		# 6.3 着弹点 2:1 像素红色宝石 (若被瓷砖遮挡同步以透视比例渲染)
+		# 6.3 着弹点 5x5 瓷砖网格在 128x64 椭圆内平滑不透明渐变显示 (消除 2.5D 高低差光学连续假象，包含高墙/地基底部截面)
+		var show_grid: bool = bool(aim_controller.show_impact_grid) if "show_impact_grid" in aim_controller else true
+		if show_grid and _grid_data:
+			var hit_cell: Vector2i = traj_info.get("hit_cell", Vector2i.ZERO)
+			var hit_floor: int = traj_info.get("hit_floor", 0)
+			var grid_rng: int = int(aim_controller.impact_grid_range) if "impact_grid_range" in aim_controller else 2
+			var rx: float = float(aim_controller.impact_grid_radius_x) if "impact_grid_radius_x" in aim_controller else 128.0
+			var ry: float = float(aim_controller.impact_grid_radius_y) if "impact_grid_radius_y" in aim_controller else 64.0
+			var grid_col: Color = aim_controller.impact_grid_color if "impact_grid_color" in aim_controller else Color(0.45, 0.85, 1.0, 0.6)
+			var show_cap: bool = bool(aim_controller.show_impact_cap) if "show_impact_cap" in aim_controller else true
+			var cap_col: Color = aim_controller.impact_cap_color if "impact_cap_color" in aim_controller else Color(0.0, 0.0, 0.0, 1.0)
+			var cap_tgt: int = int(aim_controller.impact_cap_target) if "impact_cap_target" in aim_controller else 0
+			if is_hit_occluded:
+				var grid_occ_ratio: float = float(aim_controller.impact_grid_occluded_alpha_ratio) if "impact_grid_occluded_alpha_ratio" in aim_controller else 1.0
+				grid_col.a *= grid_occ_ratio
+				cap_col.a *= grid_occ_ratio
+			IsoGridDrawer.draw_radial_falloff_grid(self, hit_cell, grid_rng, hit_floor, hit_screen_pos, rx, ry, grid_col, _grid_data, 1.0, show_cap, cap_col, cap_tgt)
+
+		# 6.4 着弹点 2:1 像素红色宝石 (若被瓷砖遮挡同步以透视比例渲染)
 		var dot_scale := occ_ratio if is_hit_occluded else 1.0
 		AimPixelDrawer.draw_pixel_diamond(self, hit_screen_pos,
 			Color(1.0, 0.25, 0.25, 0.85 * dot_scale),

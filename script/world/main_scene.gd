@@ -22,15 +22,21 @@ var aim_reticle: Node2D
 @onready var hotbar_node: Node = find_child("hotbar")
 
 func _ready() -> void:
-	# 1. 自动实例化并挂载子管理器组件
-	build_manager = BuildManagerScript.new()
-	add_child(build_manager)
+	# 1. 自动获取或挂载子管理器组件
+	build_manager = get_node_or_null("BuildManager") as BuildManager
+	if build_manager == null:
+		build_manager = BuildManagerScript.new()
+		add_child(build_manager)
 
-	wall_xray = WallXRayScript.new()
-	add_child(wall_xray)
+	wall_xray = get_node_or_null("WallXRayManager") as WallXRayManager
+	if wall_xray == null:
+		wall_xray = WallXRayScript.new()
+		add_child(wall_xray)
 
-	air_wall = AirWallScript.new()
-	add_child(air_wall)
+	air_wall = get_node_or_null("AirWall") as StaticBody2D
+	if air_wall == null:
+		air_wall = AirWallScript.new()
+		add_child(air_wall)
 
 	var player_node: Node2D = get_node_or_null("sortworld/CharacterBody2D")
 	if player_node:

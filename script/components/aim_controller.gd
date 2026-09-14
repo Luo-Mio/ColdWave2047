@@ -26,6 +26,22 @@ const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
 @export var inner_ring_color: Color = Color(1.0, 0.45, 0.35, 0.45)
 ## 最大仰角外环颜色 (θ = +max_pitch_deg)
 @export var outer_ring_color: Color = Color(0.2, 0.9, 1.0, 0.35)
+## 是否显示死区内环 (默认 false，视觉极简)
+@export var show_deadzone_ring: bool = false
+## 是否显示 0° 水平基准中环 (默认 false，视觉极简)
+@export var show_horizontal_ring: bool = false
+## 是否显示 45° 最大仰角限制弧 (默认 true，仅在角度到达 45° 最大时在准星两侧渐变显示)
+@export var show_max_pitch_arc: bool = true
+## 45° 限制弧半张角 (弧度，默认 0.35 弧度 ≈ 20°，两侧对称展开共约 40°)
+@export var max_pitch_arc_angle: float = 0.35
+## 45° 限制弧采样分段数 (默认 16 段，保证极致平滑)
+@export var max_pitch_arc_segments: int = 16
+## 是否显示地面引导射线 (默认 true，连接角色原点与准星点，强化空间感)
+@export var show_ground_ray: bool = true
+## 是否显示同层绿色准星点 (默认 true，角色同层投影参考点，强化 2.5D 空间感)
+@export var show_ground_cursor_point: bool = true
+## 是否显示 0° 参考十字 (默认 false，视觉极简)
+@export var show_zero_cross: bool = false
 ## 准心指示器光标颜色
 @export var cursor_color: Color = Color(0.2, 1.0, 0.5, 0.9)
 ## 3D 激光瞄准线颜色
@@ -61,6 +77,26 @@ const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
 ## 视角平移与回中的平滑插值速度 (数值越大越灵敏，数值越小越柔和，推荐 4.0 ~ 12.0)
 @export var camera_aim_smooth_speed: float = 6.0
 
+@export_group("落点网格辅助 (Impact Grid Hint)")
+## 是否在弹道着弹点绘制隐形范围渐变显示的瓷砖网格 (消除 2.5D 高低差连续假象)
+@export var show_impact_grid: bool = true
+## 落点网格潜在扫描半径 (默认 2 即 5x5 瓷砖区域)
+@export_range(1, 4, 1) var impact_grid_range: int = 2
+## 落点网格渐变显示水平半径 (默认 128.0 像素)
+@export var impact_grid_radius_x: float = 128.0
+## 落点网格渐变显示垂直半径 (默认 64.0 像素，与 2:1 等轴测视角完美契合)
+@export var impact_grid_radius_y: float = 64.0
+## 落点网格线条颜色与中心最大不透明度
+@export var impact_grid_color: Color = Color(0.45, 0.85, 1.0, 0.6)
+## 被墙体/瓷砖遮挡时网格的不透明度倍率 (默认 1.0 = 不降低透明度，保持原样清晰可见；0.5 = 半透明透视)
+@export_range(0.0, 1.0, 0.05) var impact_grid_occluded_alpha_ratio: float = 1.0
+## 是否在落点渐变范围内显示墙体/地基底部截面提示 (与高墙透视同款纯黑截面，消除高低差光学假象)
+@export var show_impact_cap: bool = true
+## 截面封顶底色 (默认纯黑，与高墙透视 base_floor_color 保持完全一致)
+@export var impact_cap_color: Color = Color(0.0, 0.0, 0.0, 1.0)
+## 截面封顶适用范围 (0: 仅高墙底部 fl > hit_floor; 1: 高墙底与地表全部 fl >= hit_floor; 2: 仅地表 fl == hit_floor)
+@export_enum("仅高墙底 (Walls Only)", "高墙底与地表 (Walls & Floor)", "仅地表 (Floor Only)") var impact_cap_target: int = 0
+
 @export_group("性能与更新频率 (Performance & Tick Rate)")
 ## 瞄准计算与准星刷新目标频率 (Hz，默认 60.0 次/秒；若 <= 0 则无限制跟随渲染帧率)
 @export var update_rate_hz: float = 60.0
@@ -72,7 +108,11 @@ const CONFIG_PROPERTIES: Array[String] = [
 	"projectile_speed", "drop_value", "launch_height", "trajectory_segments",
 	"trajectory_color", "trajectory_width", "trajectory_occluded_alpha_ratio", "update_rate_hz",
 	"enable_camera_aim_assist", "camera_aim_offset_distance", "camera_aim_vertical_ratio",
-	"camera_aim_edge_threshold", "camera_aim_smooth_speed"
+	"camera_aim_edge_threshold", "camera_aim_smooth_speed",
+	"show_impact_grid", "impact_grid_range", "impact_grid_radius_x", "impact_grid_radius_y", "impact_grid_color",
+	"impact_grid_occluded_alpha_ratio", "show_impact_cap", "impact_cap_color", "impact_cap_target",
+	"show_deadzone_ring", "show_horizontal_ring", "show_max_pitch_arc", "max_pitch_arc_angle", "max_pitch_arc_segments",
+	"show_ground_ray", "show_ground_cursor_point", "show_zero_cross"
 ]
 
 # 兼容旧代码字段的别名映射字典

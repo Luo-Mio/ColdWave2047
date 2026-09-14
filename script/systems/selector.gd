@@ -142,23 +142,11 @@ func _draw() -> void:
 
 	var is_full_cell: bool = (grid_size == Vector2i(4, 4))
 
-	# 1. 绘制所有周围有效大格的外边框线（干净极简，周围格子一律不画微格小点）
-	var grid_lines := PackedVector2Array()
+	# 1. 绘制所有周围有效大格的外边框线（利用 IsoGridDrawer 极速合批，周围格子一律不画微格小点）
+	var tops: Array = []
 	for tile_data in _cached_tiles:
-		var cell_top: Vector2 = tile_data["top"]
-
-		# 绘制 64x32 菱形外边框
-		var p_top := cell_top + Vector2(0, -16)
-		var p_right := cell_top + Vector2(32, 0)
-		var p_bot := cell_top + Vector2(0, 16)
-		var p_left := cell_top + Vector2(-32, 0)
-		grid_lines.push_back(p_top); grid_lines.push_back(p_right)
-		grid_lines.push_back(p_right); grid_lines.push_back(p_bot)
-		grid_lines.push_back(p_bot); grid_lines.push_back(p_left)
-		grid_lines.push_back(p_left); grid_lines.push_back(p_top)
-
-	if not grid_lines.is_empty():
-		draw_multiline(grid_lines, Color(1.0, 1.0, 1.0, 0.15), 1.0)
+		tops.append(tile_data["top"])
+	IsoGridDrawer.draw_tiles_borders(self, tops, Color(1.0, 1.0, 1.0, 0.15), 1.0)
 
 	# 2. 当前鼠标所指的大格 (target_cell) 专属微格与高亮展示
 	if target_cell != Vector2i(-99999, -99999):
@@ -205,20 +193,4 @@ func _draw() -> void:
 		var sub_c := t_center + GridData.sub_cell_to_local_offset(target_sub_cell, grid_size)
 		var hw := float(grid_size.x) * 8.0
 		var hh := float(grid_size.y) * 4.0
-
-		var highlight_pts := PackedVector2Array([
-			sub_c + Vector2(0, -hh),
-			sub_c + Vector2(hw, 0),
-			sub_c + Vector2(0, hh),
-			sub_c + Vector2(-hw, 0)
-		])
-		draw_polygon(highlight_pts, PackedColorArray([h_color]))
-
-		var border_pts := PackedVector2Array([
-			sub_c + Vector2(0, -hh),
-			sub_c + Vector2(hw, 0),
-			sub_c + Vector2(0, hh),
-			sub_c + Vector2(-hw, 0),
-			sub_c + Vector2(0, -hh)
-		])
-		draw_polyline(border_pts, Color(1.0, 1.0, 1.0, 0.9), 1.0)
+		IsoGridDrawer.draw_diamond(self, sub_c, hw, hh, h_color, Color(1.0, 1.0, 1.0, 0.9), 1.0)

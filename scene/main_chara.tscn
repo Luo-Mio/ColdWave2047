@@ -225,6 +225,10 @@ radius_max = 560.0
 trajectory_occluded_alpha_ratio = 0.3
 camera_aim_edge_threshold = 0.85
 camera_aim_smooth_speed = 4.0
+impact_grid_range = 1
+impact_grid_radius_x = 80.0
+impact_grid_radius_y = 40.0
+impact_grid_color = Color(0.98039216, 0.6431373, 1, 0.4509804)
 
 [node name="HeightStepLimitComponent" type="Node" parent="LogicScript" unique_id=1789234501]
 script = ExtResource("14_step")

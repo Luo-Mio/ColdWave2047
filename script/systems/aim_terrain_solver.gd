@@ -225,6 +225,8 @@ static func solve_adaptive_trajectory(
 				dashed_z.push_back(0.0)
 
 	var is_hit_occluded: bool = is_point_occluded(hit_screen_pos, hit_z, grid)
+	var hit_ground := hit_screen_pos + Vector2(0.0, hit_z)
+	var hit_cell: Vector2i = grid.world_to_cell(hit_ground) if grid else Vector2i.ZERO
 
 	return {
 		"is_valid": true,
@@ -234,6 +236,7 @@ static func solve_adaptive_trajectory(
 		"dashed_points": dashed_points,
 		"dashed_z": dashed_z,
 		"hit_screen_pos": hit_screen_pos,
+		"hit_cell": hit_cell,
 		"hit_floor": hit_floor,
 		"hit_z": hit_z,
 		"is_hit_occluded": is_hit_occluded
@@ -248,6 +251,7 @@ static func _create_empty_result(p_floor: int) -> Dictionary:
 		"dashed_points": PackedVector2Array(),
 		"dashed_z": PackedFloat32Array(),
 		"hit_screen_pos": Vector2.ZERO,
+		"hit_cell": Vector2i.ZERO,
 		"hit_floor": p_floor,
 		"hit_z": 0.0,
 		"is_hit_occluded": false

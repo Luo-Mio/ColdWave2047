@@ -30,6 +30,45 @@ static func draw_cached_solid_ellipse(ci: CanvasItem, center: Vector2, rx: float
 		ci.draw_polyline(pts, color, 1.0, false)
 		ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+## 绘制 2:1 等距椭圆在指定方位角两侧带透明渐变的弧段 (用于 45° 最大仰角触顶视觉提示)
+static func draw_radial_gradient_ellipse_arc(
+	ci: CanvasItem,
+	center: Vector2,
+	rx: float,
+	ry: float,
+	center_angle: float,
+	half_arc_angle: float,
+	base_color: Color,
+	segments: int = 16,
+	width: float = 1.0,
+	activation: float = 1.0
+) -> void:
+	if ci == null or activation <= 0.001 or base_color.a <= 0.001 or half_arc_angle <= 0.001:
+		return
+
+	var num_pts := segments * 2 + 1
+	var pts := PackedVector2Array()
+	var cols := PackedColorArray()
+	pts.resize(num_pts)
+	cols.resize(num_pts)
+
+	var c_round := center.round()
+	var step_inv := 1.0 / float(segments)
+
+	for i in range(-segments, segments + 1):
+		var idx := i + segments
+		var t := float(i) * step_inv # -1.0 ~ 1.0
+		var angle := center_angle + t * half_arc_angle
+		var pt := c_round + Vector2(round(cos(angle) * rx), round(sin(angle) * ry))
+		pts[idx] = pt
+
+		# 平滑二次衰减透明度：中心 100%，两端平滑渐变归零
+		var fade := 1.0 - t * t
+		var alpha := fade * base_color.a * activation
+		cols[idx] = Color(base_color.r, base_color.g, base_color.b, alpha)
+
+	ci.draw_polyline_colors(pts, cols, width, false)
+
 # 生成局部相对 (0, 0) 的整像素椭圆点序列 (步长自适应，单次生成仅 ~70us)
 static func _generate_solid_ellipse(rx: float, ry: float) -> PackedVector2Array:
 	var steps := clampi(int(TAU * rx * 0.35), 64, 256)

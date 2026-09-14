@@ -21,10 +21,13 @@ extends Node
 		max_transparency = v
 		if material: material.set_shader_parameter("max_transparency", max_transparency)
 
-# 【核心配置】：透视时同层地基截面的渲染颜色（默认为纯黑，可在检查器微调）
+@export_group("地基截面封顶参数")
+## 透视时同层地基截面的渲染颜色（默认为纯黑，可在检查器微调）
 @export var base_floor_color: Color = Color(0.0, 0.0, 0.0, 1.0)
+## 截面封顶的 Z-Index 渲染层级（默认 1，确保高于所有地砖层 z_index=0，避免被南侧/更大 Y 的地砖柱遮挡）
+@export var cap_z_index: int = 1
 
-# 轻量截面封顶多边形绘制节点 (排在同格瓷砖之上，渲染 64x32 纯黑截面)
+# 轻量截面封顶多边形绘制节点 (排在所有瓷砖之上，渲染 64x32 纯黑截面)
 class XRayCap extends Node2D:
 	var sort_key: float = 0.0
 	var layer_no: int = 999
@@ -108,7 +111,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 						is_cell_occluding = true
 
 			# 4. 【核心截面封顶】：如果该格有砖块被透视，在角色同高度的地基顶部渲染 64x32 纯黑菱形封顶面！
-			# 位于瓷砖之上(layer_no = 999)，且保留立面自然贴图纹理
+			# 位于所有瓷砖之上(z_index = cap_z_index)，且保留立面自然贴图纹理
 			if is_cell_occluding:
 				var diamond_center := cell_center + Vector2(0.0, GridData.get_floor_pixel_offset(player_floor))
 				var cap := XRayCap.new()
@@ -117,6 +120,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 				cap.sort_key = GridData.cell_to_sort_key(front_cell)
 				cap.layer_no = 999
 				cap.cap_color = base_floor_color
+				cap.z_index = cap_z_index
 				sort_world.add_child(cap)
 				active_caps.append(cap)
 				created_caps = true
