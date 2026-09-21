@@ -1,0 +1,50 @@
+[gd_scene format=3 uid="uid://cxl417doob0pl"]
+
+[ext_resource type="Script" uid="uid://bgvstxqn0pm7v" path="res://script/entities/objects/world_object_base.gd" id="1_1g1v0"]
+[ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="4_o83hs"]
+[ext_resource type="Script" uid="uid://bjjesxnpjv7bl" path="res://script/components/object_xray_component.gd" id="5_pq3nu"]
+[ext_resource type="Script" uid="uid://bo27wqobp7dge" path="res://script/components/object_destructible_component.gd" id="6_4jjma"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_78vsw"]
+load_path = "res://.godot/imported/AutumnTreeTrunk.png-a19e929a86ad3cd0863b9a63808a4f3b.ctex"
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_uhqt1"]
+load_path = "res://.godot/imported/AutumnTree.png-5ca11f7f7031b247f0d26f4230dd4202.ctex"
+
+[node name="AutumnTree" type="Node2D" unique_id=686197970]
+script = ExtResource("1_1g1v0")
+break_with_tile = false
+
+[node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
+texture_filter = 1
+position = Vector2(-1, 0)
+texture = SubResource("CompressedTexture2D_78vsw")
+offset = Vector2(0, -60)
+
+[node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
+texture_filter = 1
+position = Vector2(-1, -60)
+texture = SubResource("CompressedTexture2D_uhqt1")
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(7, 0, 0, 4, -7, 0, 0, -4)
+
+[node name="LogicScript" type="Node" parent="." unique_id=892176431]
+
+[node name="ObjectPlacementComponent" type="Node" parent="LogicScript" unique_id=561029384]
+script = ExtResource("4_o83hs")
+enable_random_jitter = true
+jitter_size = Vector2(16, 12)
+
+[node name="ObjectXRayComponent" type="Node" parent="LogicScript" unique_id=319084725]
+script = ExtResource("5_pq3nu")
+
+[node name="ObjectDestructibleComponent" type="Node" parent="LogicScript" unique_id=742910385]
+script = ExtResource("6_4jjma")
+break_with_tile = false
+drop_count = 0

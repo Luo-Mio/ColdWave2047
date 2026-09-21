@@ -3,10 +3,10 @@ class_name HealthBar
 extends Control
 
 @export_group("尺寸与位置 (Size & Layout)")
-## 血条内槽像素宽度 (默认 28px，适合常规生物)
-@export var bar_width: float = 28.0
-## 血条内槽像素高度 (默认 4px，细腻像素感)
-@export var bar_height: float = 4.0
+## 血条内槽像素宽度 (默认 20px，适合常规生物)
+@export var bar_width: float = 20.0
+## 血条内槽像素高度 (默认 2px，细腻像素感)
+@export var bar_height: float = 1.0
 ## 是否以自身原点为中心居中绘制 (设为 true 时，仅需将节点位置设为 (0, offset_y) 即可自动居中)
 @export var center_origin: bool = true
 ## 头顶悬浮垂直偏移量 (像素，负数向上)
@@ -14,7 +14,7 @@ extends Control
 
 @export_group("色彩与外观 (Colors & Aesthetics)")
 ## 是否绘制 1 像素黑色像素外边框
-@export var show_border: bool = true
+@export var show_border: bool = false
 ## 外边框颜色
 @export var border_color: Color = Color(0.04, 0.04, 0.06, 0.95)
 ## 血槽底色 (受击未满血时露出的底槽)

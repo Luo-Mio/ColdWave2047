@@ -1,0 +1,46 @@
+[gd_scene format=3 uid="uid://hucypc5g7pxq"]
+
+[ext_resource type="Script" uid="uid://bgvstxqn0pm7v" path="res://script/entities/objects/world_object_base.gd" id="1_x1bok"]
+[ext_resource type="Texture2D" uid="uid://b2bq2r3utq5uv" path="res://resources/tree/BirchTree/BirchTreeTrunk.png" id="2_ulu1w"]
+[ext_resource type="Texture2D" uid="uid://b25pvwpssdpl0" path="res://resources/tree/BirchTree/BirchTree.png" id="3_0olrr"]
+[ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="4_eusso"]
+[ext_resource type="Script" uid="uid://bjjesxnpjv7bl" path="res://script/components/object_xray_component.gd" id="5_ldsp3"]
+[ext_resource type="Script" uid="uid://bo27wqobp7dge" path="res://script/components/object_destructible_component.gd" id="6_wesb1"]
+
+[node name="AutumnTree" type="Node2D" unique_id=686197970]
+script = ExtResource("1_x1bok")
+break_with_tile = false
+
+[node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
+texture_filter = 1
+position = Vector2(-1, 0)
+texture = ExtResource("2_ulu1w")
+offset = Vector2(0, -60)
+
+[node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
+texture_filter = 1
+position = Vector2(-1, -60)
+texture = ExtResource("3_0olrr")
+
+[node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]
+collision_layer = 2
+collision_mask = 0
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(7, 0, 0, 4, -7, 0, 0, -4)
+
+[node name="LogicScript" type="Node" parent="." unique_id=892176431]
+
+[node name="ObjectPlacementComponent" type="Node" parent="LogicScript" unique_id=561029384]
+script = ExtResource("4_eusso")
+enable_random_jitter = true
+jitter_size = Vector2(16, 12)
+
+[node name="ObjectXRayComponent" type="Node" parent="LogicScript" unique_id=319084725]
+script = ExtResource("5_ldsp3")
+
+[node name="ObjectDestructibleComponent" type="Node" parent="LogicScript" unique_id=742910385]
+script = ExtResource("6_wesb1")
+break_with_tile = false
+drop_count = 0

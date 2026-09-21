@@ -1,6 +1,8 @@
 # hotbar.gd —— 底部物品栏控制器
 extends CanvasLayer
 
+signal slot_item_changed(index: int, item_data: Dictionary)
+
 enum ItemType { TILE, OBJECT, WEAPON }
 
 var items: Array[Dictionary] = [
@@ -23,8 +25,8 @@ var items: Array[Dictionary] = [
 	{ "type": ItemType.TILE,   "name": "新泥土砖", "atlas": Vector2i(0, 0) },
 	# 3 号位：小麦（农作物 1x1 微格，无瞄准）
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
-	# 4 号位：秋季大树（物体 4x4 整格，无瞄准）
-	{ "type": ItemType.OBJECT, "name": "秋季树",   "scene": "res://scene/object/tree.tscn", "icon": "res://resources/tree/AutumnTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
+	# 4 号位：橡树（物体 4x4 整格，无瞄准）
+	{ "type": ItemType.OBJECT, "name": "橡树",     "scene": "res://scene/object/tree/OakTree.tscn", "icon": "res://resources/tree/OakTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
 	# 5 号位：远射长弓（超远程武器，基准环放大至 280px，俯角内环 160px，仰角外环 420px，初速高且下坠极小）
 	{
 		"type": ItemType.WEAPON,
@@ -97,17 +99,27 @@ func _load_slot_icons() -> void:
 			continue
 
 		var item_data := items[i]
-		if item_data["type"] == ItemType.TILE:
+		var itype = item_data.get("type", -1)
+		if itype == ItemType.TILE:
 			# 瓷砖：从 TileSet 图集中裁剪出该格子的贴图
-			if tile_source:
+			if tile_source and item_data.has("atlas"):
 				var atlas_tex := AtlasTexture.new()
 				atlas_tex.atlas = tile_source.texture
 				atlas_tex.region = tile_source.get_tile_texture_region(item_data["atlas"])
 				icon_rect.texture = atlas_tex
-		elif item_data["type"] == ItemType.OBJECT or item_data["type"] == ItemType.WEAPON:
+			else:
+				icon_rect.texture = null
+		elif itype == ItemType.OBJECT or itype == ItemType.WEAPON:
 			# 物体与武器：直接加载指定的图标贴图
-			if item_data.has("icon"):
-				icon_rect.texture = load(item_data["icon"])
+			if item_data.has("icon") and str(item_data["icon"]) != "":
+				if ResourceLoader.exists(item_data["icon"]):
+					icon_rect.texture = load(item_data["icon"])
+				else:
+					icon_rect.texture = null
+			else:
+				icon_rect.texture = null
+		else:
+			icon_rect.texture = null
 
 # 监听按键 1~5 和鼠标滚轮
 func _unhandled_input(event: InputEvent) -> void:
@@ -152,3 +164,24 @@ func get_active_item() -> Dictionary:
 	if active_index >= 0 and active_index < items.size():
 		return items[active_index]
 	return {}
+
+# 替换指定槽位的物品数据并触发响应
+func set_slot_item(index: int, item_data: Dictionary) -> void:
+	if index < 0 or index >= items.size():
+		return
+	items[index] = item_data.duplicate()
+	_load_slot_icons()
+	slot_item_changed.emit(index, items[index])
+
+	# 如果更新的是当前正在激活的槽位，强制刷新武器状态与网格拾取器
+	if index == active_index:
+		var player = get_tree().root.find_child("CharacterBody2D", true, false)
+		if player:
+			var weapon_comp = player.find_child("WeaponHolderComponent", true, false)
+			if weapon_comp:
+				weapon_comp.set("_last_slot_index", -999)
+				weapon_comp.call("_check_hotbar")
+		var selector = get_tree().root.find_child("selector", true, false)
+		if selector and selector.has_method("force_update"):
+			selector.call("force_update")
+

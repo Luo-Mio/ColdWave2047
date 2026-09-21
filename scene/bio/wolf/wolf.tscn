@@ -7,8 +7,8 @@
 [ext_resource type="Script" uid="uid://beslwppir52f2" path="res://script/components/mover_component.gd" id="5_mover"]
 [ext_resource type="Script" uid="uid://c8ud3seb7jpr1" path="res://script/components/iso_anim_component.gd" id="6_anim"]
 [ext_resource type="Script" uid="uid://dvtwp428cbc7p" path="res://script/components/wander_ai_component.gd" id="7_ai"]
-[ext_resource type="Script" path="res://script/components/height_step_limit_component.gd" id="8_step"]
-[ext_resource type="Script" path="res://script/components/health_component.gd" id="9_health"]
+[ext_resource type="Script" uid="uid://ddrse11hrporb" path="res://script/components/height_step_limit_component.gd" id="8_step"]
+[ext_resource type="Script" uid="uid://cw2s2faa4iwvv" path="res://script/components/health_component.gd" id="9_health"]
 [ext_resource type="PackedScene" path="res://scene/ui/health_bar.tscn" id="10_healthbar"]
 [ext_resource type="Material" path="res://resources/materials/creature_outline.tres" id="11_outline"]
 
@@ -404,10 +404,11 @@ xray_curve = 1.0
 material = ExtResource("11_outline")
 sprite_frames = SubResource("SpriteFrames_lfxu0")
 animation = &"runWestSouth"
-offset = Vector2(0, -9)
+frame_progress = 0.93057126
+offset = Vector2(0, -8)
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1043909110]
-polygon = PackedVector2Array(12, 0, 0, 6, -12, 0, 0, -6)
+polygon = PackedVector2Array(14, 0, 0, 7, -14, 0, 0, -7)
 
 [node name="LogicScript" type="Node" parent="." unique_id=1391725743]
 
@@ -432,11 +433,8 @@ script = ExtResource("8_step")
 
 [node name="HealthComponent" type="Node" parent="LogicScript" unique_id=1928374650]
 script = ExtResource("9_health")
-max_health = 100.0
-current_health = 100.0
 
 [node name="HealthBar" parent="." unique_id=1928374651 instance=ExtResource("10_healthbar")]
 offset_top = -22.0
 offset_bottom = -18.0
 overhead_offset_y = -22.0
-

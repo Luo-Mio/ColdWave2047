@@ -57,12 +57,16 @@ func _ready() -> void:
 	# 3. 构建全局高度场
 	GridData.build_from_layers(tile_layers)
 
-	# 4. 拆分成行级层
+	# 4. 拆分成行级层 (0 层为平坦地表底板；仅将 1 层及以上具有立面高度的障碍层拆入 sort_world 参与前后景深排位)
 	_split_layers_into_rows()
 
-	# 5. 隐藏原层
-	for layer in tile_layers:
-		layer.visible = false
+	# 5. 隐藏原层 (0 层平坦基底保留为整张底板，1 层及以上立体障碍移入 sort_world 动态排序)
+	for i in tile_layers.size():
+		if i == 0:
+			tile_layers[i].visible = true
+			tile_layers[i].material = VisionFogComponent.get_tile_shadow_material()
+		else:
+			tile_layers[i].visible = false
 
 	# 6. 【正确位置】：必须在第 3 步 GridData 构建完之后，再生成空气墙！
 	air_wall.rebuild_walls()
@@ -70,9 +74,9 @@ func _ready() -> void:
 	# 7. 初始排序
 	sort_world.call("sort_now")
 
-# 拆分图层
+# 拆分图层 (0 层为平坦地表底板；仅将 1 层及以上具有立面高度的障碍层拆入 sort_world 参与前后景深排位)
 func _split_layers_into_rows() -> void:
-	for z in tile_layers.size():
+	for z in range(1, tile_layers.size()):
 		var layer: TileMapLayer = tile_layers[z]
 		for cell in layer.get_used_cells():
 			var cell_layer := build_manager.get_or_create_cell_layer(z, cell, sort_world, tile_layers)
@@ -85,6 +89,10 @@ func _split_layers_into_rows() -> void:
 
 # 鼠标输入处理
 func _unhandled_input(event: InputEvent) -> void:
+	var inventory_node: CanvasLayer = get_node_or_null("Inventory")
+	if inventory_node and inventory_node.visible:
+		return
+
 	if event is InputEventMouseButton and event.pressed:
 		var active_item: Dictionary = {}
 		if hotbar_node and hotbar_node.has_method("get_active_item"):

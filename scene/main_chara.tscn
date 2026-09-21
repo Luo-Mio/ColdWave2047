@@ -223,6 +223,7 @@ script = ExtResource("13_aim")
 radius_horizontal = 300.0
 radius_max = 560.0
 pitch_curve_power = 1.0
+ground_ray_occluded_alpha_ratio = 0.3
 trajectory_occluded_alpha_ratio = 0.3
 camera_aim_edge_threshold = 0.85
 camera_aim_smooth_speed = 4.0

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bcwfy0tha30o5"
-path="res://.godot/imported/AutumnTree.png-5ca11f7f7031b247f0d26f4230dd4202.ctex"
+uid="uid://b25pvwpssdpl0"
+path="res://.godot/imported/BirchTree.png-bd598867d6d143ce8f83c9706a95db1d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/tree/AutumnTree/AutumnTree.png"
-dest_files=["res://.godot/imported/AutumnTree.png-5ca11f7f7031b247f0d26f4230dd4202.ctex"]
+source_file="res://resources/tree/BirchTree/BirchTree.png"
+dest_files=["res://.godot/imported/BirchTree.png-bd598867d6d143ce8f83c9706a95db1d.ctex"]
 
 [params]
 

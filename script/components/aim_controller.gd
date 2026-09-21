@@ -170,6 +170,8 @@ signal target_creature_changed(new_target: Node2D, old_target: Node2D)
 
 var current_target: Node2D = null
 var active_cursor_pos: Vector2 = Vector2.ZERO
+var landing_hit_pos: Vector2 = Vector2.ZERO
+var current_trajectory_info: Dictionary = {}
 
 # 默认参数备份与所属实体
 var _default_config: Dictionary = {}
@@ -294,6 +296,8 @@ func _process(delta: float) -> void:
 	if not is_aim_active or entity == null:
 		if is_instance_valid(current_target):
 			clear_targeted_creature()
+		current_trajectory_info.clear()
+		landing_hit_pos = Vector2.ZERO
 		_was_aim_active = false
 		return
 
@@ -365,9 +369,24 @@ func update_aim(ground_center: Vector2, mouse_screen: Vector2) -> void:
 	else:
 		active_cursor_pos = ground_center + Vector2(eff_min, 0.0)
 
-	# 6. 生物碰撞箱瞄准检测与高亮控制
+	# 5.1 实时解算 3D 弹道落点 (红色落点)
+	var hand_node: Node2D = entity.find_child("hand", true, false) as Node2D if entity else null
+	var chest_origin: Vector2 = hand_node.global_position if is_instance_valid(hand_node) else (ground_center + Vector2(0.0, -8.0))
+	var player_ground: Vector2 = entity.global_position if entity else ground_center
+	var p_floor: int = 0
+	var gd = _get_grid_data()
+	if gd and gd.has_method("world_to_cell") and gd.has_method("get_highest_floor"):
+		p_floor = gd.get_highest_floor(gd.world_to_cell(player_ground))
+
+	current_trajectory_info = get_terrain_adaptive_trajectory(player_ground, p_floor, chest_origin)
+	if current_trajectory_info.get("is_valid", false):
+		landing_hit_pos = current_trajectory_info.get("hit_screen_pos", active_cursor_pos)
+	else:
+		landing_hit_pos = active_cursor_pos
+
+	# 6. 生物碰撞箱瞄准检测与高亮控制：由红色落点 (landing_hit_pos) 触发！
 	if enable_target_highlight:
-		var found_target := _detect_targeted_creature(active_cursor_pos, mouse_screen)
+		var found_target := _detect_targeted_creature(landing_hit_pos)
 		_update_target_highlight(found_target)
 	elif is_instance_valid(current_target):
 		clear_targeted_creature()
@@ -384,8 +403,8 @@ func _get_grid_data() -> Node:
 
 # ==================== 目标生物检测与高亮管理 ====================
 
-## 检测当前准星所瞄准的活体生物 (Layer 3: 活体生物层)
-func _detect_targeted_creature(cursor_pos: Vector2, mouse_pos: Vector2) -> Node2D:
+## 检测当前红色落点所瞄准的活体生物 (Layer 3: 活体生物层)
+func _detect_targeted_creature(hit_pos: Vector2) -> Node2D:
 	if not is_inside_tree() or entity == null or not entity.is_inside_tree():
 		return null
 	var space := entity.get_world_2d().direct_space_state
@@ -394,18 +413,12 @@ func _detect_targeted_creature(cursor_pos: Vector2, mouse_pos: Vector2) -> Node2
 
 	var target: Node2D = null
 
-	# 1. 严格点检测：优先检测准星地面落点 (active_cursor_pos)
-	target = _query_creature_at_point(space, cursor_pos)
+	# 1. 严格点检测：优先检测红色着弹点是否直接命中生物碰撞箱
+	target = _query_creature_at_point(space, hit_pos)
 
-	# 2. 严格点检测：其次检测鼠标屏幕真实位置 (mouse_pos)
-	if target == null and mouse_pos.distance_squared_to(cursor_pos) > 1.0:
-		target = _query_creature_at_point(space, mouse_pos)
-
-	# 3. 容差辅助吸附：若严格点未命中且启用了微半径 (默认 6.0px)
+	# 2. 容差辅助吸附：若严格点未命中且启用了微半径 (默认 6.0px)
 	if target == null and target_query_radius > 0.0:
-		target = _query_creature_in_radius(space, cursor_pos, target_query_radius)
-		if target == null and mouse_pos.distance_squared_to(cursor_pos) > 1.0:
-			target = _query_creature_in_radius(space, mouse_pos, target_query_radius)
+		target = _query_creature_in_radius(space, hit_pos, target_query_radius)
 
 	return target
 

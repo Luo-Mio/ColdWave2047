@@ -1,0 +1,127 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://script/ui/inventory.gd" id="1_inv"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.03921569, 0.07843138, 0.15686275, 0.9607843)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.47331774, 0.6786721, 0.9404536, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="Inventory" type="CanvasLayer" unique_id=1488192731]
+visible = false
+layer = 105
+script = ExtResource("1_inv")
+
+[node name="Backdrop" type="ColorRect" parent="." unique_id=987162534]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.4509804)
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=876543210]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="MainPanel" type="PanelContainer" parent="CenterContainer" unique_id=543216789]
+custom_minimum_size = Vector2(660, 480)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
+
+[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/MainPanel" unique_id=321654987]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CenterContainer/MainPanel/MarginContainer" unique_id=654987321]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer" unique_id=789123456]
+layout_mode = 2
+
+[node name="TitleLabel" type="Label" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/Header" unique_id=456789123]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.95, 0.98, 1)
+theme_override_font_sizes/font_size = 18
+text = "🎒 测试物品库 / 背包仓库"
+
+[node name="Spacer" type="Control" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/Header" unique_id=987321654]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CloseButton" type="Button" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/Header" unique_id=123987456]
+custom_minimum_size = Vector2(32, 28)
+layout_mode = 2
+text = " ✕ "
+
+[node name="CategoryBar" type="HBoxContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer" unique_id=234567891]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HSeparator1" type="HSeparator" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer" unique_id=345678912]
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer" unique_id=456123789]
+custom_minimum_size = Vector2(0, 240)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="MarginContainer" type="MarginContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/ScrollContainer" unique_id=567891234]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="GridContainer" type="GridContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/ScrollContainer/MarginContainer" unique_id=678912345]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 8
+columns = 6
+
+[node name="HSeparator2" type="HSeparator" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer" unique_id=789345612]
+layout_mode = 2
+
+[node name="HotbarBindingBar" type="VBoxContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer" unique_id=891234567]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BarHeader" type="HBoxContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/HotbarBindingBar" unique_id=912345678]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="SlotLabel" type="Label" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/HotbarBindingBar/BarHeader" unique_id=123456780]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.85, 0.9, 0.95, 1)
+theme_override_font_sizes/font_size = 14
+text = "快捷栏目标槽位:"
+
+[node name="SlotsContainer" type="HBoxContainer" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/HotbarBindingBar/BarHeader" unique_id=234567801]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="TipLabel" type="Label" parent="CenterContainer/MainPanel/MarginContainer/VBoxContainer/HotbarBindingBar" unique_id=345678012]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.8, 0.9, 0.8)
+theme_override_font_sizes/font_size = 12
+text = "提示：点击上方任意物品，直接装配进快捷栏选中的槽位！按 B 或 Tab 键关闭。"

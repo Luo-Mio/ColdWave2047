@@ -156,9 +156,11 @@ func _draw() -> void:
 				arc_segs, 1.5, activation
 			)
 
-	# 获取 3D 地形自适应重力弹道数据
+	# 获取 3D 地形自适应重力弹道数据 (优先复用控制器已解算好的轨迹缓存)
 	var traj_info: Dictionary = {}
-	if aim_controller.has_method("get_terrain_adaptive_trajectory"):
+	if "current_trajectory_info" in aim_controller and not aim_controller.current_trajectory_info.is_empty():
+		traj_info = aim_controller.current_trajectory_info
+	elif aim_controller.has_method("get_terrain_adaptive_trajectory"):
 		traj_info = aim_controller.call("get_terrain_adaptive_trajectory", player_ground, p_floor, chest_origin)
 
 	var hit_type: int = traj_info.get("hit_type", 0) if traj_info.get("is_valid", false) else 0
