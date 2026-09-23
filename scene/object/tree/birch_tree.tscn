@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="4_placement"]
 [ext_resource type="Script" uid="uid://bjjesxnpjv7bl" path="res://script/components/object_xray_component.gd" id="5_xray"]
 [ext_resource type="Script" uid="uid://bo27wqobp7dge" path="res://script/components/object_destructible_component.gd" id="6_destruct"]
+[ext_resource type="Script" path="res://script/components/object_variant_component.gd" id="7_variant"]
 
 [node name="BirchTree" type="Node2D" unique_id=686197970]
 script = ExtResource("3_base")
@@ -13,13 +14,12 @@ break_with_tile = false
 
 [node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
 texture_filter = 1
-position = Vector2(-1, 0)
+position = Vector2(-1, -56)
 texture = ExtResource("2_638qt")
-offset = Vector2(0, -60)
 
 [node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
 texture_filter = 1
-position = Vector2(-1, -60)
+position = Vector2(-1, -56)
 texture = ExtResource("3_taq0p")
 
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]
@@ -28,7 +28,7 @@ collision_mask = 0
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="StaticBody2D" unique_id=734597367]
 scale = Vector2(1, 0.5)
-polygon = PackedVector2Array(7, 0, 0, 4, -7, 0, 0, -4)
+polygon = PackedVector2Array(8, 0, 0, 5, -8, 0, 0, -5)
 
 [node name="LogicScript" type="Node" parent="." unique_id=892176431]
 
@@ -44,3 +44,11 @@ script = ExtResource("5_xray")
 script = ExtResource("6_destruct")
 break_with_tile = false
 drop_count = 0
+
+[node name="ObjectVariantComponent" type="Node" parent="LogicScript" unique_id=918273645]
+script = ExtResource("7_variant")
+canopy_variants = [ExtResource("3_taq0p")]
+trunk_variants = [ExtResource("2_638qt")]
+allow_flip_h = true
+scale_range = Vector2(0.96, 1.04)
+

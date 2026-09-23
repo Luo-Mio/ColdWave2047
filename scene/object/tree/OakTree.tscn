@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="4_placement"]
 [ext_resource type="Script" uid="uid://bjjesxnpjv7bl" path="res://script/components/object_xray_component.gd" id="5_xray"]
 [ext_resource type="Script" uid="uid://bo27wqobp7dge" path="res://script/components/object_destructible_component.gd" id="6_destruct"]
+[ext_resource type="Script" path="res://script/components/object_variant_component.gd" id="7_variant"]
 
 [node name="OakTree" type="Node2D" unique_id=686197970]
 script = ExtResource("3_base")
@@ -44,3 +45,11 @@ script = ExtResource("5_xray")
 script = ExtResource("6_destruct")
 break_with_tile = false
 drop_count = 0
+
+[node name="ObjectVariantComponent" type="Node" parent="LogicScript" unique_id=918273645]
+script = ExtResource("7_variant")
+canopy_variants = [ExtResource("1_dcgk5")]
+trunk_variants = [ExtResource("2_aotr1")]
+allow_flip_h = true
+scale_range = Vector2(0.96, 1.04)
+
