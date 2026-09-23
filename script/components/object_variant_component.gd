@@ -18,6 +18,10 @@ extends Node
 ## 单精灵贴图备选列表 (用于石头、箱子等物体)
 @export var single_sprite_variants: Array[Texture2D] = []
 
+@export_group("视口多节点变种模式 (Visuals 容器)")
+## 变种容器节点名称 (默认 "Visuals")。如果场景树中存在此节点，将自动优先采用多节点视口模式！
+@export var visuals_container_name: String = "Visuals"
+
 @export_group("零成本多样性倍增 (镜像与微缩放)")
 ## 是否允许随机左右镜像翻转 (左右对称自然树木/石头，直接使变种表现翻倍)
 @export var allow_flip_h: bool = true
@@ -42,6 +46,39 @@ func _ready() -> void:
 
 # 应用随机变种
 func _apply_variant() -> void:
+	# === 模式一：优先检查场景中是否存在多节点变种容器 (Visuals 模式) ===
+	var visuals_node := parent_object.find_child(visuals_container_name, true, false) as Node2D
+	if visuals_node and visuals_node.get_child_count() > 0:
+		var variant_children: Array[Node] = visuals_node.get_children()
+		var chosen_idx := randi() % variant_children.size()
+		var chosen_variant: Node2D = null
+
+		for i in range(variant_children.size()):
+			var v := variant_children[i] as Node2D
+			if v == null:
+				continue
+			if i == chosen_idx:
+				chosen_variant = v
+				v.visible = true
+			else:
+				# 移出并销毁未选中的多余变种，确保场景树纯净、性能最佳
+				visuals_node.remove_child(v)
+				v.queue_free()
+
+		if chosen_variant:
+			# 水平镜像翻转 (整个 Variant 作为一个整体翻转，树干与树冠相对锚点绝对精准！)
+			if allow_flip_h and randf() > 0.5:
+				chosen_variant.scale.x = -absf(chosen_variant.scale.x)
+
+			# 极轻微尺寸扰动
+			if scale_range.x > 0.01 and scale_range.y > 0.01:
+				if not is_equal_approx(scale_range.x, 1.0) or not is_equal_approx(scale_range.y, 1.0):
+					var s := randf_range(scale_range.x, scale_range.y)
+					chosen_variant.scale *= s
+
+		return
+
+	# === 模式二：旧版贴图数组替换模式 (回退兜底) ===
 	var canopy_node := parent_object.find_child("Canopy", true, false) as Sprite2D
 	var trunk_node := parent_object.find_child("Trunk", true, false) as Sprite2D
 	var single_sprite_node := parent_object.find_child(single_sprite_node_name, true, false) as Sprite2D

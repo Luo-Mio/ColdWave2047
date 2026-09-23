@@ -118,9 +118,9 @@ func _ready() -> void:
 
 	# 4. 为非透视实体精灵（如 Trunk 树干）挂载专用阴影材质 (只接收阴影，绝不透视镂空)
 	var shadow_mat := ObjectXRayComponent.get_shared_shadow_material()
-	for child in get_children():
-		if child is Sprite2D and child.material == null:
-			child.material = shadow_mat
+	for sprite in _get_all_visual_sprites():
+		if sprite.material == null:
+			sprite.material = shadow_mat
 
 var _is_in_shadow: bool = false
 
@@ -129,9 +129,20 @@ func set_in_shadow(in_shadow: bool) -> void:
 	if _is_in_shadow == in_shadow:
 		return
 	_is_in_shadow = in_shadow
-	for child in get_children():
-		if child is CanvasItem and child.material != null:
-			child.set_instance_shader_parameter("is_in_shadow", in_shadow)
+	for sprite in _get_all_visual_sprites():
+		if sprite.material != null:
+			sprite.set_instance_shader_parameter("is_in_shadow", in_shadow)
+
+func _get_all_visual_sprites() -> Array[CanvasItem]:
+	var result: Array[CanvasItem] = []
+	var stack: Array[Node] = [self]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is CanvasItem and n != self and (n is Sprite2D or n is AnimatedSprite2D):
+			result.append(n as CanvasItem)
+		for c in n.get_children():
+			stack.push_back(c)
+	return result
 
 func _find_placement_comp() -> ObjectPlacementComponent:
 	return find_child("ObjectPlacementComponent", true, false) as ObjectPlacementComponent

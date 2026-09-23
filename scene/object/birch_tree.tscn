@@ -1,26 +1,45 @@
 [gd_scene format=3 uid="uid://hucypc5g7pxq"]
 
-[ext_resource type="Script" uid="uid://bgvstxqn0pm7v" path="res://script/entities/objects/world_object_base.gd" id="1_x1bok"]
 [ext_resource type="Texture2D" uid="uid://b2bq2r3utq5uv" path="res://resources/tree/BirchTree/BirchTreeTrunk.png" id="2_ulu1w"]
 [ext_resource type="Texture2D" uid="uid://b25pvwpssdpl0" path="res://resources/tree/BirchTree/BirchTree.png" id="3_0olrr"]
+[ext_resource type="Script" uid="uid://bgvstxqn0pm7v" path="res://script/entities/objects/world_object_base.gd" id="3_base"]
 [ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="4_eusso"]
+[ext_resource type="Texture2D" uid="uid://dy3vwbo0pcf34" path="res://resources/tree/BirchTree/BirchTreeTrunk002.png" id="4_ldsp3"]
 [ext_resource type="Script" uid="uid://bjjesxnpjv7bl" path="res://script/components/object_xray_component.gd" id="5_ldsp3"]
+[ext_resource type="Texture2D" uid="uid://qu47xu638187" path="res://resources/tree/BirchTree/BirchTree002.png" id="5_wesb1"]
 [ext_resource type="Script" uid="uid://bo27wqobp7dge" path="res://script/components/object_destructible_component.gd" id="6_wesb1"]
 [ext_resource type="Script" uid="uid://brbxvn2t1ab0s" path="res://script/components/object_variant_component.gd" id="7_variant"]
 
 [node name="BirchTree" type="Node2D" unique_id=686197970]
-script = ExtResource("1_x1bok")
+script = ExtResource("3_base")
 break_with_tile = false
 
-[node name="Trunk" type="Sprite2D" parent="." unique_id=173823860]
+[node name="Visuals" type="Node2D" parent="." unique_id=1122334455]
+
+[node name="Variant_0" type="Node2D" parent="Visuals" unique_id=1122334456]
+visible = false
+
+[node name="Trunk" type="Sprite2D" parent="Visuals/Variant_0" unique_id=173823860]
 texture_filter = 1
 position = Vector2(-1, -56)
 texture = ExtResource("2_ulu1w")
 
-[node name="Canopy" type="Sprite2D" parent="." unique_id=1281070627]
+[node name="Canopy" type="Sprite2D" parent="Visuals/Variant_0" unique_id=1281070627]
 texture_filter = 1
 position = Vector2(-1, -56)
 texture = ExtResource("3_0olrr")
+
+[node name="Variant_1" type="Node2D" parent="Visuals" unique_id=1122334457]
+
+[node name="Trunk" type="Sprite2D" parent="Visuals/Variant_1" unique_id=173823861]
+texture_filter = 1
+position = Vector2(6, -55)
+texture = ExtResource("4_ldsp3")
+
+[node name="Canopy" type="Sprite2D" parent="Visuals/Variant_1" unique_id=1281070628]
+texture_filter = 1
+position = Vector2(6, -55)
+texture = ExtResource("5_wesb1")
 
 [node name="StaticBody2D" type="StaticBody2D" parent="." unique_id=963016476]
 collision_layer = 2
@@ -31,6 +50,9 @@ scale = Vector2(1, 0.5)
 polygon = PackedVector2Array(8, 0, 0, 8, -8, 0, 0, -8)
 
 [node name="LogicScript" type="Node" parent="." unique_id=892176431]
+
+[node name="ObjectVariantComponent" type="Node" parent="LogicScript" unique_id=918273645]
+script = ExtResource("7_variant")
 
 [node name="ObjectPlacementComponent" type="Node" parent="LogicScript" unique_id=561029384]
 script = ExtResource("4_eusso")
@@ -44,9 +66,3 @@ script = ExtResource("5_ldsp3")
 script = ExtResource("6_wesb1")
 break_with_tile = false
 drop_count = 0
-
-[node name="ObjectVariantComponent" type="Node" parent="LogicScript" unique_id=918273645]
-script = ExtResource("7_variant")
-canopy_variants = Array[Texture2D]([ExtResource("3_0olrr")])
-trunk_variants = Array[Texture2D]([ExtResource("2_ulu1w")])
-allow_flip_h = false
