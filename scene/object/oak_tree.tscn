@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://cxl417doob0pl"]
+[gd_scene format=3 uid="uid://bpqngk25xid8"]
 
 [ext_resource type="Script" uid="uid://bgvstxqn0pm7v" path="res://script/entities/objects/world_object_base.gd" id="1_rbyjv"]
 [ext_resource type="Script" uid="uid://c7v7qyrew47bp" path="res://script/components/object_placement_component.gd" id="2_1yv2n"]
@@ -54,3 +54,4 @@ script = ExtResource("5_variant")
 canopy_variants = Array[Texture2D]([SubResource("CompressedTexture2D_uhqt1")])
 trunk_variants = Array[Texture2D]([SubResource("CompressedTexture2D_78vsw")])
 allow_flip_h = false
+scale_range = Vector2(1, 1)

@@ -61,15 +61,16 @@ func update(
 					) * factor
 
 	# 平滑插值 (指数平滑衰减，不受渲染帧率波动影响)
-	if current_cam_offset.distance_squared_to(target_offset) > 0.01:
+	if current_cam_offset.distance_squared_to(target_offset) > 0.25:
 		var t := 1.0 - exp(-smooth_speed * delta)
 		current_cam_offset = current_cam_offset.lerp(target_offset, t)
-		if current_cam_offset.distance_squared_to(target_offset) < 0.01:
+		if current_cam_offset.distance_squared_to(target_offset) < 0.25:
 			current_cam_offset = target_offset
-		cam.offset = current_cam_offset
-	elif cam.offset != target_offset:
+		# 像素量化：防止亚像素抖动每帧击穿 VisionFogComponent 全屏重算
+		cam.offset = current_cam_offset.round()
+	elif cam.offset != target_offset.round():
 		current_cam_offset = target_offset
-		cam.offset = target_offset
+		cam.offset = target_offset.round()
 
 ## 重置镜头偏移至居中原点
 func reset_offset() -> void:

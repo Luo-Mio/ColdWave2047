@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://hucypc5g7pxq"]
+[gd_scene format=3 uid="uid://2rptbbgtyb30"]
 
 [ext_resource type="Texture2D" uid="uid://b2bq2r3utq5uv" path="res://resources/tree/BirchTree/BirchTreeTrunk.png" id="2_ulu1w"]
 [ext_resource type="Texture2D" uid="uid://b25pvwpssdpl0" path="res://resources/tree/BirchTree/BirchTree.png" id="3_0olrr"]
@@ -53,6 +53,8 @@ polygon = PackedVector2Array(8, 0, 0, 8, -8, 0, 0, -8)
 
 [node name="ObjectVariantComponent" type="Node" parent="LogicScript" unique_id=918273645]
 script = ExtResource("7_variant")
+allow_flip_h = false
+scale_range = Vector2(1, 1)
 
 [node name="ObjectPlacementComponent" type="Node" parent="LogicScript" unique_id=561029384]
 script = ExtResource("4_eusso")
