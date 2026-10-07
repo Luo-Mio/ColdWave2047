@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://blsh2kqs6dcpo"
-path="res://.godot/imported/mask_64x32.png-fd9817f460ebee3fa2e0be2415eb5469.ctex"
+uid="uid://cdxfder2umi8e"
+path="res://.godot/imported/ref_standard.png-d0acef1f6fc18ad4a49b97c2c3ae0127.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/surface/GreenGrass/mask_64x32.png"
-dest_files=["res://.godot/imported/mask_64x32.png-fd9817f460ebee3fa2e0be2415eb5469.ctex"]
+source_file="res://resources/surface/ref_standard.png"
+dest_files=["res://.godot/imported/ref_standard.png-d0acef1f6fc18ad4a49b97c2c3ae0127.ctex"]
 
 [params]
 

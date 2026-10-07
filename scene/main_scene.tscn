@@ -6,12 +6,63 @@
 [ext_resource type="PackedScene" uid="uid://upwf0c0w2qlj" path="res://scene/hud/hotbar.tscn" id="3_qvu5t"]
 [ext_resource type="PackedScene" uid="uid://b7c5qb03k04wg" path="res://scene/main_chara.tscn" id="3_x5n27"]
 [ext_resource type="Texture2D" uid="uid://ctg00xdmy43db" path="res://resources/tiles/dirt_tile.png" id="4_hrphr"]
+[ext_resource type="Material" uid="uid://cmbcfxlkxxnwq" path="res://addons/TileMapDual/ghost_material.tres" id="5_6s1rr"]
 [ext_resource type="Script" uid="uid://cmwffxpi1h3gk" path="res://script/systems/selector.gd" id="5_x5n27"]
+[ext_resource type="Texture2D" uid="uid://c51xpuwf6fbfk" path="res://resources/surface/GreenGrass/grass_out.png" id="6_4cqoh"]
+[ext_resource type="Script" uid="uid://cjk8nronimk5r" path="res://addons/TileMapDual/tile_map_dual.gd" id="7_pi6ld"]
 [ext_resource type="Script" uid="uid://ccyjcrsoj6l7p" path="res://script/systems/wall_xray.gd" id="8_hrphr"]
 [ext_resource type="Script" uid="uid://bbfq38ivdtgy8" path="res://script/systems/build_manager.gd" id="9_86xya"]
 [ext_resource type="PackedScene" uid="uid://dewx1yy1y8ghw" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
 [ext_resource type="Script" uid="uid://heo0xna060h4" path="res://script/systems/aim_reticle.gd" id="11_aimreticle"]
 [ext_resource type="PackedScene" path="res://scene/ui/inventory.tscn" id="12_inv"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_8inyt"]
+texture = ExtResource("6_4cqoh")
+texture_region_size = Vector2i(64, 32)
+0:3/0 = 0
+0:3/0/terrain_set = 0
+0:3/0/terrain = 0
+3:3/0 = 0
+3:3/0/terrain_set = 0
+0:2/0 = 0
+0:2/0/terrain_set = 0
+1:2/0 = 0
+1:2/0/terrain_set = 0
+0:0/0 = 0
+0:0/0/terrain_set = 0
+3:2/0 = 0
+3:2/0/terrain_set = 0
+2:3/0 = 0
+2:3/0/terrain_set = 0
+3:1/0 = 0
+3:1/0/terrain_set = 0
+1:3/0 = 0
+1:3/0/terrain_set = 0
+0:1/0 = 0
+0:1/0/terrain_set = 0
+1:0/0 = 0
+1:0/0/terrain_set = 0
+2:2/0 = 0
+2:2/0/terrain_set = 0
+3:0/0 = 0
+3:0/0/terrain_set = 0
+2:0/0 = 0
+2:0/0/terrain_set = 0
+1:1/0 = 0
+1:1/0/terrain_set = 0
+2:1/0 = 0
+2:1/0/terrain_set = 0
+2:1/0/terrain = 1
+
+[sub_resource type="TileSet" id="TileSet_hjb8m"]
+tile_shape = 1
+tile_size = Vector2i(64, 32)
+terrain_set_0/mode = 1
+terrain_set_0/terrain_0/name = "<any>"
+terrain_set_0/terrain_0/color = Color(0.93333334, 0.50980395, 0.93333334, 1)
+terrain_set_0/terrain_1/name = "FG -grass_out.png"
+terrain_set_0/terrain_1/color = Color(0.5, 0.4375, 0.25, 1)
+sources/0 = SubResource("TileSetAtlasSource_8inyt")
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_86xya"]
 texture = ExtResource("4_hrphr")
@@ -27,6 +78,14 @@ sources/0 = SubResource("TileSetAtlasSource_86xya")
 [node name="mainScene" type="Node2D" unique_id=1756960173]
 texture_filter = 1
 script = ExtResource("1_fb1ex")
+
+[node name="TileMapDual" type="TileMapLayer" parent="." unique_id=971917508]
+material = ExtResource("5_6s1rr")
+tile_map_data = PackedByteArray("AAAYAA0AAAACAAEAAAAcAAsAAAACAAEAAAAeAAwAAAACAAEAAAAdAAsAAAACAAEAAAA=")
+tile_set = SubResource("TileSet_hjb8m")
+script = ExtResource("7_pi6ld")
+godot_4_3_compatibility = false
+metadata/_custom_type_script = "uid://cjk8nronimk5r"
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=1688893282]
 layer = 100
@@ -158,4 +217,3 @@ script = ExtResource("8_hrphr")
 script = ExtResource("9_86xya")
 
 [node name="Inventory" parent="." unique_id=1488192731 instance=ExtResource("12_inv")]
-
