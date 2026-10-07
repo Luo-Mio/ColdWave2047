@@ -14,7 +14,9 @@ func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, se
 	if item.is_empty():
 		return
 
-	if item["type"] == 0:  # TILE
+	if item.get("id") == "grass_turf":
+		_place_turf(cell, selector)
+	elif item["type"] == 0:  # TILE
 		_place_tile(cell, item["atlas"], sort_world, selector, tile_layers)
 	elif item["type"] == 1:  # OBJECT
 		var grid_size: Vector2i = item.get("grid_size", Vector2i(4, 4))
@@ -23,6 +25,16 @@ func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, se
 		if grid_size != Vector2i(4, 4) and selector != null:
 			sub_cell = selector.get("target_sub_cell")
 		_place_object(cell, item["scene"], sort_world, sub_cell, grid_size)
+
+# 放置表面草皮
+func _place_turf(cell: Vector2i, selector: Node2D) -> void:
+	if not GridData.has_any_tile(cell):
+		return
+	var z := GridData.get_highest_floor(cell)
+	if TurfSystem.instance and not TurfSystem.instance.has_turf(cell, z):
+		TurfSystem.instance.set_turf(cell, z, true)
+		if selector:
+			selector.call("force_update")
 
 # 放置瓷砖
 func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer]) -> void:
@@ -85,8 +97,18 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 		selector.call("force_update")
 		return
 
-	# 2. 准备破坏最上层瓷砖（地面0层不拆）
-	var z := GridData.get_highest_floor(cell)
+	# 2. 如果地表有草皮，优先铲除草皮（爆出草皮掉落物，保留底下的泥土地砖！）
+	var top_z := GridData.get_highest_floor(cell)
+	if TurfSystem.instance and TurfSystem.instance.has_turf(cell, top_z):
+		TurfSystem.instance.set_turf(cell, top_z, false)
+		var turf_valid_neighbors := _get_valid_drop_neighbors(cell, top_z)
+		if not turf_valid_neighbors.is_empty():
+			_spawn_item_drops("grass_turf", 1, cell, top_z, turf_valid_neighbors, sort_world)
+		selector.call("force_update")
+		return
+
+	# 3. 准备破坏最上层瓷砖（地面0层不拆）
+	var z := top_z
 	if z <= 0:
 		return
 

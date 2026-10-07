@@ -73,6 +73,14 @@ static var ITEMS: Array[Dictionary] = [
 		"icon": "", # 运行时由 TileSet 图集裁剪填充
 		"description": "基础地表泥土砖块，用于铺设地面或垫高阶梯。"
 	},
+	{
+		"id": "grass_turf",
+		"name": "草皮",
+		"category": Category.TILE,
+		"type": ItemType.TILE,
+		"icon": "res://resources/surface/GreenGrass/grass_icon.png",
+		"description": "绿油油的草皮，可铺设在任意泥土地砖表面，边缘自动无缝平滑衔接。"
+	},
 
 	# --- 武器装备 (WEAPON) ---
 	{

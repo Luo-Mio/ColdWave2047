@@ -22,6 +22,19 @@ var objects_at: Dictionary = {}
 # 微物体占用表(1x1小麦/2x2灌木): key = sub_slot_key(cell, sub_pos), value = 作物节点
 var sub_objects_at: Dictionary = {}
 
+# 3. 地表草皮覆盖数据: key = Vector3i(cell.x, cell.y, z), value = true
+var turf_grid: Dictionary = {}
+
+func has_turf(cell: Vector2i, z: int) -> bool:
+	return turf_grid.has(Vector3i(cell.x, cell.y, z))
+
+func set_turf(cell: Vector2i, z: int, exists: bool) -> void:
+	var key := Vector3i(cell.x, cell.y, z)
+	if exists:
+		turf_grid[key] = true
+	else:
+		turf_grid.erase(key)
+
 # 遍历所有层,生成高度场
 func build_from_layers(layer_nodes: Array[TileMapLayer]) -> void:
 	layers = layer_nodes
@@ -105,6 +118,7 @@ func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 		highest_floor[ck] = maxi(highest_floor.get(ck, 0), z)
 	else:
 		grid.erase(key)
+		turf_grid.erase(key)
 		# 拆除时重新计算该格的最高楼层
 		var max_z := 0
 		var has_any := false

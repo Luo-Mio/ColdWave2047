@@ -27,24 +27,12 @@ var items: Array[Dictionary] = [
 	{ "type": ItemType.OBJECT, "name": "小麦",     "scene": "res://scene/object/wheat.tscn", "icon": "res://resources/Plant/wheat/wheat.png", "grid_size": Vector2i(1, 1) },
 	# 4 号位：橡树（物体 4x4 整格，无瞄准）
 	{ "type": ItemType.OBJECT, "name": "橡树",     "scene": "res://scene/object/tree/OakTree.tscn", "icon": "res://resources/tree/OakTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
-	# 5 号位：远射长弓（超远程武器，基准环放大至 280px，俯角内环 160px，仰角外环 420px，初速高且下坠极小）
+	# 5 号位：草皮（表面覆盖物，双网格平滑）
 	{
-		"type": ItemType.WEAPON,
-		"name": "远射长弓",
-		"icon": "res://resources/object/weapon/stick/stick.png",
-		"weapon_tex": "res://resources/object/weapon/stick/stick.png",
-		"aim_config": {
-			"radius_min": 40.0,
-			"radius_horizontal": 280.0,
-			"radius_max": 420.0,
-			"laser_length": 280.0,
-			"ring_color": Color(0.3, 0.8, 1.0, 0.75),
-			"laser_color": Color(0.4, 0.9, 1.0, 0.9),
-			"projectile_speed": 680.0,
-			"drop_value": 360.0,
-			"launch_height": 10.0,
-			"trajectory_color": Color(0.5, 0.9, 1.0, 0.9)
-		}
+		"id": "grass_turf",
+		"type": ItemType.TILE,
+		"name": "草皮",
+		"icon": "res://resources/surface/GreenGrass/grass_icon.png",
 	},
 ]
 
@@ -101,8 +89,10 @@ func _load_slot_icons() -> void:
 		var item_data := items[i]
 		var itype = item_data.get("type", -1)
 		if itype == ItemType.TILE:
-			# 瓷砖：从 TileSet 图集中裁剪出该格子的贴图
-			if tile_source and item_data.has("atlas"):
+			# 瓷砖：如果指定了独立 icon 则优先使用，否则从 TileSet 图集中裁剪
+			if item_data.has("icon") and str(item_data["icon"]) != "" and ResourceLoader.exists(item_data["icon"]):
+				icon_rect.texture = load(item_data["icon"])
+			elif tile_source and item_data.has("atlas"):
 				var atlas_tex := AtlasTexture.new()
 				atlas_tex.atlas = tile_source.texture
 				atlas_tex.region = tile_source.get_tile_texture_region(item_data["atlas"])

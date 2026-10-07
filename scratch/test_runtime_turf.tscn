@@ -1,0 +1,61 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scene/main_scene.tscn" id="1_scene"]
+
+[sub_resource type="GDScript" id="GDScript_turf_test"]
+script/source = "extends Node
+
+func _ready():
+	print(\"--- STARTING RUNTIME TURF TEST ---\")
+	var main_scene = $mainScene
+	var turf_sys = main_scene.turf_system
+	assert(turf_sys != null, \"TurfSystem should be present\")
+	
+	var floor0_layer = turf_sys.floor0_turf_layer
+	assert(floor0_layer != null, \"floor0_turf_layer should be present\")
+	print(\"Floor0 turf layer position: \", floor0_layer.position)
+	assert(floor0_layer.position == Vector2(0, -16), \"floor0_turf_layer position must be (0, -16)\")
+	
+	# Test placing single turf at (0, 0)
+	print(\"Placing turf at (0, 0), z=0...\")
+	turf_sys.set_turf(Vector2i(0, 0), 0, true)
+	
+	var used = floor0_layer.get_used_cells()
+	print(\"Used dual cells count: \", used.size())
+	for c in used:
+		var atlas = floor0_layer.get_cell_atlas_coords(c)
+		print(\"  dual cell \", c, \" -> atlas \", atlas)
+		
+	assert(used.size() == 4, \"Placing 1 turf must create exactly 4 dual cells\")
+	assert(floor0_layer.get_cell_atlas_coords(Vector2i(0, 0)) == Vector2i(1, 3), \"Cell (0,0) must have atlas (1,3)\")
+	assert(floor0_layer.get_cell_atlas_coords(Vector2i(0, 2)) == Vector2i(3, 3), \"Cell (0,2) must have atlas (3,3)\")
+	assert(floor0_layer.get_cell_atlas_coords(Vector2i(-1, 1)) == Vector2i(0, 2), \"Cell (-1,1) must have atlas (0,2)\")
+	assert(floor0_layer.get_cell_atlas_coords(Vector2i(0, 1)) == Vector2i(0, 0), \"Cell (0,1) must have atlas (0,0)\")
+	
+	print(\"Single turf test passed!\")
+	
+	# Test placing on high floor z=1
+	print(\"Placing turf at (0, 0), z=1...\")
+	turf_sys.set_turf(Vector2i(0, 0), 1, true)
+	var z1_dual_cell = main_scene.sort_world.get_node_or_null(\"turf_z1_0_0\") as TileMapLayer
+	assert(z1_dual_cell != null, \"High floor dual cell node should exist in sort_world\")
+	print(\"High floor dual cell position: \", z1_dual_cell.position)
+	assert(z1_dual_cell.position == Vector2(0, -32), \"z=1 position must be -16*1 - 16 = -32\")
+	
+	# Test removing turf
+	print(\"Removing turf at (0, 0), z=0...\")
+	turf_sys.set_turf(Vector2i(0, 0), 0, false)
+	assert(floor0_layer.get_used_cells().size() == 0, \"All floor 0 dual cells should be erased\")
+	
+	print(\"Removing turf at (0, 0), z=1...\")
+	turf_sys.set_turf(Vector2i(0, 0), 1, false)
+	
+	print(\"ALL RUNTIME TURF TESTS PASSED PERFECTLY!\")
+	get_tree().quit()
+"
+
+[node name="TestRuntimeTurf" type="Node"]
+script = SubResource("GDScript_turf_test")
+
+[node name="mainScene" parent="." instance=ExtResource("1_scene")]
+

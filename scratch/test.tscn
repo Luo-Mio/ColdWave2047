@@ -1,0 +1,22 @@
+[gd_scene load_steps=2 format=3]
+
+[sub_resource type="GDScript" id="GDScript_1"]
+script/source = "extends Node
+
+func _ready():
+	var f = FileAccess.open(\"d:/Project/Project-Godot/测试001/scratch/test.txt\", FileAccess.WRITE)
+	var ts = load(\"res://resources/surface/GreenGrass/grass_tileset.tres\") as TileSet
+	var tml = TileMapLayer.new()
+	tml.tile_set = ts
+	f.store_line(\"tile_size: \" + str(ts.tile_size))
+	f.store_line(\"tile_shape: \" + str(ts.tile_shape))
+	for y in range(-2, 3):
+		for x in range(-2, 3):
+			f.store_line(\"cell (%d, %d) -> map_to_local: %s\" % [x, y, str(tml.map_to_local(Vector2i(x, y)))])
+	f.close()
+	get_tree().quit()
+"
+
+[node name="TestNode" type="Node"]
+script = SubResource("GDScript_1")
+

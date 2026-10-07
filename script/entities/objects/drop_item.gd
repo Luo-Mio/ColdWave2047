@@ -23,6 +23,7 @@ var foot_y: float = 0.0
 const ITEM_TEXTURES: Dictionary = {
 	"dirt": preload("res://resources/object/dirt.png"),
 	"wheat": preload("res://resources/Plant/wheat/wheat.png"),
+	"grass_turf": preload("res://resources/surface/GreenGrass/grass_icon.png"),
 }
 
 func _ready() -> void:
