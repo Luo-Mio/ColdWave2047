@@ -1,0 +1,35 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scene/main_scene.tscn" id="1_scene"]
+
+[sub_resource type="GDScript" id="GDScript_dual_pos"]
+script/source = "extends Node
+
+func _ready():
+	var scene = $mainScene
+	var tile_layer = scene.tile_layers[0]
+	var grass_layer = scene.turf_system.floor0_turf_layer
+
+	print(\"--- PRIMARY CELLS ---\")
+	for cell in [Vector2i(3, 1), Vector2i(3, 2)]:
+		var pos = tile_layer.map_to_local(cell) + tile_layer.position
+		print(\"Cell %s: center=%s (x+y=%d)\" % [cell, pos, cell.x + cell.y])
+
+	print(\"\\n--- DUAL CELLS FOR (3, 1) ---\")
+	for d in scene.turf_system._get_affected_dual_cells(Vector2i(3, 1)):
+		var pos = grass_layer.map_to_local(d) + grass_layer.position
+		print(\"Dual %s: center=%s (v=%d, u+v=%d)\" % [d, pos, d.y, d.x + d.y])
+
+	print(\"\\n--- DUAL CELLS FOR (3, 2) ---\")
+	for d in scene.turf_system._get_affected_dual_cells(Vector2i(3, 2)):
+		var pos = grass_layer.map_to_local(d) + grass_layer.position
+		print(\"Dual %s: center=%s (v=%d, u+v=%d)\" % [d, pos, d.y, d.x + d.y])
+
+	get_tree().quit()
+"
+
+[node name="CheckDualPos" type="Node"]
+script = SubResource("GDScript_dual_pos")
+
+[node name="mainScene" parent="." instance=ExtResource("1_scene")]
+

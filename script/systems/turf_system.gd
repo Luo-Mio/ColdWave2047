@@ -178,10 +178,19 @@ func _update_dual_cell(u: int, v: int, z: int) -> void:
 
 	# 计算该交点四周 4 个逻辑角的草皮存在情况 (4-bit 掩码)
 	var mask := 0
-	if GridData.has_turf(top_cell, z):    mask |= 1 # Top (上)
-	if GridData.has_turf(right_cell, z):  mask |= 2 # Right (右)
-	if GridData.has_turf(left_cell, z):   mask |= 4 # Left (左)
-	if GridData.has_turf(bottom_cell, z): mask |= 8 # Bottom (下)
+	var active_cells: Array[Vector2i] = []
+	if GridData.has_turf(top_cell, z):
+		mask |= 1 # Top (上)
+		active_cells.append(top_cell)
+	if GridData.has_turf(right_cell, z):
+		mask |= 2 # Right (右)
+		active_cells.append(right_cell)
+	if GridData.has_turf(left_cell, z):
+		mask |= 4 # Left (左)
+		active_cells.append(left_cell)
+	if GridData.has_turf(bottom_cell, z):
+		mask |= 8 # Bottom (下)
+		active_cells.append(bottom_cell)
 
 	if z == 0:
 		# 0 层平坦地面：直接画在底板 floor0_turf_layer 上
@@ -191,7 +200,7 @@ func _update_dual_cell(u: int, v: int, z: int) -> void:
 			else:
 				floor0_turf_layer.set_cell(Vector2i(u, v), 0, MASK_TO_ATLAS[mask])
 	else:
-		# 1 层及以上立体高台：进入 sort_world 参与同格精细深度排序
+		# 1 层及以上立体高台：进入 sort_world 参与精细深度排序
 		if sort_world == null:
 			return
 		var key := "turf_z%d_%d_%d" % [z, u, v]
@@ -200,6 +209,14 @@ func _update_dual_cell(u: int, v: int, z: int) -> void:
 			if d_layer:
 				d_layer.queue_free()
 		else:
+			# 找到向该双网格切片贡献草皮的逻辑格中，最靠北（sort_key 最小）的基准深度
+			# 确保草皮永远作为本格地表顶层绘制，绝对不会冒充南侧前景去遮盖本格角色！
+			var min_sk := 999999.0
+			for ac in active_cells:
+				var sk := GridData.cell_to_sort_key(ac)
+				if sk < min_sk:
+					min_sk = sk
+
 			if d_layer == null:
 				d_layer = cell_script.new()
 				d_layer.name = key
@@ -208,10 +225,14 @@ func _update_dual_cell(u: int, v: int, z: int) -> void:
 				d_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 				d_layer.y_sort_enabled = true
 				d_layer.collision_enabled = false
-				# 排序深度：与该格泥土对齐，但次键比泥土(z)高 0.1，确保盖在泥土顶面，且在麦子/实体(999)底下
-				d_layer.set("sort_key", GridData.cell_to_sort_key(Vector2i(u, v)))
+				d_layer.set("sort_key", min_sk)
 				d_layer.set("layer_no", float(z) + 0.1)
 				sort_world.add_child(d_layer)
 				if sort_world.has_method("insert_sort"):
 					sort_world.call("insert_sort", d_layer)
+			else:
+				d_layer.set("sort_key", min_sk)
+				if sort_world.has_method("insert_sort"):
+					sort_world.call("insert_sort", d_layer)
+
 			d_layer.set_cell(Vector2i(u, v), 0, MASK_TO_ATLAS[mask])
