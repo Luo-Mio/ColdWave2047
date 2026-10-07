@@ -25,6 +25,10 @@ GridData="*res://script/core/grid_data.gd"
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/TileCropper/plugin.cfg", "res://addons/TileMapDual/plugin.cfg")
+
 [input]
 
 move_up={
