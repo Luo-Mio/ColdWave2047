@@ -23,6 +23,7 @@ var camera: Camera2D
 
 var current_floor: int = 0
 var _base_sprite_y: float = 0.0
+var _base_collision_mask: int = 6
 
 func _ready() -> void:
 	# 向上查找实体根节点（支持组件放在 LogicScript 等容器节点中）
@@ -52,6 +53,9 @@ func _ready() -> void:
 		parent_entity.set("foot_y", 0.0)
 	if not ("layer_no" in parent_entity):
 		parent_entity.set("layer_no", layer_no)
+
+	if parent_entity is CollisionObject2D:
+		_base_collision_mask = (parent_entity as CollisionObject2D).collision_mask
 
 	# 等待一帧让场景和 GridData 完全初始化
 	await get_tree().process_frame
@@ -104,9 +108,14 @@ func update_depth(delta: float) -> void:
 	parent_entity.set("sort_key", final_sort_key)
 	parent_entity.set("foot_y", eval_pos.y)
 	parent_entity.set("layer_no", layer_no)
+	parent_entity.set("floor_level", current_floor)
 
 	# 6. 通知父级排序容器 sort_world 重排
 	var parent_sort := parent_entity.get_parent()
 	if parent_sort and parent_sort.has_method("insert_sort"):
 		parent_sort.call("insert_sort", parent_entity)
+
+	# 7. 动态更新实体物理碰撞掩码：仅与同楼层的物体发生碰撞，彻底消除跨楼层空气碰撞！
+	if parent_entity is CollisionObject2D:
+		(parent_entity as CollisionObject2D).collision_mask = GridData.get_entity_collision_mask_for_floor(current_floor, _base_collision_mask)
 

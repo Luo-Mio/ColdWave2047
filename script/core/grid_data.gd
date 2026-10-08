@@ -28,6 +28,29 @@ var turf_grid: Dictionary:
 	get: return surf_grid
 	set(v): surf_grid = v
 
+# === 2.5D 多楼层物理碰撞分层系统 ===
+# Layer 1 (bit 0): 地形 / 空气墙边界
+# Layer 2 (bit 1): 全局基础障碍 / 边缘碰撞
+# Layer 3 (bit 2): 角色生物层 (CharacterBody2D)
+# Layer 4 (bit 3): 掉落物 / 道具拾取 (Item pickup)
+# Layer 5~24 (bit 4~23): 对应 0~19 楼层物体专属碰撞层，彻底杜绝跨楼层碰撞穿透！
+const BASE_OBJECT_LAYER_BIT: int = 4
+
+# 获取指定楼层物体专用的物理碰撞层 (1 << (4 + floor))
+func get_floor_collision_layer(floor_idx: int) -> int:
+	return 1 << clampi(BASE_OBJECT_LAYER_BIT + floor_idx, 0, 31)
+
+# 获取实体在指定楼层应当监听的物理碰撞掩码 (基础层 + 同楼层物体层)
+func get_entity_collision_mask_for_floor(floor_idx: int, base_mask: int = 6) -> int:
+	return (base_mask & ~get_all_floors_object_mask()) | get_floor_collision_layer(floor_idx)
+
+# 获取所有楼层物体碰撞层的全局掩码 (用于迷雾/阴影全局射线检测)
+func get_all_floors_object_mask(max_floors: int = 20) -> int:
+	var mask := 0
+	for f in range(max_floors):
+		mask |= (1 << clampi(BASE_OBJECT_LAYER_BIT + f, 0, 31))
+	return mask
+
 func has_surf(cell: Vector2i, z: int) -> bool:
 	return surf_grid.has(Vector3i(cell.x, cell.y, z))
 

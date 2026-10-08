@@ -215,6 +215,9 @@ func _ready() -> void:
 
 	main_cam = entity.find_child("Camera2D", true, false) as Camera2D
 
+	# 包含所有楼层的物体专属碰撞层，使全高度树木与障碍物均可正确投射阴影
+	obstacle_mask |= GridData.get_all_floors_object_mask()
+
 	# 预分配矩形物理探测参数（直接匹配屏幕视口包围盒），避免每帧分配垃圾
 	_rect_shape = RectangleShape2D.new()
 	_shape_query = PhysicsShapeQueryParameters2D.new()

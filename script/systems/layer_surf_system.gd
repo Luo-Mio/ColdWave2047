@@ -317,6 +317,7 @@ func _setup_floor0_surf_layer() -> void:
 	# 双网格在第 0 层向上偏移半格 (-16px)，使显示格中心对齐 4 个地砖交汇点
 	floor0_surf_layer.position = Vector2(0.0, -16.0)
 	floor0_surf_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	floor0_surf_layer.material = VisionFogComponent.get_tile_shadow_material()
 	floor0_surf_layer.y_sort_enabled = true
 	floor0_surf_layer.z_index = 0
 	floor0_surf_layer.visible = true
@@ -371,7 +372,7 @@ func get_surf(cell: Vector2i, z: int) -> String:
 	return GridData.get_surf(cell, z)
 
 # 获取逻辑网格 (x, y) 触碰到的 4 个双网格交点坐标 (适配交错等距网格 TILE_LAYOUT_STACKED)
-func _get_affected_dual_cells(cell: Vector2i) -> Array[Vector2i]:
+static func get_affected_dual_cells(cell: Vector2i) -> Array[Vector2i]:
 	var is_odd := (absi(cell.y) % 2 == 1)
 	if is_odd:
 		return [
@@ -387,6 +388,9 @@ func _get_affected_dual_cells(cell: Vector2i) -> Array[Vector2i]:
 			Vector2i(cell.x - 1, cell.y + 1), # cell 是该双格的右角 (R)
 			Vector2i(cell.x, cell.y + 1),     # cell 是该双格的左角 (L)
 		]
+
+func _get_affected_dual_cells(cell: Vector2i) -> Array[Vector2i]:
+	return get_affected_dual_cells(cell)
 
 # 更新单个双网格交点 (u, v) 在第 z 层的贴图
 func _update_dual_cell(u: int, v: int, z: int) -> void:
@@ -464,6 +468,7 @@ func _update_dual_cell(u: int, v: int, z: int) -> void:
 				d_layer.tile_set = current_tileset
 				d_layer.position = Vector2(0.0, -float(z) * 16.0 - 16.0)
 				d_layer.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+				d_layer.material = VisionFogComponent.get_tile_shadow_material()
 				d_layer.y_sort_enabled = true
 				d_layer.collision_enabled = false
 				d_layer.set("sort_key", max_sk)

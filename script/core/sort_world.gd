@@ -1,17 +1,46 @@
-# sort_world.gd —— 手动排序容器
+# sort_world.gd —— 手动排序容器 (支持多楼层立体地表与实体深度精准消隐)
 extends Node2D
 
 # 比较两个渲染项的顺序(a 是否应排在 b 前)
 func _less_than(a: Node, b: Node) -> bool:
-	if a.sort_key != b.sort_key:
-		return a.sort_key < b.sort_key
-	# 相同深度时：地砖先画，实体后画盖砖
 	var a_is_entity := ("foot_y" in a) and not (a is TileMapLayer)
 	var b_is_entity := ("foot_y" in b) and not (b is TileMapLayer)
-	if a_is_entity and not b_is_entity:
-		return false
-	if not a_is_entity and b_is_entity:
-		return true
+
+	# 1. 实体 与 地形/地表切片 之间的多层物理排序法则
+	if a_is_entity != b_is_entity:
+		var entity_node: Node = a if a_is_entity else b
+		var terrain_node: Node = b if a_is_entity else a
+
+		var e_floor: int = 0
+		if "floor_level" in entity_node:
+			e_floor = int(entity_node.floor_level)
+		elif "current_floor" in entity_node:
+			e_floor = int(entity_node.current_floor)
+		elif "base_position" in entity_node and entity_node.base_position != Vector2.ZERO:
+			e_floor = GridData.get_highest_floor(GridData.world_to_cell(entity_node.base_position))
+		else:
+			e_floor = GridData.get_highest_floor(GridData.world_to_cell(entity_node.global_position))
+
+		var t_layer: float = terrain_node.layer_no if "layer_no" in terrain_node else 0.0
+		var t_floor: int = int(floor(t_layer))
+
+		# 核心物理法则：
+		# 当地形与实体处于同一楼层或更低楼层 (t_floor <= e_floor) 时，
+		# 该地形必然是实体脚下的基底地砖或地表草皮！地表永远在实体脚底之下，绝不允许盖住实体根部！
+		if t_layer < 900.0 and t_floor <= e_floor:
+			# 地形必须先画 (排在实体之前)，实体后画 (盖在地表草皮之上)
+			return not a_is_entity
+
+		# 如果地形处于更高楼层 (t_floor > e_floor)，则该地形属于高台立面/高墙障碍，
+		# 遵循经典 2.5D 深度规则：南侧障碍遮挡北侧生物，北侧障碍在生物后方
+		if a.sort_key != b.sort_key:
+			return a.sort_key < b.sort_key
+		return not a_is_entity
+
+	# 2. 两个同类项之间 (实体 vs 实体，或 地形 vs 地形)
+	if a.sort_key != b.sort_key:
+		return a.sort_key < b.sort_key
+
 	return a.layer_no < b.layer_no
 
 # 把单个动态节点插入到正确位置（极速平稳的相邻位比对，零抖动）

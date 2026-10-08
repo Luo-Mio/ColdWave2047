@@ -1,4 +1,4 @@
-# wall_xray.gd —— 动态高墙透视控制器（支持高墙透视 + 同层地基截面纯黑效果）
+# wall_xray.gd —— 动态高墙与表面/物体透视控制器（支持高墙透视 + 草皮透视 + 柱顶物体透视 + 同层地基截面纯黑效果）
 class_name WallXRayManager
 extends Node
 
@@ -8,7 +8,7 @@ extends Node
 	set(v):
 		rx = v
 		if material: material.set_shader_parameter("rx", rx)
-@export var ry: float = 120:
+@export var ry: float = 120.0:
 	set(v):
 		ry = v
 		if material: material.set_shader_parameter("ry", ry)
@@ -44,6 +44,7 @@ class XRayCap extends Node2D:
 
 var material: ShaderMaterial
 var active_xray_layers: Array[TileMapLayer] = []
+var active_xray_objects: Dictionary = {} # CanvasItem -> Material (记录透视前原始材质，用于精准还原)
 var active_caps: Array[Node2D] = [] # 记录当前活跃的同层封顶盖板
 
 func _ready() -> void:
@@ -56,11 +57,17 @@ func _ready() -> void:
 
 # 动态刷新高墙透视
 func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
-	# 1. 还原上一批透视的高墙与清理截面封顶
+	# 1. 还原上一批透视的高墙与泥土切片
 	for layer in active_xray_layers:
 		if is_instance_valid(layer):
 			layer.material = VisionFogComponent.get_tile_shadow_material()
 	active_xray_layers.clear()
+
+	# 还原上一批透视的柱顶/高处物体精灵与草皮表面 (树木、小麦、掉落物、surf切片等)
+	for item in active_xray_objects.keys():
+		if is_instance_valid(item):
+			item.material = active_xray_objects[item]
+	active_xray_objects.clear()
 
 	for cap in active_caps:
 		if is_instance_valid(cap):
@@ -81,7 +88,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 	var created_caps := false
 
 	# 2. 向南方大范围扫描
-	for dy in range(0, 25):
+	for dy in range(-8, 25):
 		for dx in range(-8, 9):
 			var front_cell := player_cell + Vector2i(dx, dy)
 			var wall_floor := GridData.get_highest_floor(front_cell)
@@ -106,13 +113,27 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 					var key := "cell_z%d_%d_%d" % [z, front_cell.x, front_cell.y]
 					var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
 					if cell_layer:
-						cell_layer.material = material
-						active_xray_layers.append(cell_layer)
+						if not active_xray_layers.has(cell_layer):
+							cell_layer.material = material
+							active_xray_layers.append(cell_layer)
 						is_cell_occluding = true
 
-			# 4. 【核心截面封顶】：如果该格有砖块被透视，在角色同高度的地基顶部渲染 64x32 纯黑菱形封顶面！
-			# 位于所有瓷砖之上(z_index = cap_z_index)，且保留立面自然贴图纹理
+			# 4. 【遮挡处理与封顶】：如果该格有砖块遮挡玩家
 			if is_cell_occluding:
+				# 4.1 确保整根遮挡柱从 (player_floor + 1) 到 wall_floor 的所有泥土方块均挂载 X-Ray 材质
+				for z in range(player_floor + 1, wall_floor + 1):
+					var key := "cell_z%d_%d_%d" % [z, front_cell.x, front_cell.y]
+					var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
+					if cell_layer and not active_xray_layers.has(cell_layer):
+						cell_layer.material = material
+						active_xray_layers.append(cell_layer)
+					# 4.2 挂载该楼层对应的所有草皮/表面切片 (surf)
+					_apply_xray_to_surf(front_cell, z, sort_world)
+
+				# 4.3 挂载该柱顶及高出的所有物体精灵 (树木躯干/树冠、农作物、掉落物等)
+				_apply_xray_to_objects_at(front_cell, player_floor)
+
+				# 4.4 【核心截面封顶】：在角色同高度的地基顶部渲染 64x32 纯黑菱形封顶面！
 				var diamond_center := cell_center + Vector2(0.0, GridData.get_floor_pixel_offset(player_floor))
 				var cap := XRayCap.new()
 				cap.name = "xray_cap_%d_%d" % [front_cell.x, front_cell.y]
@@ -127,3 +148,72 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 
 	if created_caps:
 		sort_world.call("sort_now")
+
+# 为某格子在第 z 层涉及的所有双网格表面切片挂载 X-Ray 材质
+func _apply_xray_to_surf(cell: Vector2i, z: int, sort_world: Node2D) -> void:
+	if sort_world == null:
+		return
+	var dual_cells := LayerSurfSystem.get_affected_dual_cells(cell)
+	for d in dual_cells:
+		var key := "surf_z%d_%d_%d" % [z, d.x, d.y]
+		var surf_node := sort_world.get_node_or_null(key) as CanvasItem
+		if surf_node == null:
+			# 兼容旧命名规范
+			surf_node = sort_world.get_node_or_null("turf_z%d_%d_%d" % [z, d.x, d.y]) as CanvasItem
+		
+		if surf_node and not active_xray_objects.has(surf_node):
+			active_xray_objects[surf_node] = surf_node.material
+			surf_node.material = material
+
+# 为某格子上高于 min_floor 的所有物体 (树木、小麦、掉落物等) 挂载 X-Ray 材质
+func _apply_xray_to_objects_at(cell: Vector2i, min_floor: int) -> void:
+	# 1. 查找 GridData 中注册在该格子的所有实体 (大树、微格小麦等)
+	var objs := GridData.get_all_objects_at(cell)
+	for obj in objs:
+		if not is_instance_valid(obj):
+			continue
+		var obj_fl: int = obj.get("floor_level") if obj.get("floor_level") != null else GridData.get_highest_floor(cell)
+		if obj_fl > min_floor:
+			_apply_xray_to_node_sprites(obj)
+
+	# 2. 检查全局 world_objects (防止有场景预置但未在 GridData 中的物体)
+	if objs.is_empty():
+		for obj in get_tree().get_nodes_in_group("world_objects"):
+			if not is_instance_valid(obj):
+				continue
+			var obj_base_pos: Vector2 = obj.get("base_position") if obj.get("base_position") != null and obj.get("base_position") != Vector2.ZERO else obj.global_position
+			var obj_cell := GridData.world_to_cell(obj_base_pos)
+			if obj_cell == cell:
+				var obj_fl: int = obj.get("floor_level") if obj.get("floor_level") != null else GridData.get_highest_floor(cell)
+				if obj_fl > min_floor:
+					_apply_xray_to_node_sprites(obj)
+
+	# 3. 检查掉落物 drop_items (掉落在该柱顶上的物品)
+	for drop in get_tree().get_nodes_in_group("drop_items"):
+		if not is_instance_valid(drop):
+			continue
+		var drop_pos: Vector2 = drop.get("base_position") if drop.get("base_position") != null and drop.get("base_position") != Vector2.ZERO else drop.global_position
+		var drop_cell := GridData.world_to_cell(drop_pos)
+		if drop_cell == cell:
+			var drop_fl: int = drop.get("floor_level") if drop.get("floor_level") != null else 0
+			if drop_fl > min_floor:
+				_apply_xray_to_node_sprites(drop)
+
+func _apply_xray_to_node_sprites(obj: Node) -> void:
+	for sprite in _get_all_visual_sprites(obj):
+		if not active_xray_objects.has(sprite):
+			active_xray_objects[sprite] = sprite.material
+		sprite.material = material
+
+func _get_all_visual_sprites(obj: Node) -> Array[CanvasItem]:
+	var result: Array[CanvasItem] = []
+	if obj == null:
+		return result
+	var stack: Array[Node] = [obj]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is Sprite2D or n is AnimatedSprite2D or n is Polygon2D:
+			result.append(n as CanvasItem)
+		for c in n.get_children():
+			stack.push_back(c)
+	return result

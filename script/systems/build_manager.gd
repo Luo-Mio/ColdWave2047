@@ -53,7 +53,14 @@ func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selec
 	if GridData.is_slot_occupied(cell, Vector2i.ZERO, Vector2i(4, 4)):
 		return
 
-	var z := GridData.get_highest_floor(cell) + 1
+	var prev_z := GridData.get_highest_floor(cell)
+
+	# 【新约束】：放置新瓷砖时，覆压摧毁原顶面上的草皮/表面覆层
+	# 当前不掉落（spawn_drop = false），底层复用通用掉落系统，未来只需置为 true 即可掉落
+	if LayerSurfSystem.instance and LayerSurfSystem.instance.has_surf(cell, prev_z):
+		destroy_surf_at(cell, prev_z, sort_world, false)
+
+	var z := prev_z + 1
 	var cell_layer := get_or_create_cell_layer(z, cell, sort_world, tile_layers)
 	cell_layer.set_cell(cell, 0, tile_atlas, 0)
 	GridData.set_tile(cell, z, true)
@@ -61,6 +68,24 @@ func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selec
 		LayerSurfSystem.instance.update_surf_around_tile(cell, z)
 	sort_world.call("sort_now")
 	selector.call("force_update")
+
+## 统一表面覆层破坏接口（支持草皮、菌毯、积雪等）
+## [spawn_drop] 为 false 时仅清除不产出掉落物，为 true 时按通用掉落规则抛出掉落物
+func destroy_surf_at(cell: Vector2i, z: int, sort_world: Node2D, spawn_drop: bool = false) -> void:
+	if LayerSurfSystem.instance == null or not LayerSurfSystem.instance.has_surf(cell, z):
+		return
+
+	var s_type := GridData.get_surf(cell, z)
+	var drop_item_id := s_type + "_surf"
+
+	# 1. 从双网格系统与 GridData 中彻底清除
+	LayerSurfSystem.instance.set_surf(cell, z, false)
+
+	# 2. 掉落物产出（与瓷砖、物体共用同一套抛物线掉落系统）
+	if spawn_drop:
+		var surf_valid_neighbors := _get_valid_drop_neighbors(cell, z)
+		if not surf_valid_neighbors.is_empty():
+			_spawn_item_drops(drop_item_id, 1, cell, z, surf_valid_neighbors, sort_world)
 
 # 放置物体（支持 1x1 小麦、2x2 灌木、4x4 大树）
 func _place_object(cell: Vector2i, scene_path: String, sort_world: Node2D, sub_cell: Vector2i = Vector2i.ZERO, size: Vector2i = Vector2i(4, 4)) -> void:
@@ -113,12 +138,7 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 	# 2. 如果地表有表面覆盖物（草皮/菌毯/雪），优先铲除（爆出对应掉落物，保留底下的泥土地砖！）
 	var top_z := GridData.get_highest_floor(cell)
 	if LayerSurfSystem.instance and LayerSurfSystem.instance.has_surf(cell, top_z):
-		var s_type := GridData.get_surf(cell, top_z)
-		var drop_item_id := s_type + "_surf"
-		LayerSurfSystem.instance.set_surf(cell, top_z, false)
-		var surf_valid_neighbors := _get_valid_drop_neighbors(cell, top_z)
-		if not surf_valid_neighbors.is_empty():
-			_spawn_item_drops(drop_item_id, 1, cell, top_z, surf_valid_neighbors, sort_world)
+		destroy_surf_at(cell, top_z, sort_world, true)
 		selector.call("force_update")
 		return
 

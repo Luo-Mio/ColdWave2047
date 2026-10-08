@@ -11,7 +11,10 @@ extends Node2D
 ## 物体脚底基准世界坐标 (放置时自动计算)
 @export var base_position: Vector2 = Vector2.ZERO
 ## 物体所在楼层高度 (0=地面, 1=一层台上...)
-@export var floor_level: int = 0
+@export var floor_level: int = 0:
+	set(v):
+		floor_level = v
+		update_collision_floor()
 
 # === 物理立面遮挡高度 ===
 @export_group("物理立面高度 (Obstacle Height)")
@@ -116,11 +119,39 @@ func _ready() -> void:
 	# 3. 注册进全局世界物体组，便于战争迷雾动态阴影检测
 	add_to_group("world_objects")
 
+	# 如果尚未在 GridData 中注册（如场景静态预置物体），自动进行登记
+	var effective_pos := base_position if base_position != Vector2.ZERO else position
+	var obj_cell := GridData.world_to_cell(effective_pos)
+	if not GridData.is_slot_occupied(obj_cell, sub_cell, grid_size):
+		GridData.register_object(obj_cell, self, sub_cell, grid_size)
+
 	# 4. 为非透视实体精灵（如 Trunk 树干）挂载专用阴影材质 (只接收阴影，绝不透视镂空)
 	var shadow_mat := ObjectXRayComponent.get_shared_shadow_material()
 	for sprite in _get_all_visual_sprites():
 		if sprite.material == null:
 			sprite.material = shadow_mat
+
+	# 5. 根据所处楼层同步物理碰撞层，杜绝跨楼层空气碰撞穿模
+	update_collision_floor()
+
+# 动态同步该物体内部所有 StaticBody2D 的物理碰撞层
+func update_collision_floor() -> void:
+	if not is_inside_tree():
+		return
+	var col_layer := GridData.get_floor_collision_layer(floor_level)
+	var stack: Array[Node] = [self]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is StaticBody2D:
+			n.collision_layer = col_layer
+			n.collision_mask = 0
+		for c in n.get_children():
+			stack.push_back(c)
+
+func _exit_tree() -> void:
+	var effective_pos := base_position if base_position != Vector2.ZERO else position
+	var obj_cell := GridData.world_to_cell(effective_pos)
+	GridData.unregister_object(obj_cell, sub_cell, grid_size)
 
 var _is_in_shadow: bool = false
 

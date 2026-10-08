@@ -55,8 +55,15 @@ move_right={
 [layer_names]
 
 2d_physics/layer_1="地形"
-2d_physics/layer_2="物体"
+2d_physics/layer_2="空气墙"
 2d_physics/layer_3="角色"
+2d_physics/layer_4="拾取"
+2d_physics/layer_5="物体L0"
+2d_physics/layer_6="物体L1"
+2d_physics/layer_7="物体L2"
+2d_physics/layer_8="物体L3"
+2d_physics/layer_9="物体L4"
+2d_physics/layer_10="物体L5"
 
 [physics]
 
