@@ -8,7 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://ctg00xdmy43db" path="res://resources/tiles/dirt_tile.png" id="4_hrphr"]
 [ext_resource type="TileSet" uid="uid://b4wyeh4y7edc7" path="res://resources/surface/GreenGrass/grass_tileset.tres" id="5_grass_ts"]
 [ext_resource type="Script" uid="uid://cmwffxpi1h3gk" path="res://script/systems/selector.gd" id="5_x5n27"]
-[ext_resource type="Script" uid="uid://beps514wedjm6" path="res://script/systems/turf_system.gd" id="6_turf_sys"]
+[ext_resource type="Script" uid="uid://qn45wtjehd4q" path="res://script/systems/layer_surf_system.gd" id="6_surf_sys"]
 [ext_resource type="Script" uid="uid://ccyjcrsoj6l7p" path="res://script/systems/wall_xray.gd" id="8_hrphr"]
 [ext_resource type="Script" uid="uid://bbfq38ivdtgy8" path="res://script/systems/build_manager.gd" id="9_86xya"]
 [ext_resource type="PackedScene" uid="uid://dewx1yy1y8ghw" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
@@ -30,8 +30,8 @@ sources/0 = SubResource("TileSetAtlasSource_86xya")
 texture_filter = 1
 script = ExtResource("1_fb1ex")
 
-[node name="TurfSystem" type="Node" parent="." unique_id=1983868399]
-script = ExtResource("6_turf_sys")
+[node name="LayerSurfSystem" type="Node" parent="." unique_id=1983868399]
+script = ExtResource("6_surf_sys")
 
 [node name="HUD" type="CanvasLayer" parent="." unique_id=1688893282]
 layer = 100
@@ -52,7 +52,8 @@ tile_map_data = PackedByteArray("AAD7/wcAAAAAAAAAAAD8/wYAAAAAAAAAAAD8/wUAAAAAAAA
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
 
-[node name="turf1" type="TileMapLayer" parent="layers" unique_id=971917508]
+[node name="surf1" type="TileMapLayer" parent="layers/layer1" unique_id=971917508]
+z_index = 1
 y_sort_enabled = true
 texture_filter = 1
 tile_map_data = PackedByteArray("AAACAA4AAAACAAEAAAACAAwAAAACAAEAAAADAAwAAAACAAEAAAAGAA4AAAACAAEAAAAGAA0AAAACAAEAAAAHAAwAAAACAAEAAAAGAA8AAAACAAEAAAAHABAAAAACAAEAAAAFAA8AAAACAAEAAAAFABAAAAACAAEAAAAFAA0AAAACAAEAAAAFAAwAAAACAAEAAAAFAAsAAAACAAEAAAAHAA0AAAACAAEAAAAGABEAAAACAAEAAAAEAA8AAAACAAEAAAAGAAoAAAACAAEAAAAIAA4AAAACAAEAAAAGABIAAAACAAEAAAAEAA4AAAACAAEAAAA=")
@@ -62,65 +63,113 @@ tile_set = ExtResource("5_grass_ts")
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -16)
-tile_map_data = PackedByteArray("AAADAAEAAAAAAAAAAAABAAkAAAAAAAAAAAAFAAcAAAAAAAAAAAA=")
+tile_map_data = PackedByteArray("AAAHAAIAAAAAAAAAAAAHAAMAAAAAAAAAAAAIAAQAAAAAAAAAAAAIAAUAAAAAAAAAAAAJAAYAAAAAAAAAAAD/////AAAAAAAAAAAAAP7/AAAAAAAAAAAAAP//AAAAAAAAAAAAAAAAAAAAAAAAAAD//wAAAAAAAAAAAAD//wEAAAAAAAAAAAD+/wEAAAAAAAAAAAD//wIAAAAAAAAAAAD//wMAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAEAAAAAAAAAAAABAAAAAAAAAAAAAAABAAIAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAQAAAAAAAAAAAABAAEAAAAAAAAAAAACAAIAAAAAAAAAAAABAAMAAAAAAAAAAAABAAQAAAAAAAAAAAAAAAUAAAAAAAAAAAAAAAYAAAAAAAAAAAD//wUAAAAAAAAAAAD//wQAAAAAAAAAAAD+/wMAAAAAAAAAAAD+/wIAAAAAAAAAAAD9/wYAAAAAAAAAAAD9/wcAAAAAAAAAAAD+/wgAAAAAAAAAAAD9/wkAAAAAAAAAAAD9/wgAAAAAAAAAAAD8/wcAAAAAAAAAAAD8/wgAAAAAAAAAAAD8/wkAAAAAAAAAAAD9/woAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf2" type="TileMapLayer" parent="layers/layer2" unique_id=971917509]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_map_data = PackedByteArray("AAAJAAYAAAACAAEAAAD9/wYAAAACAAEAAAD9/wgAAAACAAEAAAD8/wgAAAACAAEAAAD9/woAAAACAAEAAAD+/wgAAAACAAEAAAAAAAIAAAACAAEAAAAAAAEAAAACAAEAAAABAAAAAAACAAEAAAD//wMAAAACAAEAAAD//wQAAAACAAEAAAD//wEAAAACAAEAAAD//wAAAAACAAEAAAAAAAMAAAACAAEAAAABAAQAAAACAAEAAAD/////AAACAAEAAAAAAP7/AAACAAEAAAABAAEAAAACAAEAAAACAAIAAAACAAEAAAAAAAUAAAACAAEAAAAAAAYAAAACAAEAAAD+/wMAAAACAAEAAAD+/wIAAAACAAEAAAA=")
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer3" type="TileMapLayer" parent="layers" unique_id=1595319724]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -32)
-tile_map_data = PackedByteArray("AAADAAEAAAAAAAAAAAAFAAcAAAAAAAAAAAABAAkAAAAAAAAAAAA=")
+tile_map_data = PackedByteArray("AAAIAAUAAAAAAAAAAAAIAAQAAAAAAAAAAAAHAAMAAAAAAAAAAAAHAAIAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf3" type="TileMapLayer" parent="layers/layer3" unique_id=971917510]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_map_data = PackedByteArray("AAAIAAUAAAACAAEAAAA=")
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer4" type="TileMapLayer" parent="layers" unique_id=1871400794]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -48)
-tile_map_data = PackedByteArray("AAADAAEAAAAAAAAAAAAFAAcAAAAAAAAAAAABAAkAAAAAAAAAAAA=")
+tile_map_data = PackedByteArray("AAAIAAQAAAAAAAAAAAAHAAMAAAAAAAAAAAAHAAIAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf4" type="TileMapLayer" parent="layers/layer4" unique_id=971917511]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_map_data = PackedByteArray("AAAIAAQAAAACAAEAAAA=")
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer5" type="TileMapLayer" parent="layers" unique_id=970622839]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -64)
-tile_map_data = PackedByteArray("AAADAAEAAAAAAAAAAAABAAkAAAAAAAAAAAAFAAcAAAAAAAAAAAA=")
+tile_map_data = PackedByteArray("AAAHAAMAAAAAAAAAAAAHAAIAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf5" type="TileMapLayer" parent="layers/layer5" unique_id=971917512]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_map_data = PackedByteArray("AAAHAAMAAAACAAEAAAAHAAIAAAACAAEAAAA=")
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer6" type="TileMapLayer" parent="layers" unique_id=1068962064]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -80)
-tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf6" type="TileMapLayer" parent="layers/layer6" unique_id=971917513]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer7" type="TileMapLayer" parent="layers" unique_id=594062277]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -96)
-tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf7" type="TileMapLayer" parent="layers/layer7" unique_id=971917514]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer8" type="TileMapLayer" parent="layers" unique_id=1226240692]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -112)
-tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf8" type="TileMapLayer" parent="layers/layer8" unique_id=971917515]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_set = ExtResource("5_grass_ts")
 
 [node name="layer9" type="TileMapLayer" parent="layers" unique_id=1374829223]
 y_sort_enabled = true
 texture_filter = 1
 position = Vector2(0, -128)
-tile_map_data = PackedByteArray("AAABAAkAAAAAAAAAAAA=")
 tile_set = SubResource("TileSet_eowc1")
 collision_visibility_mode = 1
+
+[node name="surf9" type="TileMapLayer" parent="layers/layer9" unique_id=971917516]
+z_index = 1
+y_sort_enabled = true
+texture_filter = 1
+tile_set = ExtResource("5_grass_ts")
 
 [node name="selector" type="Node2D" parent="." unique_id=2062074770]
 script = ExtResource("5_x5n27")

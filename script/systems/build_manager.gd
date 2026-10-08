@@ -14,8 +14,9 @@ func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, se
 	if item.is_empty():
 		return
 
-	if item.get("id") == "grass_turf":
-		_place_turf(cell, selector)
+	var item_id: String = item.get("id", "")
+	if item_id.ends_with("_surf") or item_id.ends_with("_turf") or item_id == "grass_surf" or item_id == "grass_turf":
+		_place_surf(cell, selector, item_id)
 	elif item["type"] == 0:  # TILE
 		_place_tile(cell, item["atlas"], sort_world, selector, tile_layers)
 	elif item["type"] == 1:  # OBJECT
@@ -26,15 +27,25 @@ func place_active_item(cell: Vector2i, hotbar_node: Node, sort_world: Node2D, se
 			sub_cell = selector.get("target_sub_cell")
 		_place_object(cell, item["scene"], sort_world, sub_cell, grid_size)
 
-# 放置表面草皮
-func _place_turf(cell: Vector2i, selector: Node2D) -> void:
+# 放置表面覆盖物（草皮/菌毯/积雪等）
+func _place_surf(cell: Vector2i, selector: Node2D, item_id: String = "grass_surf") -> void:
 	if not GridData.has_any_tile(cell):
 		return
 	var z := GridData.get_highest_floor(cell)
-	if TurfSystem.instance and not TurfSystem.instance.has_turf(cell, z):
-		TurfSystem.instance.set_turf(cell, z, true)
+	var surf_type := "grass"
+	if item_id.begins_with("creep"):
+		surf_type = "creep"
+	elif item_id.begins_with("snow"):
+		surf_type = "snow"
+
+	if LayerSurfSystem.instance and not LayerSurfSystem.instance.has_surf(cell, z):
+		LayerSurfSystem.instance.set_surf(cell, z, true, surf_type)
 		if selector:
 			selector.call("force_update")
+
+# 兼容旧方法
+func _place_turf(cell: Vector2i, selector: Node2D) -> void:
+	_place_surf(cell, selector, "grass_surf")
 
 # 放置瓷砖
 func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer]) -> void:
@@ -46,6 +57,8 @@ func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selec
 	var cell_layer := get_or_create_cell_layer(z, cell, sort_world, tile_layers)
 	cell_layer.set_cell(cell, 0, tile_atlas, 0)
 	GridData.set_tile(cell, z, true)
+	if LayerSurfSystem.instance:
+		LayerSurfSystem.instance.update_surf_around_tile(cell, z)
 	sort_world.call("sort_now")
 	selector.call("force_update")
 
@@ -97,13 +110,15 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 		selector.call("force_update")
 		return
 
-	# 2. 如果地表有草皮，优先铲除草皮（爆出草皮掉落物，保留底下的泥土地砖！）
+	# 2. 如果地表有表面覆盖物（草皮/菌毯/雪），优先铲除（爆出对应掉落物，保留底下的泥土地砖！）
 	var top_z := GridData.get_highest_floor(cell)
-	if TurfSystem.instance and TurfSystem.instance.has_turf(cell, top_z):
-		TurfSystem.instance.set_turf(cell, top_z, false)
-		var turf_valid_neighbors := _get_valid_drop_neighbors(cell, top_z)
-		if not turf_valid_neighbors.is_empty():
-			_spawn_item_drops("grass_turf", 1, cell, top_z, turf_valid_neighbors, sort_world)
+	if LayerSurfSystem.instance and LayerSurfSystem.instance.has_surf(cell, top_z):
+		var s_type := GridData.get_surf(cell, top_z)
+		var drop_item_id := s_type + "_surf"
+		LayerSurfSystem.instance.set_surf(cell, top_z, false)
+		var surf_valid_neighbors := _get_valid_drop_neighbors(cell, top_z)
+		if not surf_valid_neighbors.is_empty():
+			_spawn_item_drops(drop_item_id, 1, cell, top_z, surf_valid_neighbors, sort_world)
 		selector.call("force_update")
 		return
 
@@ -131,6 +146,8 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 	if cell_layer:
 		cell_layer.erase_cell(cell)
 		GridData.set_tile(cell, z, false)
+		if LayerSurfSystem.instance:
+			LayerSurfSystem.instance.update_surf_around_tile(cell, z)
 		if cell_layer.get_used_cells().is_empty():
 			cell_layer.queue_free()
 		else:

@@ -22,18 +22,30 @@ var objects_at: Dictionary = {}
 # 微物体占用表(1x1小麦/2x2灌木): key = sub_slot_key(cell, sub_pos), value = 作物节点
 var sub_objects_at: Dictionary = {}
 
-# 3. 地表草皮覆盖数据: key = Vector3i(cell.x, cell.y, z), value = true
-var turf_grid: Dictionary = {}
+# 3. 地表覆盖数据 (草皮/菌毯/积雪等): key = Vector3i(cell.x, cell.y, z), value = surf_type (例如 "grass", "creep", "snow")
+var surf_grid: Dictionary = {}
+var turf_grid: Dictionary:
+	get: return surf_grid
+	set(v): surf_grid = v
+
+func has_surf(cell: Vector2i, z: int) -> bool:
+	return surf_grid.has(Vector3i(cell.x, cell.y, z))
 
 func has_turf(cell: Vector2i, z: int) -> bool:
-	return turf_grid.has(Vector3i(cell.x, cell.y, z))
+	return has_surf(cell, z)
 
-func set_turf(cell: Vector2i, z: int, exists: bool) -> void:
+func get_surf(cell: Vector2i, z: int) -> String:
+	return surf_grid.get(Vector3i(cell.x, cell.y, z), "")
+
+func set_surf(cell: Vector2i, z: int, exists: bool, type: String = "grass") -> void:
 	var key := Vector3i(cell.x, cell.y, z)
 	if exists:
-		turf_grid[key] = true
+		surf_grid[key] = type
 	else:
-		turf_grid.erase(key)
+		surf_grid.erase(key)
+
+func set_turf(cell: Vector2i, z: int, exists: bool) -> void:
+	set_surf(cell, z, exists, "grass")
 
 # 遍历所有层,生成高度场
 func build_from_layers(layer_nodes: Array[TileMapLayer]) -> void:
@@ -101,6 +113,10 @@ func get_floor_pixel_offset(floor: int) -> float:
 func has_any_tile(cell: Vector2i) -> bool:
 	return tile_cells.has(cell_key(cell))
 
+# 某格在指定楼层 z 是否有砖
+func has_tile(cell: Vector2i, z: int) -> bool:
+	return grid.has(Vector3i(cell.x, cell.y, z))
+
 # 键编码
 func cell_key(cell: Vector2i) -> int:
 	return (cell.x + 500) * 10000 + (cell.y + 500)
@@ -118,7 +134,7 @@ func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 		highest_floor[ck] = maxi(highest_floor.get(ck, 0), z)
 	else:
 		grid.erase(key)
-		turf_grid.erase(key)
+		surf_grid.erase(key)
 		# 拆除时重新计算该格的最高楼层
 		var max_z := 0
 		var has_any := false

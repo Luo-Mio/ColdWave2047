@@ -10,15 +10,26 @@ func _ready():
 	var sort_world = main_scene.sort_world
 	var turf_sys = main_scene.turf_system
 	
-	# Place turf on cell (3, 1) at floor 2
-	turf_sys.set_turf(Vector2i(3, 1), 2, true)
-	
-	# Let's inspect all turf nodes in sort_world
-	print(\"Turf nodes in sort_world for (3, 1) floor 2:\")
-	for c in sort_world.get_children():
-		if c.name.begins_with(\"turf_z2_\"):
-			print(\"  \", c.name, \" sort_key=\", c.get(\"sort_key\"), \" layer_no=\", c.get(\"layer_no\"))
+	# Place 3x3 dirt platform on floor 1 centered at (3, 2)
+	for dx in [-1, 0, 1]:
+		for dy in [-1, 0, 1]:
+			var c = Vector2i(3 + dx, 2 + dy)
+			main_scene.build_manager.get_or_create_cell_layer(1, c, sort_world, main_scene.tile_layers)
+			GridData.set_tile(c, 1, true)
 			
+	# Place 5 grass tiles on floor 1 in cross pattern: (3, 2), (3, 0), (3, 4), (2, 2), (4, 2)
+	for gc in [Vector2i(3, 2), Vector2i(3, 0), Vector2i(3, 4), Vector2i(2, 2), Vector2i(4, 2)]:
+		turf_sys.set_surf(gc, 1, true, \"grass\")
+		
+	sort_world.call(\"sort_now\")
+	
+	print(\"--- SORT WORLD ELEVATED TILES & SURF ORDER ---\")
+	var idx = 0
+	for child in sort_world.get_children():
+		var n = child.name
+		if n.begins_with(\"cell_z1_\") or n.begins_with(\"surf_z1_\"):
+			print(\" [%d] %s: sort_key=%.3f, layer_no=%.1f\" % [idx, n, child.get(\"sort_key\"), child.get(\"layer_no\")])
+			idx += 1
 	get_tree().quit()
 "
 

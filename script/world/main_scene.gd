@@ -16,7 +16,9 @@ var wall_xray: WallXRayManager
 var air_wall: StaticBody2D
 var aim_controller: Node
 var aim_reticle: Node2D
-var turf_system: TurfSystem
+var layer_surf_system: LayerSurfSystem
+var surf_system: LayerSurfSystem
+var turf_system: LayerSurfSystem
 
 @onready var sort_world: Node2D = $sortworld
 @onready var selector: Node2D = $selector
@@ -47,9 +49,11 @@ func _ready() -> void:
 		aim_reticle.aim_controller = aim_controller
 
 	# 2. 收集并按 Y 坐标排序原始层 (过滤掉草皮层，仅收集泥土砖块层)
+	# 2. 收集并按 Y 坐标排序原始层 (过滤掉表面层，仅收集泥土砖块层)
 	tile_layers = []
 	for child in $layers.get_children():
-		if child is TileMapLayer and not child.name.to_lower().contains("turf"):
+		var n := child.name.to_lower()
+		if child is TileMapLayer and not (n.contains("surf") or n.contains("turf") or n.contains("creep") or n.contains("snow")):
 			tile_layers.append(child)
 	tile_layers.sort_custom(func(a: TileMapLayer, b: TileMapLayer) -> bool:
 		return a.position.y > b.position.y
@@ -75,13 +79,19 @@ func _ready() -> void:
 	# 7. 初始排序
 	sort_world.call("sort_now")
 
-	# 8. 初始化双网格表面草皮系统 (自动读取场景中的草皮占位层并平滑渲染)
-	turf_system = get_node_or_null("TurfSystem") as TurfSystem
-	if turf_system == null:
-		turf_system = TurfSystem.new()
-		turf_system.name = "TurfSystem"
-		add_child(turf_system)
-	turf_system.init_turf_system(self, sort_world, $layers)
+	# 8. 初始化楼层与双网格表面系统 (自动读取场景中的表面占位层并平滑渲染)
+	layer_surf_system = get_node_or_null("LayerSurfSystem") as LayerSurfSystem
+	if layer_surf_system == null:
+		layer_surf_system = get_node_or_null("SurfSystem") as LayerSurfSystem
+	if layer_surf_system == null:
+		layer_surf_system = get_node_or_null("TurfSystem") as LayerSurfSystem
+	if layer_surf_system == null:
+		layer_surf_system = LayerSurfSystem.new()
+		layer_surf_system.name = "LayerSurfSystem"
+		add_child(layer_surf_system)
+	layer_surf_system.init_surf_system(self, sort_world, $layers)
+	surf_system = layer_surf_system
+	turf_system = layer_surf_system
 
 # 拆分图层 (0 层为平坦地表底板；仅将 1 层及以上具有立面高度的障碍层拆入 sort_world 参与前后景深排位)
 func _split_layers_into_rows() -> void:

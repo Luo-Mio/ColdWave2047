@@ -74,7 +74,7 @@ static var ITEMS: Array[Dictionary] = [
 		"description": "基础地表泥土砖块，用于铺设地面或垫高阶梯。"
 	},
 	{
-		"id": "grass_turf",
+		"id": "grass_surf",
 		"name": "草皮",
 		"category": Category.TILE,
 		"type": ItemType.TILE,
@@ -147,8 +147,11 @@ static func get_items_by_category(category: Category) -> Array[Dictionary]:
 
 # 按 ID 查找物品
 static func get_item_by_id(item_id: String) -> Dictionary:
+	var target_id := item_id
+	if target_id == "grass_turf":
+		target_id = "grass_surf"
 	for item in ITEMS:
-		if item.get("id") == item_id:
+		if item.get("id") == target_id:
 			return item
 	return {}
 

@@ -29,7 +29,7 @@ var items: Array[Dictionary] = [
 	{ "type": ItemType.OBJECT, "name": "橡树",     "scene": "res://scene/object/tree/OakTree.tscn", "icon": "res://resources/tree/OakTree/AutumnTree.png", "grid_size": Vector2i(4, 4) },
 	# 5 号位：草皮（表面覆盖物，双网格平滑）
 	{
-		"id": "grass_turf",
+		"id": "grass_surf",
 		"type": ItemType.TILE,
 		"name": "草皮",
 		"icon": "res://resources/surface/GreenGrass/grass_icon.png",
