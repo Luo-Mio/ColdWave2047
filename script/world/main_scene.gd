@@ -93,6 +93,33 @@ func _ready() -> void:
 	surf_system = layer_surf_system
 	turf_system = layer_surf_system
 
+	# 9. 连接 HUD 保存快照按钮
+	var save_btn := get_node_or_null("HUD/SaveMapBtn") as Button
+	if save_btn:
+		save_btn.pressed.connect(_on_save_map_btn_pressed)
+
+var _toast_tween: Tween = null
+
+func _on_save_map_btn_pressed() -> void:
+	if layer_surf_system:
+		var ok := layer_surf_system.dump_map_to_file()
+		if ok:
+			_show_toast("💾 地图快照已成功导出至 res://data/editor_map_dump.json\n可在编辑器中选中 LayerSurfSystem 点击【从运行时快照同步覆盖场景】！")
+
+func _show_toast(msg: String) -> void:
+	var toast := get_node_or_null("HUD/ToastLabel") as Label
+	if toast == null:
+		return
+	toast.text = msg
+	toast.modulate.a = 1.0
+	toast.visible = true
+	if _toast_tween and _toast_tween.is_valid():
+		_toast_tween.kill()
+	_toast_tween = create_tween()
+	_toast_tween.tween_interval(3.5)
+	_toast_tween.tween_property(toast, "modulate:a", 0.0, 0.6)
+	_toast_tween.tween_callback(func(): toast.visible = false)
+
 # 拆分图层 (0 层为平坦地表底板；仅将 1 层及以上具有立面高度的障碍层拆入 sort_world 参与前后景深排位)
 func _split_layers_into_rows() -> void:
 	for z in range(1, tile_layers.size()):
@@ -111,6 +138,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	var inventory_node: CanvasLayer = get_node_or_null("Inventory")
 	if inventory_node and inventory_node.visible:
 		return
+
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_F10:
+			_on_save_map_btn_pressed()
+			get_viewport().set_input_as_handled()
+			return
 
 	if event is InputEventMouseButton and event.pressed:
 		var active_item: Dictionary = {}

@@ -43,6 +43,34 @@ script = ExtResource("2_jsie2")
 
 [node name="hotbar" parent="HUD" unique_id=292178155 instance=ExtResource("3_qvu5t")]
 
+[node name="SaveMapBtn" type="Button" parent="HUD" unique_id=1983868999]
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -175.0
+offset_top = 10.0
+offset_right = -15.0
+offset_bottom = 42.0
+grow_horizontal = 0
+focus_mode = 0
+text = "💾 保存快照 (F10)"
+
+[node name="ToastLabel" type="Label" parent="HUD" unique_id=1983868888]
+visible = false
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -300.0
+offset_top = 50.0
+offset_right = 300.0
+offset_bottom = 100.0
+grow_horizontal = 2
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 14
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="layers" type="Node2D" parent="." unique_id=1082848895]
 
 [node name="layer1" type="TileMapLayer" parent="layers" unique_id=1161703262]
