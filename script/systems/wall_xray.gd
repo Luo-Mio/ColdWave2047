@@ -69,8 +69,11 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 			item.material = active_xray_objects[item]
 	active_xray_objects.clear()
 
+	# 清理上一批截面封顶
 	for cap in active_caps:
 		if is_instance_valid(cap):
+			if cap.get_parent():
+				cap.get_parent().remove_child(cap)
 			cap.queue_free()
 	active_caps.clear()
 
@@ -83,26 +86,50 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 
 	var player_cell := GridData.world_to_cell(player_node.global_position)
 	var player_floor := GridData.get_highest_floor(player_cell)
-	var player_base_y := player_node.global_position.y
+	var player_sort_key: float = float(player_node.get("sort_key")) if player_node.get("sort_key") != null else GridData.cell_to_sort_key(player_cell)
 
 	var created_caps := false
 
-	# 2. 向南方大范围扫描
-	for dy in range(-8, 25):
-		for dx in range(-8, 9):
+	# 2. 向南方扫描可能遮挡玩家的高墙候选格 (在等距 2.5D 视角中，遮挡障碍必须在排序键上处于角色南侧前景)
+	for dy in range(-4, 16):
+		for dx in range(-4, 16):
 			var front_cell := player_cell + Vector2i(dx, dy)
 			var wall_floor := GridData.get_highest_floor(front_cell)
 			
 			if wall_floor <= player_floor:
 				continue
 
+			# 【核心深度准则 1】：地形障碍必须在角色南侧 (前景)，其排序键必须严格大于角色！
+			# 若 wall_sort_key <= player_sort_key，则该高台/墙面物理处于角色北侧/后景，
+			# 角色本身会自然遮盖后方立面，绝不可能被该墙面遮挡，彻底杜绝站在墙脚或斜边被误判为遮挡！
+			var wall_sort_key := GridData.cell_to_sort_key(front_cell)
+			if wall_sort_key <= player_sort_key:
+				continue
+
 			var cell_center := GridData.cell_to_world(front_cell)
-			if cell_center.y <= player_base_y - 2.0:
+
+			# 【核心几何准则 2】：横向屏幕重叠判定
+			# 菱形地砖宽度为 64px (半宽 32px)，角色半宽约为 20px。
+			# 若角色与该柱的屏幕 X 轴投影相距超过 52px，两者在屏幕空间上完全不重叠，无遮挡可能！
+			if absf(player_visual.x - cell_center.x) > 52.0:
+				continue
+
+			# 【核心几何准则 3】：垂直屏幕立面重叠判定
+			# 该高墙立面在屏幕上的覆盖范围：
+			# 底端 (player_floor 处): cell_center.y + get_floor_pixel_offset(player_floor) + 16.0
+			# 顶端 (wall_floor 处): cell_center.y + get_floor_pixel_offset(wall_floor) - 16.0
+			# 角色的全身视觉垂直范围：[player_visual.y - 48.0 (头顶), player_visual.y + 4.0 (脚底)]
+			var wall_bottom_y := cell_center.y + GridData.get_floor_pixel_offset(player_floor) + 16.0
+			var wall_top_y := cell_center.y + GridData.get_floor_pixel_offset(wall_floor) - 16.0
+			var player_top_y := player_visual.y - 48.0
+			var player_bottom_y := player_visual.y + 4.0
+
+			if wall_top_y > player_bottom_y or wall_bottom_y < player_top_y:
 				continue
 
 			var is_cell_occluding := false
 
-			# 3. 逐层检查高出玩家视野的砖块
+			# 3. 逐层检查高出玩家视野的砖块是否进入透视范围
 			for z in range(player_floor + 1, wall_floor + 1):
 				var block_screen_pos := Vector2(cell_center.x, cell_center.y - float(z) * 16.0) # 适配 64x32
 				

@@ -3,16 +3,76 @@
 [sub_resource type="GDScript" id="GDScript_1"]
 script/source = "extends Node
 
+func check_occlusion(player: Node2D, front_cell: Vector2i, player_visual: Vector2, player_floor: int, player_sort_key: float, rx: float, ry: float) -> bool:
+	var wall_floor := GridData.get_highest_floor(front_cell)
+	if wall_floor <= player_floor:
+		return false
+	
+	var wall_sort_key := GridData.cell_to_sort_key(front_cell)
+	if wall_sort_key <= player_sort_key:
+		return false
+	
+	var cell_center := GridData.cell_to_world(front_cell)
+	if absf(player_visual.x - cell_center.x) > 52.0:
+		return false
+		
+	var wall_bottom_y := cell_center.y + GridData.get_floor_pixel_offset(player_floor) + 16.0
+	var wall_top_y := cell_center.y + GridData.get_floor_pixel_offset(wall_floor) - 16.0
+	var player_top_y := player_visual.y - 48.0
+	var player_bottom_y := player_visual.y + 4.0
+	if wall_top_y > player_bottom_y or wall_bottom_y < player_top_y:
+		return false
+		
+	for z in range(player_floor + 1, wall_floor + 1):
+		var block_screen_pos := Vector2(cell_center.x, cell_center.y - float(z) * 16.0)
+		var norm_x := (block_screen_pos.x - player_visual.x) / (rx + 20.0)
+		var norm_y := (block_screen_pos.y - player_visual.y) / (ry + 20.0)
+		if (norm_x * norm_x + norm_y * norm_y) <= 1.0:
+			return true
+	return false
+
 func _ready():
+	var scene = load(\"res://scene/main_scene.tscn\").instantiate()
+	add_child(scene)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	
+	var player = scene.get_node(\"sortworld/CharacterBody2D\") as CharacterBody2D
+	var xray = scene.get_node(\"WallXRayManager\") as WallXRayManager
+	var sort_world = scene.get_node(\"sortworld\") as Node2D
+	
 	var f = FileAccess.open(\"d:/Project/Project-Godot/测试001/scratch/test.txt\", FileAccess.WRITE)
-	var ts = load(\"res://resources/surface/GreenGrass/grass_tileset.tres\") as TileSet
-	var tml = TileMapLayer.new()
-	tml.tile_set = ts
-	f.store_line(\"tile_size: \" + str(ts.tile_size))
-	f.store_line(\"tile_shape: \" + str(ts.tile_shape))
-	for y in range(-2, 3):
-		for x in range(-2, 3):
-			f.store_line(\"cell (%d, %d) -> map_to_local: %s\" % [x, y, str(tml.map_to_local(Vector2i(x, y)))])
+	
+	# Positions to test:
+	# 1. Image 2 position: standing in front of cliff
+	# 2. Image 1 position: sliding along saw-tooth edge into corner
+	# 3. Position behind cliff: truly occluded
+	var test_positions = [
+		Vector2(128, 99),
+		Vector2(128, 98),
+		Vector2(128, 97),
+		Vector2(128, 95),
+		Vector2(115, 80),
+		Vector2(64, -32), # in front of (0, -2) which is occluded
+	]
+	
+	for pos in test_positions:
+		player.global_position = pos
+		var depth_comp = player.find_child(\"IsoDepthComponent\")
+		if depth_comp:
+			depth_comp.call(\"update_depth\", 0.016)
+		xray.update_wall_xray(player, sort_world)
+		var active_caps_str = \"\"
+		for cap in xray.active_caps:
+			active_caps_str += cap.name + \" (sort_key: \" + str(cap.sort_key) + \") \"
+		f.store_line(\"Pos: %s (cell %s, fl %d, sort_key %.2f) -> Active Caps: %s\" % [
+			str(pos),
+			str(GridData.world_to_cell(pos)),
+			GridData.get_highest_floor(GridData.world_to_cell(pos)),
+			player.get(\"sort_key\"),
+			active_caps_str if active_caps_str != \"\" else \"NONE\"
+		])
+	
 	f.close()
 	get_tree().quit()
 "
