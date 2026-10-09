@@ -3,33 +3,61 @@
 [sub_resource type="GDScript" id="GDScript_1"]
 script/source = "extends Node
 
-func check_occlusion(player: Node2D, front_cell: Vector2i, player_visual: Vector2, player_floor: int, player_sort_key: float, rx: float, ry: float) -> bool:
+func is_backside_occluder(front_cell: Vector2i, player_pos: Vector2, player_floor: int) -> bool:
 	var wall_floor := GridData.get_highest_floor(front_cell)
 	if wall_floor <= player_floor:
 		return false
 	
-	var wall_sort_key := GridData.cell_to_sort_key(front_cell)
-	if wall_sort_key <= player_sort_key:
+	var cell_center := GridData.cell_to_world(front_cell)
+	
+	# 规则 1：玩家必须在格子的水平横轴之上 (即 cell_center.y > player_pos.y)
+	if cell_center.y <= player_pos.y:
 		return false
 	
-	var cell_center := GridData.cell_to_world(front_cell)
-	if absf(player_visual.x - cell_center.x) > 52.0:
-		return false
+	# 规则 2：横向偏差判定
+	var dx_screen := player_pos.x - cell_center.x
+	
+	# 如果玩家正正好好处于该格的正上方/正后方 (偏差 <= 16px)，正中遮挡
+	if absf(dx_screen) <= 16.0:
+		return true
 		
-	var wall_bottom_y := cell_center.y + GridData.get_floor_pixel_offset(player_floor) + 16.0
-	var wall_top_y := cell_center.y + GridData.get_floor_pixel_offset(wall_floor) - 16.0
-	var player_top_y := player_visual.y - 48.0
-	var player_bottom_y := player_visual.y + 4.0
-	if wall_top_y > player_bottom_y or wall_bottom_y < player_top_y:
-		return false
-		
-	for z in range(player_floor + 1, wall_floor + 1):
-		var block_screen_pos := Vector2(cell_center.x, cell_center.y - float(z) * 16.0)
-		var norm_x := (block_screen_pos.x - player_visual.x) / (rx + 20.0)
-		var norm_y := (block_screen_pos.y - player_visual.y) / (ry + 20.0)
-		if (norm_x * norm_x + norm_y * norm_y) <= 1.0:
-			return true
-	return false
+	# 如果玩家在右侧 (dx_screen > 16.0)：
+	# 检查该格向右上 (-Y 方向) 是否有一整条连续高墙砖穿过角色的 Y 水平线
+	if dx_screen > 16.0:
+		var curr := front_cell
+		var is_continuous_flank := false
+		while true:
+			var next_c := curr + Vector2i(0, -1) # 右上 (-Y)
+			if GridData.has_any_tile(next_c) and GridData.get_highest_floor(next_c) > player_floor:
+				var next_center := GridData.cell_to_world(next_c)
+				if next_center.y <= player_pos.y:
+					is_continuous_flank = true
+					break
+				curr = next_c
+			else:
+				break
+		if is_continuous_flank:
+			return false
+			
+	# 如果玩家在左侧 (dx_screen < -16.0)：
+	# 检查该格向左上 (-X 方向) 是否有一整条连续高墙砖穿过角色的 Y 水平线
+	if dx_screen < -16.0:
+		var curr := front_cell
+		var is_continuous_flank := false
+		while true:
+			var next_c := curr + Vector2i(-1, 0) # 左上 (-X)
+			if GridData.has_any_tile(next_c) and GridData.get_highest_floor(next_c) > player_floor:
+				var next_center := GridData.cell_to_world(next_c)
+				if next_center.y <= player_pos.y:
+					is_continuous_flank = true
+					break
+				curr = next_c
+			else:
+				break
+		if is_continuous_flank:
+			return false
+	
+	return true
 
 func _ready():
 	var scene = load(\"res://scene/main_scene.tscn\").instantiate()
@@ -40,38 +68,34 @@ func _ready():
 	var player = scene.get_node(\"sortworld/CharacterBody2D\") as CharacterBody2D
 	var xray = scene.get_node(\"WallXRayManager\") as WallXRayManager
 	var sort_world = scene.get_node(\"sortworld\") as Node2D
-	
 	var f = FileAccess.open(\"d:/Project/Project-Godot/测试001/scratch/test.txt\", FileAccess.WRITE)
 	
-	# Positions to test:
-	# 1. Image 2 position: standing in front of cliff
-	# 2. Image 1 position: sliding along saw-tooth edge into corner
-	# 3. Position behind cliff: truly occluded
-	var test_positions = [
-		Vector2(128, 99),
-		Vector2(128, 98),
-		Vector2(128, 97),
-		Vector2(128, 95),
-		Vector2(115, 80),
-		Vector2(64, -32), # in front of (0, -2) which is occluded
-	]
-	
-	for pos in test_positions:
-		player.global_position = pos
-		var depth_comp = player.find_child(\"IsoDepthComponent\")
-		if depth_comp:
-			depth_comp.call(\"update_depth\", 0.016)
-		xray.update_wall_xray(player, sort_world)
-		var active_caps_str = \"\"
-		for cap in xray.active_caps:
-			active_caps_str += cap.name + \" (sort_key: \" + str(cap.sort_key) + \") \"
-		f.store_line(\"Pos: %s (cell %s, fl %d, sort_key %.2f) -> Active Caps: %s\" % [
-			str(pos),
-			str(GridData.world_to_cell(pos)),
-			GridData.get_highest_floor(GridData.world_to_cell(pos)),
-			player.get(\"sort_key\"),
-			active_caps_str if active_caps_str != \"\" else \"NONE\"
-		])
+	# 找到一个高墙格子并测试站在其正后方 (西北侧 floor 0)
+	var wall_found := Vector2i.ZERO
+	for k in GridData.grid.keys():
+		if k.z > 0:
+			var cell = Vector2i(k.x, k.y)
+			var back_cell = cell + Vector2i(-1, 0)
+			if GridData.get_highest_floor(back_cell) == 0:
+				wall_found = cell
+				break
+				
+	var back_pos = GridData.cell_to_world(wall_found + Vector2i(-1, 0))
+	player.global_position = back_pos
+	var depth_comp = player.find_child(\"IsoDepthComponent\")
+	if depth_comp:
+		depth_comp.call(\"update_depth\", 0.016)
+	xray.update_wall_xray(player, sort_world)
+	var active_caps_str = \"\"
+	for cap in xray.active_caps:
+		active_caps_str += cap.name + \" \"
+	f.store_line(\"Behind wall at %s: Player at %s (fl %d) -> Active Caps: %s (X-Ray layers: %d)\" % [
+		str(wall_found),
+		str(back_pos),
+		GridData.get_highest_floor(GridData.world_to_cell(back_pos)),
+		active_caps_str if active_caps_str != \"\" else \"NONE\",
+		xray.active_xray_layers.size()
+	])
 	
 	f.close()
 	get_tree().quit()
@@ -79,4 +103,3 @@ func _ready():
 
 [node name="TestNode" type="Node"]
 script = SubResource("GDScript_1")
-
