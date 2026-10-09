@@ -28,6 +28,19 @@ var turf_grid: Dictionary:
 	get: return surf_grid
 	set(v): surf_grid = v
 
+# === 2.5D 顶层落差边缘标记系统 (Edge Indicator) ===
+const EDGE_NONE: int = 0
+const EDGE_TIP_L: int = 1
+const EDGE_TIP_M: int = 2
+const EDGE_TIP_R: int = 3
+
+signal edge_changed(cell: Vector2i, edge_type: int, new_floor: int, old_floor: int)
+
+# 顶层边缘标记缓存: cell (Vector2i) -> edge_type (int)
+var edge_grid: Dictionary = {}
+# 顶层边缘对应楼层高度缓存: cell (Vector2i) -> z (int)
+var edge_floor: Dictionary = {}
+
 # === 2.5D 多楼层物理碰撞分层系统 ===
 # Layer 1 (bit 0): 地形 / 空气墙边界
 # Layer 2 (bit 1): 全局基础障碍 / 边缘碰撞
@@ -83,6 +96,7 @@ func build_from_layers(layer_nodes: Array[TileMapLayer]) -> void:
 			tile_cells[k] = true
 			highest_floor[k] = maxi(highest_floor.get(k, 0), z) # ← 记录该格最高层
 	_update_height_map()
+	rebuild_edge_map()
 
 # 世界坐标 → 大格子坐标
 func world_to_cell(world_pos: Vector2) -> Vector2i:
@@ -180,6 +194,8 @@ func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 			height_map_image.set_pixel(cx, cy, Color(float(fl) / 16.0, 0, 0, 1))
 			if height_map_texture != null:
 				height_map_texture.update(height_map_image)
+
+	update_edges_around(cell)
 
 # 初始化并全量刷新全局 2.5D 高度场纹理 (ImageTexture R8)
 func _update_height_map() -> void:
@@ -295,3 +311,92 @@ func get_all_objects_at(cell: Vector2i) -> Array[Node]:
 				if not list.has(obj):
 					list.append(obj)
 	return list
+
+
+# === 2.5D 顶层落差边缘标记计算与拓扑维护 (Edge Indicator) ===
+
+# 获取某格当前的边缘标记类型 (EDGE_NONE / EDGE_TIP_L / EDGE_TIP_M / EDGE_TIP_R)
+func get_edge(cell: Vector2i) -> int:
+	return edge_grid.get(cell, EDGE_NONE)
+
+func get_edge_floor(cell: Vector2i) -> int:
+	return edge_floor.get(cell, -1)
+
+# 精确获取 2.5D 等距堆叠网格斜上方与斜下方相邻格（严格区分奇偶行）
+func get_nw_neighbor(cell: Vector2i) -> Vector2i:
+	var is_odd := (absi(cell.y) % 2 == 1)
+	return Vector2i(cell.x, cell.y - 1) if is_odd else Vector2i(cell.x - 1, cell.y - 1)
+
+func get_ne_neighbor(cell: Vector2i) -> Vector2i:
+	var is_odd := (absi(cell.y) % 2 == 1)
+	return Vector2i(cell.x + 1, cell.y - 1) if is_odd else Vector2i(cell.x, cell.y - 1)
+
+func get_se_neighbor(cell: Vector2i) -> Vector2i:
+	var is_odd := (absi(cell.y) % 2 == 1)
+	return Vector2i(cell.x + 1, cell.y + 1) if is_odd else Vector2i(cell.x, cell.y + 1)
+
+func get_sw_neighbor(cell: Vector2i) -> Vector2i:
+	var is_odd := (absi(cell.y) % 2 == 1)
+	return Vector2i(cell.x, cell.y + 1) if is_odd else Vector2i(cell.x - 1, cell.y + 1)
+
+# 计算指定格子当前的边缘形态（纯函数计算）
+func compute_edge_at(cell: Vector2i) -> int:
+	if not has_any_tile(cell):
+		return EDGE_NONE
+	var z := get_highest_floor(cell)
+	var nw := get_nw_neighbor(cell)
+	var ne := get_ne_neighbor(cell)
+	var z_nw := get_highest_floor(nw) if has_any_tile(nw) else -1
+	var z_ne := get_highest_floor(ne) if has_any_tile(ne) else -1
+	var expose_left := (z_nw < z)
+	var expose_right := (z_ne < z)
+	if expose_left and expose_right:
+		return EDGE_TIP_M
+	elif expose_left:
+		return EDGE_TIP_L
+	elif expose_right:
+		return EDGE_TIP_R
+	return EDGE_NONE
+
+# 更新单个格子的边缘缓存并触发信号 (若状态或楼层改变)
+func update_edge_at(cell: Vector2i) -> bool:
+	var old_type: int = edge_grid.get(cell, EDGE_NONE)
+	var old_z: int = edge_floor.get(cell, -1)
+
+	var has_tile_now: bool = has_any_tile(cell)
+	var new_z: int = get_highest_floor(cell) if has_tile_now else -1
+	var new_type: int = compute_edge_at(cell) if has_tile_now else EDGE_NONE
+
+	if old_type != new_type or old_z != new_z:
+		if new_type == EDGE_NONE or new_z < 0:
+			edge_grid.erase(cell)
+			edge_floor.erase(cell)
+		else:
+			edge_grid[cell] = new_type
+			edge_floor[cell] = new_z
+
+		edge_changed.emit(cell, new_type, new_z, old_z)
+		return true
+	return false
+
+# 当某格地砖发生变动时，联动刷新本格及四周物理相邻格
+func update_edges_around(cell: Vector2i) -> void:
+	update_edge_at(cell)
+	update_edge_at(get_se_neighbor(cell))
+	update_edge_at(get_sw_neighbor(cell))
+	update_edge_at(get_nw_neighbor(cell))
+	update_edge_at(get_ne_neighbor(cell))
+
+# 全量构建所有地块的边缘缓存
+func rebuild_edge_map() -> void:
+	edge_grid.clear()
+	edge_floor.clear()
+	var processed: Dictionary = {}
+	for k in grid.keys():
+		var cell := Vector2i(k.x, k.y)
+		if not processed.has(cell):
+			processed[cell] = true
+			var edge := compute_edge_at(cell)
+			if edge != EDGE_NONE:
+				edge_grid[cell] = edge
+				edge_floor[cell] = get_highest_floor(cell)

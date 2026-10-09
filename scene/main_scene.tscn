@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" uid="uid://dewx1yy1y8ghw" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
 [ext_resource type="Script" uid="uid://heo0xna060h4" path="res://script/systems/aim_reticle.gd" id="11_aimreticle"]
 [ext_resource type="PackedScene" path="res://scene/ui/inventory.tscn" id="12_inv"]
+[ext_resource type="Script" uid="uid://b5xabwksehtaj" path="res://script/systems/edge_indicate_system.gd" id="13_edge"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_86xya"]
 texture = ExtResource("4_hrphr")
@@ -246,3 +247,6 @@ script = ExtResource("8_hrphr")
 script = ExtResource("9_86xya")
 
 [node name="Inventory" parent="." unique_id=1488192731 instance=ExtResource("12_inv")]
+
+[node name="EdgeIndicateSystem" type="Node" parent="." unique_id=1983868555]
+script = ExtResource("13_edge")

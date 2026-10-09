@@ -6,6 +6,7 @@ const WallXRayScript := preload("res://script/systems/wall_xray.gd")
 const AirWallScript := preload("res://script/systems/air_wall.gd")
 const AimControllerScript := preload("res://script/components/aim_controller.gd")
 const AimReticleScript := preload("res://script/systems/aim_reticle.gd")
+const EdgeIndicateSystemScript := preload("res://script/systems/edge_indicate_system.gd")
 const MagicOrbScene := preload("res://scene/particle/magic_orb.tscn")
 const LightOrbScene := preload("res://scene/particle/light.tscn")
 
@@ -19,6 +20,7 @@ var aim_reticle: Node2D
 var layer_surf_system: LayerSurfSystem
 var surf_system: LayerSurfSystem
 var turf_system: LayerSurfSystem
+var edge_indicate_system: EdgeIndicateSystem
 
 @onready var sort_world: Node2D = $sortworld
 @onready var selector: Node2D = $selector
@@ -93,7 +95,15 @@ func _ready() -> void:
 	surf_system = layer_surf_system
 	turf_system = layer_surf_system
 
-	# 9. 连接 HUD 保存快照按钮
+	# 9. 初始化顶层落差白边指示系统
+	edge_indicate_system = get_node_or_null("EdgeIndicateSystem") as EdgeIndicateSystem
+	if edge_indicate_system == null:
+		edge_indicate_system = EdgeIndicateSystemScript.new()
+		edge_indicate_system.name = "EdgeIndicateSystem"
+		add_child(edge_indicate_system)
+	edge_indicate_system.init_system(sort_world, $layers)
+
+	# 10. 连接 HUD 保存快照按钮
 	var save_btn := get_node_or_null("HUD/SaveMapBtn") as Button
 	if save_btn:
 		save_btn.pressed.connect(_on_save_map_btn_pressed)

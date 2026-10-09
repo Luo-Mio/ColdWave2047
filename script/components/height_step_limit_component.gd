@@ -14,6 +14,13 @@ extends Node
 ## 身体足底防穿模安全边距 (像素，默认 4.0px)
 @export var margin_pixels: float = 4.0
 
+@export_group("台阶边缘防抖与斜边推开 (Step Edge Glide)")
+## 是否开启通行台阶边缘防频繁上下抖动 (开启后只有垂直/正对斜边移动才允许跨越，贴边斜向移动会被斜边推开平滑滑动)
+@export var enable_step_edge_glide: bool = true
+## 允许跨越台阶的最小垂直度阈值 (即速度与斜边法线的点积下限，默认 0.70，约对应法向夹角 <= 45 度内允许通过)
+## 0.70 刚好允许正向与等距斜向通过，阻挡沿锯齿横向移动。
+@export_range(0.5, 0.95, 0.05) var step_perpendicular_threshold: float = 0.70
+
 var entity: CharacterBody2D = null
 var _last_physics_pos: Vector2 = Vector2.ZERO
 
@@ -35,11 +42,19 @@ func _physics_process(_delta: float) -> void:
 	enforce_boundary(entity, _last_physics_pos)
 	_last_physics_pos = entity.global_position
 
+var grid_override: Node = null
+
 # 获取 GridData 引用 (兼容主场景运行与独立单元测试环境)
 func _get_grid() -> Node:
-	var tree := get_tree()
-	if tree and tree.root and tree.root.has_node("GridData"):
-		return tree.root.get_node("GridData")
+	if grid_override != null:
+		return grid_override
+	if is_inside_tree():
+		var tree := get_tree()
+		if tree and tree.root and tree.root.has_node("GridData"):
+			return tree.root.get_node("GridData")
+	var main_loop := Engine.get_main_loop()
+	if main_loop is SceneTree and (main_loop as SceneTree).root and (main_loop as SceneTree).root.has_node("GridData"):
+		return (main_loop as SceneTree).root.get_node("GridData")
 	return null
 
 # 检验目标格子是否允许从 from_floor 楼层合法通行
@@ -58,6 +73,32 @@ func is_cell_passable(target_cell: Vector2i, from_floor: int) -> bool:
 
 	return absi(target_floor - from_floor) <= max_step_height
 
+# 获取指定格子 4 个斜向邻居的楼层落差向量 (dx: 左右水平落差总和, dy: 上下垂直落差总和)
+func _get_cell_cliff_diffs(gd: Node, c: Vector2i) -> Vector2i:
+	var n_ne: Vector2i
+	var n_nw: Vector2i
+	var n_se: Vector2i
+	var n_sw: Vector2i
+	if c.y % 2 == 0:
+		n_ne = Vector2i(c.x, c.y - 1)
+		n_nw = Vector2i(c.x - 1, c.y - 1)
+		n_se = Vector2i(c.x, c.y + 1)
+		n_sw = Vector2i(c.x - 1, c.y + 1)
+	else:
+		n_ne = Vector2i(c.x + 1, c.y - 1)
+		n_nw = Vector2i(c.x, c.y - 1)
+		n_se = Vector2i(c.x + 1, c.y + 1)
+		n_sw = Vector2i(c.x, c.y + 1)
+
+	var f_ne: int = gd.call("get_highest_floor", n_ne)
+	var f_nw: int = gd.call("get_highest_floor", n_nw)
+	var f_se: int = gd.call("get_highest_floor", n_se)
+	var f_sw: int = gd.call("get_highest_floor", n_sw)
+
+	var dx := absi((f_ne + f_se) - (f_nw + f_sw))
+	var dy := absi((f_ne + f_nw) - (f_se + f_sw))
+	return Vector2i(dx, dy)
+
 # 物理移动前的速度预处理：检测前方目标落点，若撞向不可进入的格子，则消除法向速度并投影至等距切向平滑滑动
 func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -> Vector2:
 	if not is_enabled or velocity == Vector2.ZERO:
@@ -72,8 +113,13 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 
 	var motion := velocity * delta
 	var target_pos := current_pos + motion
-	var probe_pos := target_pos + velocity.normalized() * margin_pixels
-	var probe_cell: Vector2i = gd.call("world_to_cell", probe_pos)
+
+	# 优先判定下一帧身体直接进入的 target_cell；若仍在本格内，再用 margin_pixels 提前探查边缘防穿透
+	var target_cell: Vector2i = gd.call("world_to_cell", target_pos)
+	var probe_cell: Vector2i = target_cell
+	if probe_cell == curr_cell and margin_pixels > 0.0:
+		var probe_pos := target_pos + velocity.normalized() * margin_pixels
+		probe_cell = gd.call("world_to_cell", probe_pos)
 
 	# 若探测点在同一格子内，完全合法
 	if probe_cell == curr_cell:
@@ -101,6 +147,53 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 			return slide_vel
 		else:
 			return Vector2.ZERO
+
+	# 若探测点所在格子在允许跨越的高度内，但存在楼层落差：
+	# 检查移动方向是否属于沿锯齿边缘“擦边行走”（如横向锯齿沿左右走、竖向锯齿沿上下走）：
+	# 若是擦边移动：像空气墙一样被斜边推开，沿等距斜边平滑滑动，避免在两个高度间反复跳变；
+	# 仅当移动方向正对/垂直于边缘面或斜向直跨时，才允许翻越。
+	if enable_step_edge_glide:
+		var probe_floor: int = gd.call("get_highest_floor", probe_cell)
+		if probe_floor != curr_floor:
+			var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
+			var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
+			var cell_delta := center_probe - center_curr
+			if cell_delta != Vector2.ZERO:
+				var normal := Vector2(cell_delta.x * 0.5, cell_delta.y * 2.0).normalized()
+				var dot_n := velocity.normalized().dot(normal)
+				if dot_n > 0.0:
+					var is_grazing := false
+					var d1 := _get_cell_cliff_diffs(gd, curr_cell)
+					var d2 := _get_cell_cliff_diffs(gd, probe_cell)
+					var total_dx := d1.x + d2.x
+					var total_dy := d1.y + d2.y
+
+					var vmx := absf(velocity.x)
+					var vmy := absf(velocity.y) * 2.0  # 还原 2:1 等距透视下的等权 Y 速度
+
+					if total_dy > total_dx:
+						# 横向锯齿边缘 (崖壁整体大致沿 X 轴水平延伸)：
+						# 角色主要沿崖壁横向左右移动 (East/West) 视为擦边，被斜边推开；垂直 (North/South) 或斜跨视为翻越
+						is_grazing = (vmx > vmy * 1.5)
+					elif total_dx > total_dy:
+						# 竖向锯齿边缘 (崖壁整体大致沿 Y 轴垂直延伸)：
+						# 角色主要沿崖壁纵向上下移动 (North/South) 视为擦边，被斜边推开；横向 (East/West) 或斜跨视为翻越
+						is_grazing = (vmy > vmx * 1.5)
+					else:
+						# 对角线崖壁或孤立转角：使用法向垂直度阈值
+						is_grazing = (dot_n < step_perpendicular_threshold)
+
+					if is_grazing:
+						if enable_sliding:
+							var normal_speed := velocity.dot(normal)
+							var slide_vel := velocity - normal * normal_speed
+							var probe2 := current_pos + slide_vel * delta + slide_vel.normalized() * margin_pixels
+							var cell2: Vector2i = gd.call("world_to_cell", probe2)
+							if cell2 != curr_cell and not is_cell_passable(cell2, curr_floor):
+								return Vector2.ZERO
+							return slide_vel
+						else:
+							return Vector2.ZERO
 
 	return velocity
 
