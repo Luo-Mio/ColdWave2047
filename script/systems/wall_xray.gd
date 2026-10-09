@@ -112,11 +112,12 @@ func is_backside_occluder(front_cell: Vector2i, player_visual: Vector2, player_f
 		return true
 
 	# 若玩家在右侧 (dx_screen > 16.0)：
-	# 检查该格向右上 (-Y 方向) 是否有一整条连续高墙砖穿过角色的 Y 水平线
+	# 检查该格向右上 (北东方向) 是否有一整条连续高墙砖穿过角色的 Y 水平线
 	if dx_screen > 16.0:
 		var curr := front_cell
 		while true:
-			var next_c := curr + Vector2i(0, -1)
+			var is_odd := (absi(curr.y) % 2 == 1)
+			var next_c := curr + (Vector2i(1, -1) if is_odd else Vector2i(0, -1))
 			if GridData.has_any_tile(next_c) and GridData.get_highest_floor(next_c) > player_floor:
 				var next_center := GridData.cell_to_world(next_c)
 				if next_center.y <= player_visual.y:
@@ -126,11 +127,12 @@ func is_backside_occluder(front_cell: Vector2i, player_visual: Vector2, player_f
 				break
 
 	# 若玩家在左侧 (dx_screen < -16.0)：
-	# 检查该格向左上 (-X 方向) 是否有一整条连续高墙砖穿过角色的 Y 水平线
+	# 检查该格向左上 (北西方向) 是否有一整条连续高墙砖穿过角色的 Y 水平线
 	if dx_screen < -16.0:
 		var curr := front_cell
 		while true:
-			var next_c := curr + Vector2i(-1, 0)
+			var is_odd := (absi(curr.y) % 2 == 1)
+			var next_c := curr + (Vector2i(0, -1) if is_odd else Vector2i(-1, -1))
 			if GridData.has_any_tile(next_c) and GridData.get_highest_floor(next_c) > player_floor:
 				var next_center := GridData.cell_to_world(next_c)
 				if next_center.y <= player_visual.y:

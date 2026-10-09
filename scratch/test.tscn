@@ -67,36 +67,22 @@ func _ready():
 	
 	var player = scene.get_node(\"sortworld/CharacterBody2D\") as CharacterBody2D
 	var xray = scene.get_node(\"WallXRayManager\") as WallXRayManager
-	var sort_world = scene.get_node(\"sortworld\") as Node2D
 	var f = FileAccess.open(\"d:/Project/Project-Godot/测试001/scratch/test.txt\", FileAccess.WRITE)
+	var tml: TileMapLayer = scene.get_node(\"layers/layer_0\")
+	var ts = tml.tile_set
+	f.store_line(\"tile_shape: %d (0=SQUARE, 1=ISOMETRIC, 2=HALF_OFFSET_SQUARE, 3=HEXAGON)\" % ts.tile_shape)
+	f.store_line(\"tile_layout: %d (0=STACKED, 1=STACKED_OFFSET, 2=STAIRS_RIGHT, 3=STAIRS_DOWN, 4=DIAMOND_RIGHT, 5=DIAMOND_DOWN)\" % ts.tile_layout)
+	f.store_line(\"tile_offset_axis: %d (0=HORIZONTAL, 1=VERTICAL)\" % ts.tile_offset_axis)
+	f.store_line(\"tile_size: %s\" % str(ts.tile_size))
 	
-	# 找到一个高墙格子并测试站在其正后方 (西北侧 floor 0)
-	var wall_found := Vector2i.ZERO
-	for k in GridData.grid.keys():
-		if k.z > 0:
-			var cell = Vector2i(k.x, k.y)
-			var back_cell = cell + Vector2i(-1, 0)
-			if GridData.get_highest_floor(back_cell) == 0:
-				wall_found = cell
-				break
-				
-	var back_pos = GridData.cell_to_world(wall_found + Vector2i(-1, 0))
-	player.global_position = back_pos
-	var depth_comp = player.find_child(\"IsoDepthComponent\")
-	if depth_comp:
-		depth_comp.call(\"update_depth\", 0.016)
-	xray.update_wall_xray(player, sort_world)
-	var active_caps_str = \"\"
-	for cap in xray.active_caps:
-		active_caps_str += cap.name + \" \"
-	f.store_line(\"Behind wall at %s: Player at %s (fl %d) -> Active Caps: %s (X-Ray layers: %d)\" % [
-		str(wall_found),
-		str(back_pos),
-		GridData.get_highest_floor(GridData.world_to_cell(back_pos)),
-		active_caps_str if active_caps_str != \"\" else \"NONE\",
-		xray.active_xray_layers.size()
-	])
-	
+	for y in range(0, 5):
+		for x in range(0, 5):
+			var c := Vector2i(x, y)
+			var w_pos := GridData.cell_to_world(c)
+			var sk := GridData.cell_to_sort_key(c)
+			var fl := GridData.get_highest_floor(c)
+			f.store_line(\"cell %s -> world %s, sort_key %.3f, fl %d\" % [str(c), str(w_pos), sk, fl])
+			
 	f.close()
 	get_tree().quit()
 "

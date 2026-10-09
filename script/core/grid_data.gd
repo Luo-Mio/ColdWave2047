@@ -129,13 +129,13 @@ func world_to_sub_cell(world_pos: Vector2, cell: Vector2i) -> Vector2i:
 	var sy := clampi(int(floor(v + 2.0)), 0, 3)
 	return Vector2i(sx, sy)
 
-# 【排序核心】格子 → 排序键
+# 【排序核心】格子 → 排序键 (基于交错等距网格视觉屏幕深度 row = cell.y)
 func cell_to_sort_key(cell: Vector2i) -> float:
 	if layers.is_empty():
 		return 0.0
 	var half_h := layers[0].tile_set.tile_size.y / 2.0
-	var row := float(cell.x + cell.y)
-	var col := float(cell.x - cell.y)
+	var row := float(cell.y)
+	var col := float(cell.x)
 	return row * half_h - col * 0.001
 
 # 某格最高楼层（O(1) 瞬时查询，零循环零垃圾）
