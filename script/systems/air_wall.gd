@@ -13,6 +13,24 @@ const DIAMOND_POINTS: PackedVector2Array = [
 	Vector2(0, -16), Vector2(32, 0), Vector2(0, 16), Vector2(-32, 0)
 ]
 
+# 四种半砖中“空缺虚空部分”的碰撞多边形点集（阻挡进入空缺的一半，形成平滑直线物理边界）：
+# HALF_W (西侧实心，东侧虚空): 虚空在东侧 [ (0, -16), (32, 0), (0, 16) ]
+const VOID_POINTS_HALF_W: PackedVector2Array = [
+	Vector2(0, -16), Vector2(32, 0), Vector2(0, 16)
+]
+# HALF_E (东侧实心，西侧虚空): 虚空在西侧 [ (0, -16), (0, 16), (-32, 0) ]
+const VOID_POINTS_HALF_E: PackedVector2Array = [
+	Vector2(0, -16), Vector2(0, 16), Vector2(-32, 0)
+]
+# HALF_N (北侧实心，南侧虚空): 虚空在南侧 [ (-32, 0), (32, 0), (0, 16) ]
+const VOID_POINTS_HALF_N: PackedVector2Array = [
+	Vector2(-32, 0), Vector2(32, 0), Vector2(0, 16)
+]
+# HALF_S (南侧实心，北侧虚空): 虚空在北侧 [ (-32, 0), (32, 0), (0, -16) ]
+const VOID_POINTS_HALF_S: PackedVector2Array = [
+	Vector2(-32, 0), Vector2(32, 0), Vector2(0, -16)
+]
+
 func _ready() -> void:
 	add_to_group("air_walls")
 	# 设置物理碰撞层（Layer 2：障碍物层，匹配角色的 collision_mask）
@@ -42,10 +60,31 @@ func rebuild_walls() -> void:
 			if not GridData.has_any_tile(neighbor):
 				void_cells[neighbor] = true
 
-	# 4. 为每一个虚空格生成 32x16 菱形物理碰撞体
+	# 4. 为每一个完全空白的虚空格生成 64x32 菱形物理碰撞体
 	for void_cell in void_cells.keys():
 		var center := GridData.cell_to_world(void_cell)
 		var col := CollisionPolygon2D.new()
 		col.position = center
 		col.polygon = DIAMOND_POINTS
 		add_child(col)
+
+	# 5. 为所有半砖格子生成“缺失半边”的三角形空气墙
+	for k in GridData.auto_half_tiles.keys():
+		var cell := Vector2i(k.x, k.y)
+		var shape: int = GridData.auto_half_tiles[k]
+		var poly: PackedVector2Array
+		match shape:
+			GridData.TileShape.HALF_W:
+				poly = VOID_POINTS_HALF_W
+			GridData.TileShape.HALF_E:
+				poly = VOID_POINTS_HALF_E
+			GridData.TileShape.HALF_N:
+				poly = VOID_POINTS_HALF_N
+			GridData.TileShape.HALF_S:
+				poly = VOID_POINTS_HALF_S
+		if not poly.is_empty():
+			var center := GridData.cell_to_world(cell) + Vector2(0.0, GridData.get_floor_pixel_offset(k.z))
+			var col := CollisionPolygon2D.new()
+			col.position = center
+			col.polygon = poly
+			add_child(col)

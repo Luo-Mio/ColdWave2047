@@ -3,11 +3,29 @@ extends Node
 
 const FLOOR_HEIGHT: float = 16.0   # 每层视觉高度差
 
-# 1. 地形高度场数据
+# 1. 地形高度场数据与三角半砖系统
+enum TileShape {
+	FULL = 0,    # 完整 64x32 菱形地砖 (Atlas 0:0)
+	HALF_W = 1,  # 西侧 1/2 三角半砖 (Atlas 1:0, 像素 x: 0..31)
+	HALF_E = 2,  # 东侧 1/2 三角半砖 (Atlas 2:0, 像素 x: 32..63)
+	HALF_N = 3,  # 北侧 1/2 三角半砖 (Atlas 3:0, 像素 y: 16..47)
+	HALF_S = 4   # 南侧 1/2 三角半砖 (Atlas 4:0, 像素 y: 31..63)
+}
+
+const TILE_SHAPE_ATLAS: Dictionary = {
+	TileShape.FULL: Vector2i(0, 0),
+	TileShape.HALF_W: Vector2i(1, 0),
+	TileShape.HALF_E: Vector2i(2, 0),
+	TileShape.HALF_N: Vector2i(3, 0),
+	TileShape.HALF_S: Vector2i(4, 0),
+}
+
 var grid: Dictionary = {}
 var layers: Array[TileMapLayer] = []
 var tile_cells: Dictionary = {}
 var highest_floor: Dictionary = {}
+# 自动生成的三角半砖数据: key = Vector3i(cell.x, cell.y, z), value = shape (TileShape)
+var auto_half_tiles: Dictionary = {}
 
 # 2.5D GPU 高度场纹理 (R8 格式, 256x256, 覆盖 [-128, 128] 网格, 供 3D 视线步进 Shader 使用)
 const HEIGHT_MAP_WIDTH: int = 256
@@ -89,6 +107,7 @@ func build_from_layers(layer_nodes: Array[TileMapLayer]) -> void:
 	grid.clear()
 	tile_cells.clear()
 	highest_floor.clear() # ← 清空缓存
+	auto_half_tiles.clear()
 	for z in layers.size():
 		for cell in layers[z].get_used_cells():
 			var k := cell_key(cell)
@@ -186,16 +205,116 @@ func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 			highest_floor.erase(ck)
 			tile_cells.erase(ck)
 
+	_update_height_map_for_cell(cell)
+	update_edges_around(cell)
+
+func _update_height_map_for_cell(cell: Vector2i) -> void:
 	if height_map_image != null:
 		var cx := cell.x + HEIGHT_MAP_OFFSET.x
 		var cy := cell.y + HEIGHT_MAP_OFFSET.y
 		if cx >= 0 and cx < HEIGHT_MAP_WIDTH and cy >= 0 and cy < HEIGHT_MAP_HEIGHT:
+			var ck := cell_key(cell)
 			var fl: int = highest_floor.get(ck, 0)
 			height_map_image.set_pixel(cx, cy, Color(float(fl) / 16.0, 0, 0, 1))
 			if height_map_texture != null:
 				height_map_texture.update(height_map_image)
 
+# === 三角半砖 (1/2 Tile) 数据核心与几何判定 ===
+
+# 查询指定格子在某层的瓷砖形态 (TileShape.FULL / HALF_W / HALF_E / HALF_N / HALF_S，若无砖则返回 -1)
+func get_tile_shape(cell: Vector2i, z: int) -> int:
+	var key := Vector3i(cell.x, cell.y, z)
+	if auto_half_tiles.has(key):
+		return auto_half_tiles[key]
+	if grid.has(key):
+		return TileShape.FULL
+	return -1
+
+# 某格在指定层是否为三角半砖
+func is_half_tile(cell: Vector2i, z: int) -> bool:
+	return auto_half_tiles.has(Vector3i(cell.x, cell.y, z))
+
+func is_auto_half_tile(cell: Vector2i, z: int) -> bool:
+	return auto_half_tiles.has(Vector3i(cell.x, cell.y, z))
+
+func get_auto_half_tile_shape(cell: Vector2i, z: int) -> int:
+	return auto_half_tiles.get(Vector3i(cell.x, cell.y, z), -1)
+
+# 某格在指定层是否为完整砖块 (排除半砖)
+func has_full_tile(cell: Vector2i, z: int) -> bool:
+	var key := Vector3i(cell.x, cell.y, z)
+	return grid.has(key) and not auto_half_tiles.has(key)
+
+# 写入或更新自动半砖
+func set_auto_half_tile(cell: Vector2i, z: int, shape: int) -> void:
+	var key := Vector3i(cell.x, cell.y, z)
+	var ck := cell_key(cell)
+	auto_half_tiles[key] = shape
+	grid[key] = true
+	tile_cells[ck] = true
+	highest_floor[ck] = maxi(highest_floor.get(ck, 0), z)
+	_update_height_map_for_cell(cell)
 	update_edges_around(cell)
+
+# 彻底移除半砖 (同时移除高度场)
+func remove_auto_half_tile(cell: Vector2i, z: int) -> void:
+	var key := Vector3i(cell.x, cell.y, z)
+	auto_half_tiles.erase(key)
+	set_tile(cell, z, false)
+
+# 仅从半砖字典中擦除 (用于被完整砖块直接升级替换时，保留其高度场)
+func remove_auto_half_tile_only(cell: Vector2i, z: int) -> void:
+	var key := Vector3i(cell.x, cell.y, z)
+	auto_half_tiles.erase(key)
+
+# 根据周围完整砖块分布，计算该格在该层应填充的半砖形状 (若不应填充则返回 -1)
+func determine_half_tile_shape(cell: Vector2i, z: int) -> int:
+	if has_full_tile(cell, z):
+		return -1
+
+	var nw := get_nw_neighbor(cell)
+	var ne := get_ne_neighbor(cell)
+	var sw := get_sw_neighbor(cell)
+	var se := get_se_neighbor(cell)
+
+	var has_nw := has_full_tile(nw, z)
+	var has_ne := has_full_tile(ne, z)
+	var has_sw := has_full_tile(sw, z)
+	var has_se := has_full_tile(se, z)
+
+	var count := int(has_nw) + int(has_ne) + int(has_sw) + int(has_se)
+	if count == 2:
+		if has_nw and has_ne:
+			return TileShape.HALF_N
+		elif has_sw and has_se:
+			return TileShape.HALF_S
+		elif has_nw and has_sw:
+			return TileShape.HALF_W
+		elif has_ne and has_se:
+			return TileShape.HALF_E
+
+	return -1
+
+# 检验 4x4 微槽位 sub_pos (0~3, 0~3) 在指定半砖形态下是否属于合法可种植槽位
+# 规则：除去中线上的 4 个位置和缺失的一半，三角半砖仅保留 1+2+3 = 6 个有效种植槽位
+func is_sub_slot_valid_for_shape(shape: int, sub_pos: Vector2i) -> bool:
+	match shape:
+		TileShape.FULL:
+			return true
+		TileShape.HALF_N:
+			# 水平中线为 u + v = 3，北侧有效区为 u + v < 3 (共6格)
+			return (sub_pos.x + sub_pos.y) < 3
+		TileShape.HALF_S:
+			# 水平中线为 u + v = 3，南侧有效区为 u + v > 3 (共6格)
+			return (sub_pos.x + sub_pos.y) > 3
+		TileShape.HALF_W:
+			# 垂直中线为 u == v，西侧有效区为 u < v (共6格)
+			return sub_pos.x < sub_pos.y
+		TileShape.HALF_E:
+			# 垂直中线为 u == v，东侧有效区为 u > v (共6格)
+			return sub_pos.x > sub_pos.y
+		_:
+			return false
 
 # 初始化并全量刷新全局 2.5D 高度场纹理 (ImageTexture R8)
 func _update_height_map() -> void:
@@ -230,22 +349,37 @@ func get_height_map_texture() -> ImageTexture:
 
 # 查询指定位置是否已被占用（支持 1x1 小麦、2x2 灌木、4x4 大树）
 func is_slot_occupied(cell: Vector2i, sub_pos: Vector2i = Vector2i.ZERO, size: Vector2i = Vector2i(1, 1)) -> bool:
+	if not has_any_tile(cell):
+		return true
+
+	var top_z := get_highest_floor(cell)
+	var shape := get_tile_shape(cell, top_z)
+
 	# 1. 如果有整格大物体(大树)，直接判定为全部占用
 	if objects_at.has(cell_key(cell)):
 		return true
-	# 2. 如果要放 4x4 大物体，检查该格是否有任何小麦/微物体
+
+	# 2. 如果要放 4x4 大物体
 	if size == Vector2i(4, 4):
+		# 三角半砖无法容纳 4x4 大物体
+		if shape != TileShape.FULL and shape != -1:
+			return true
+		# 检查该格是否有任何小麦/微物体
 		for y in 4:
 			for x in 4:
 				if sub_objects_at.has(sub_slot_key(cell, Vector2i(x, y))):
 					return true
 		return false
-	# 3. 检查指定的微槽位是否已有物体
+
+	# 3. 检查指定的微槽位是否已有物体或落在半砖禁用区域内
 	for dy in range(size.y):
 		for dx in range(size.x):
 			var sp := sub_pos + Vector2i(dx, dy)
-			if sp.x > 3 or sp.y > 3:
+			if sp.x > 3 or sp.y > 3 or sp.x < 0 or sp.y < 0:
 				return true # 超出边界
+			if shape != TileShape.FULL and shape != -1:
+				if not is_sub_slot_valid_for_shape(shape, sp):
+					return true # 不在半砖有效种植范围内 (中线或缺失半边)
 			if sub_objects_at.has(sub_slot_key(cell, sp)):
 				return true
 	return false
@@ -278,15 +412,34 @@ func get_object_at(cell: Vector2i, sub_pos: Vector2i = Vector2i.ZERO) -> Node:
 		return sub_objects_at[sub_slot_key(cell, sub_pos)]
 	return null
 
+# 查询本格是否有任何物体或植物 (用于放置地砖时的互斥检测)
+func has_any_object(cell: Vector2i) -> bool:
+	if objects_at.has(cell_key(cell)):
+		return true
+	for y in 4:
+		for x in 4:
+			if sub_objects_at.has(sub_slot_key(cell, Vector2i(x, y))):
+				return true
+	return false
+
 # 获取某格全部 16 个微槽位的占用布尔数组（供几何网格渲染器快速画图）
 func get_cell_sub_occupancies(cell: Vector2i) -> Array[bool]:
 	var mask: Array[bool] = []
 	mask.resize(16)
 	var has_full: bool = objects_at.has(cell_key(cell))
+	var top_z := get_highest_floor(cell)
+	var shape := get_tile_shape(cell, top_z)
+
 	for y in 4:
 		for x in 4:
 			var idx := y * 4 + x
-			if has_full or sub_objects_at.has(sub_slot_key(cell, Vector2i(x, y))):
+			var sp := Vector2i(x, y)
+			if has_full:
+				mask[idx] = true
+			elif shape != TileShape.FULL and shape != -1 and not is_sub_slot_valid_for_shape(shape, sp):
+				# 半砖中线及缺损半边直接标记为不可用
+				mask[idx] = true
+			elif sub_objects_at.has(sub_slot_key(cell, sp)):
 				mask[idx] = true
 			else:
 				mask[idx] = false
@@ -344,6 +497,8 @@ func compute_edge_at(cell: Vector2i) -> int:
 	if not has_any_tile(cell):
 		return EDGE_NONE
 	var z := get_highest_floor(cell)
+	if is_half_tile(cell, z):
+		return EDGE_NONE
 	var nw := get_nw_neighbor(cell)
 	var ne := get_ne_neighbor(cell)
 	var z_nw := get_highest_floor(nw) if has_any_tile(nw) else -1

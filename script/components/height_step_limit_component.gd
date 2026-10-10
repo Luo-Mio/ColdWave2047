@@ -15,8 +15,8 @@ extends Node
 @export var margin_pixels: float = 4.0
 
 @export_group("台阶边缘防抖与斜边推开 (Step Edge Glide)")
-## 是否开启通行台阶边缘防频繁上下抖动 (开启后纯正四向 W/A/S/D 移动贴近斜边会被推开平滑滑动，只有对角双键直跨才允许跨越台阶)
-@export var enable_step_edge_glide: bool = true
+## 是否开启通行台阶边缘防频繁上下抖动 (有三角半砖平滑边缘后已无需此约束，默认 false)
+@export var enable_step_edge_glide: bool = false
 
 var entity: CharacterBody2D = null
 var _last_physics_pos: Vector2 = Vector2.ZERO

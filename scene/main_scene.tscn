@@ -8,9 +8,13 @@
 [ext_resource type="Texture2D" uid="uid://ctg00xdmy43db" path="res://resources/tiles/dirt_tile.png" id="4_hrphr"]
 [ext_resource type="TileSet" uid="uid://b4wyeh4y7edc7" path="res://resources/surface/GreenGrass/grass_tileset.tres" id="5_grass_ts"]
 [ext_resource type="Script" uid="uid://cmwffxpi1h3gk" path="res://script/systems/selector.gd" id="5_x5n27"]
+[ext_resource type="Texture2D" uid="uid://cd3nvy5dng3s" path="res://resources/tiles/dirt_tile_half_d.png" id="6_l506t"]
 [ext_resource type="Script" uid="uid://qn45wtjehd4q" path="res://script/systems/layer_surf_system.gd" id="6_surf_sys"]
+[ext_resource type="Texture2D" uid="uid://deemrj4ceo6pm" path="res://resources/tiles/dirt_tile_half_l.png" id="7_nw6ib"]
+[ext_resource type="Texture2D" uid="uid://bmwbc0685ao2f" path="res://resources/tiles/dirt_tile_half_r.png" id="8_f8mcn"]
 [ext_resource type="Script" uid="uid://ccyjcrsoj6l7p" path="res://script/systems/wall_xray.gd" id="8_hrphr"]
 [ext_resource type="Script" uid="uid://bbfq38ivdtgy8" path="res://script/systems/build_manager.gd" id="9_86xya"]
+[ext_resource type="Texture2D" uid="uid://dq33tl7gd6250" path="res://resources/tiles/dirt_tile_half_t.png" id="9_rvira"]
 [ext_resource type="PackedScene" uid="uid://dewx1yy1y8ghw" path="res://scene/bio/wolf/wolf.tscn" id="10_wolf"]
 [ext_resource type="Script" uid="uid://heo0xna060h4" path="res://script/systems/aim_reticle.gd" id="11_aimreticle"]
 [ext_resource type="PackedScene" path="res://scene/ui/inventory.tscn" id="12_inv"]
@@ -20,12 +24,40 @@
 texture = ExtResource("4_hrphr")
 texture_region_size = Vector2i(64, 64)
 0:0/0 = 0
+1:0/0 = 0
+2:0/0 = 0
+3:0/0 = 0
+4:0/0 = 0
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_l4hwf"]
+texture = ExtResource("6_l506t")
+texture_region_size = Vector2i(64, 64)
+0:0/0 = 0
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_dcrpu"]
+texture = ExtResource("7_nw6ib")
+texture_region_size = Vector2i(64, 64)
+0:0/0 = 0
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_3sgmn"]
+texture = ExtResource("8_f8mcn")
+texture_region_size = Vector2i(64, 64)
+0:0/0 = 0
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_m4mm3"]
+texture = ExtResource("9_rvira")
+texture_region_size = Vector2i(64, 64)
+0:0/0 = 0
 
 [sub_resource type="TileSet" id="TileSet_eowc1"]
 tile_shape = 1
 tile_size = Vector2i(64, 32)
 physics_layer_0/collision_layer = 1
 sources/0 = SubResource("TileSetAtlasSource_86xya")
+sources/1 = SubResource("TileSetAtlasSource_l4hwf")
+sources/2 = SubResource("TileSetAtlasSource_dcrpu")
+sources/3 = SubResource("TileSetAtlasSource_3sgmn")
+sources/4 = SubResource("TileSetAtlasSource_m4mm3")
 
 [node name="mainScene" type="Node2D" unique_id=1756960173]
 texture_filter = 1

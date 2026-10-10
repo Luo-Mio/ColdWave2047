@@ -75,10 +75,13 @@ func _ready() -> void:
 		else:
 			tile_layers[i].visible = false
 
-	# 6. 【正确位置】：必须在第 3 步 GridData 构建完之后，再生成空气墙！
+	# 6. 全量构建并填补地图初始三角半砖
+	build_manager.update_all_half_tiles(sort_world, tile_layers)
+
+	# 7. 【正确位置】：必须在 GridData 与半砖构建完之后，再生成空气墙！
 	air_wall.rebuild_walls()
 
-	# 7. 初始排序
+	# 8. 初始排序
 	sort_world.call("sort_now")
 
 	# 8. 初始化楼层与双网格表面系统 (自动读取场景中的表面占位层并平滑渲染)
@@ -193,7 +196,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			build_manager.place_active_item(cell, hotbar_node, sort_world, selector, tile_layers)
 			_refresh_xray()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			build_manager.destroy_top_at(cell, sort_world, selector)
+			build_manager.destroy_top_at(cell, sort_world, selector, tile_layers)
 			_refresh_xray()
 
 func _process(_delta: float) -> void:

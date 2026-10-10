@@ -49,23 +49,34 @@ func _place_turf(cell: Vector2i, selector: Node2D) -> void:
 
 # 放置瓷砖
 func _place_tile(cell: Vector2i, tile_atlas: Vector2i, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer]) -> void:
-	# 【新增拦截】：如果本格种有小麦（哪怕只有1株）或种有大树，严禁在其上方叠放瓷砖！
-	if GridData.is_slot_occupied(cell, Vector2i.ZERO, Vector2i(4, 4)):
+	# 【拦截】：如果本格种有小麦（哪怕只有1株）或种有大树，严禁在其上方叠放瓷砖！
+	if GridData.has_any_object(cell):
 		return
 
 	var prev_z := GridData.get_highest_floor(cell)
+
+	var z: int
+	if GridData.is_half_tile(cell, prev_z):
+		# 如果本格当前顶层是自动半砖，放置完整地砖直接升级替换该半砖为完整砖块！
+		z = prev_z
+		GridData.remove_auto_half_tile_only(cell, z)
+	else:
+		z = prev_z + 1
 
 	# 【新约束】：放置新瓷砖时，覆压摧毁原顶面上的草皮/表面覆层
 	# 当前不掉落（spawn_drop = false），底层复用通用掉落系统，未来只需置为 true 即可掉落
 	if LayerSurfSystem.instance and LayerSurfSystem.instance.has_surf(cell, prev_z):
 		destroy_surf_at(cell, prev_z, sort_world, false)
 
-	var z := prev_z + 1
-	var cell_layer := get_or_create_cell_layer(z, cell, sort_world, tile_layers)
-	cell_layer.set_cell(cell, 0, tile_atlas, 0)
+	_set_tile_visual(cell, z, tile_atlas, sort_world, tile_layers)
 	GridData.set_tile(cell, z, true)
 	if LayerSurfSystem.instance:
 		LayerSurfSystem.instance.update_surf_around_tile(cell, z)
+
+	# 联动刷新本格及四周的三角半砖
+	update_half_tiles_around(cell, z, sort_world, tile_layers)
+	_rebuild_air_wall_if_present(sort_world)
+
 	sort_world.call("sort_now")
 	selector.call("force_update")
 
@@ -111,7 +122,7 @@ func _place_object(cell: Vector2i, scene_path: String, sort_world: Node2D, sub_c
 	GridData.register_object(cell, obj, sub_cell, size)
 
 # 右键智能破坏
-func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> void:
+func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D, tile_layers: Array[TileMapLayer] = []) -> void:
 	# 1. 优先破坏鼠标精准指向的单个物体（如单独收割某株小麦）
 	var sub_cell: Vector2i = selector.get("target_sub_cell") if selector else Vector2i.ZERO
 	var targeted_obj := GridData.get_object_at(cell, sub_cell)
@@ -147,6 +158,10 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 	if z <= 0:
 		return
 
+	# 自动半砖由两侧完整砖块支撑，不允许单独挖除
+	if GridData.is_half_tile(cell, z):
+		return
+
 	# 【安全审查】：检查地砖上方是否有坚固重型物体（如大树 break_with_tile == false）
 	var objects_on_tile: Array[Node] = GridData.get_all_objects_at(cell)
 	for obj in objects_on_tile:
@@ -172,6 +187,11 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 			cell_layer.queue_free()
 		else:
 			sort_world.call("sort_now")
+
+		# 【半砖联动刷新】：摧毁该层地砖后，周围受其支撑的半砖自动清除！
+		var layers_to_use: Array[TileMapLayer] = tile_layers if not tile_layers.is_empty() else GridData.layers
+		update_half_tiles_around(cell, z, sort_world, layers_to_use)
+		_rebuild_air_wall_if_present(sort_world)
 
 		# 【连带瓦解】：地砖上的轻型植被（小麦）连带收割破坏，并爆出对应的小麦掉落物！
 		for plant in objects_on_tile:
@@ -289,3 +309,96 @@ func _spawn_item_drops(item_id: String, count: int, broken_cell: Vector2i, broke
 			item_obj.set("base_position", target_world_pos)
 
 	sort_world.call("sort_now")
+
+# === 三角半砖 (1/2 Tile) 自动生成、消除与渲染同步 ===
+
+# 统一设置指定坐标与楼层的地砖视觉 (0层使用地面基底图层，1层及以上在 sort_world 动态分层)
+func _set_tile_visual(cell: Vector2i, z: int, atlas: Vector2i, sort_world: Node2D, tile_layers: Array[TileMapLayer]) -> void:
+	if z == 0 and not tile_layers.is_empty():
+		tile_layers[0].set_cell(cell, 0, atlas, 0)
+	else:
+		var cell_layer := get_or_create_cell_layer(z, cell, sort_world, tile_layers)
+		cell_layer.set_cell(cell, 0, atlas, 0)
+
+# 统一清除指定坐标与楼层的地砖视觉
+func _erase_tile_visual(cell: Vector2i, z: int, sort_world: Node2D, tile_layers: Array[TileMapLayer]) -> void:
+	if z == 0 and not tile_layers.is_empty():
+		tile_layers[0].erase_cell(cell)
+	var key := "cell_z%d_%d_%d" % [z, cell.x, cell.y]
+	var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
+	if cell_layer:
+		cell_layer.erase_cell(cell)
+		if cell_layer.get_used_cells().is_empty():
+			cell_layer.queue_free()
+
+# 当某格地砖发生变动时，联动检测本格及周围物理相邻格，自动增删填补三角半砖
+func update_half_tiles_around(center_cell: Vector2i, z: int, sort_world: Node2D, tile_layers: Array[TileMapLayer]) -> void:
+	var layers_to_use: Array[TileMapLayer] = tile_layers if not tile_layers.is_empty() else GridData.layers
+	var candidates: Array[Vector2i] = [center_cell]
+	for n in _get_surrounding_cells(center_cell):
+		if not candidates.has(n):
+			candidates.append(n)
+
+	for c in candidates:
+		# 若本格在该层已有完整砖块，绝不生成半砖
+		if GridData.has_full_tile(c, z):
+			continue
+
+		var desired_shape: int = GridData.determine_half_tile_shape(c, z)
+		var current_shape: int = GridData.get_auto_half_tile_shape(c, z)
+
+		if desired_shape != -1:
+			# 需要半砖
+			if current_shape != desired_shape:
+				GridData.set_auto_half_tile(c, z, desired_shape)
+				_set_tile_visual(c, z, GridData.TILE_SHAPE_ATLAS[desired_shape], sort_world, layers_to_use)
+		else:
+			# 不需要半砖
+			if current_shape != -1:
+				_cleanup_objects_on_cell(c, z, sort_world)
+				GridData.remove_auto_half_tile(c, z)
+				_erase_tile_visual(c, z, sort_world, layers_to_use)
+
+# 全量构建所有楼层的三角半砖 (地图初始化时调用)
+func update_all_half_tiles(sort_world: Node2D, tile_layers: Array[TileMapLayer]) -> void:
+	var layers_to_use: Array[TileMapLayer] = tile_layers if not tile_layers.is_empty() else GridData.layers
+	var floors_checked: Dictionary = {}
+	for k in GridData.grid.keys():
+		floors_checked[k.z] = true
+
+	for z in floors_checked.keys():
+		var cells_at_z: Array[Vector2i] = []
+		for k in GridData.grid.keys():
+			if k.z == z and not GridData.is_half_tile(Vector2i(k.x, k.y), z):
+				cells_at_z.append(Vector2i(k.x, k.y))
+		for cell in cells_at_z:
+			update_half_tiles_around(cell, z, sort_world, layers_to_use)
+	_rebuild_air_wall_if_present(sort_world)
+
+# 清理某格指定楼层上的植物与掉落物
+func _cleanup_objects_on_cell(cell: Vector2i, z: int, sort_world: Node2D) -> void:
+	var objects_on_tile: Array[Node] = GridData.get_all_objects_at(cell)
+	if objects_on_tile.is_empty():
+		return
+	var valid_neighbors := _get_valid_drop_neighbors(cell, z)
+	for plant in objects_on_tile:
+		var p_size: Vector2i = plant.get("grid_size") if plant.get("grid_size") != null else Vector2i(1, 1)
+		var p_sp: Vector2i = plant.get("sub_cell") if plant.get("sub_cell") != null else Vector2i.ZERO
+		var p_drop: String = plant.get("drop_item_id") if plant.get("drop_item_id") != null else ""
+		var p_cnt: int = plant.get("drop_count") if plant.get("drop_count") != null else 1
+
+		GridData.unregister_object(cell, p_sp, p_size)
+		plant.queue_free()
+
+		if p_drop != "" and not valid_neighbors.is_empty():
+			_spawn_item_drops(p_drop, p_cnt, cell, z, valid_neighbors, sort_world)
+
+# 联动更新边缘空气墙 (若场景中存在 AirWall)
+func _rebuild_air_wall_if_present(sort_world: Node2D) -> void:
+	if sort_world == null:
+		return
+	var parent := sort_world.get_parent()
+	if parent != null:
+		var aw = parent.get_node_or_null("AirWall")
+		if aw != null and aw.has_method("rebuild_walls"):
+			aw.call("rebuild_walls")

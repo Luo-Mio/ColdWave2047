@@ -31,16 +31,38 @@ static func collect_floor_grid_lines(center_cell: Vector2i, range_radius: int, f
 			if iso_dist > float(range_radius) + 0.15:
 				continue
 
-			# 64x32 菱形边框 4 条独立线段 (8 个顶点)
+			# 64x32 菱形或半砖三角边框线段
 			var p_top := cell_top + Vector2(0, -16)
 			var p_right := cell_top + Vector2(32, 0)
 			var p_bot := cell_top + Vector2(0, 16)
 			var p_left := cell_top + Vector2(-32, 0)
 
-			lines.push_back(p_top); lines.push_back(p_right)
-			lines.push_back(p_right); lines.push_back(p_bot)
-			lines.push_back(p_bot); lines.push_back(p_left)
-			lines.push_back(p_left); lines.push_back(p_top)
+			var shape := 0
+			if grid_data.has_method("get_tile_shape"):
+				shape = grid_data.get_tile_shape(cell, fl)
+
+			match shape:
+				1: # HALF_W
+					lines.push_back(p_top); lines.push_back(p_bot)
+					lines.push_back(p_bot); lines.push_back(p_left)
+					lines.push_back(p_left); lines.push_back(p_top)
+				2: # HALF_E
+					lines.push_back(p_top); lines.push_back(p_right)
+					lines.push_back(p_right); lines.push_back(p_bot)
+					lines.push_back(p_bot); lines.push_back(p_top)
+				3: # HALF_N
+					lines.push_back(p_top); lines.push_back(p_right)
+					lines.push_back(p_right); lines.push_back(p_left)
+					lines.push_back(p_left); lines.push_back(p_top)
+				4: # HALF_S
+					lines.push_back(p_left); lines.push_back(p_right)
+					lines.push_back(p_right); lines.push_back(p_bot)
+					lines.push_back(p_bot); lines.push_back(p_left)
+				_: # FULL
+					lines.push_back(p_top); lines.push_back(p_right)
+					lines.push_back(p_right); lines.push_back(p_bot)
+					lines.push_back(p_bot); lines.push_back(p_left)
+					lines.push_back(p_left); lines.push_back(p_top)
 
 	return lines
 
@@ -52,25 +74,50 @@ static func draw_tile_grid(ci: CanvasItem, center_cell: Vector2i, range_radius: 
 	if not lines.is_empty():
 		ci.draw_multiline(lines, color, width)
 
-## 依据已有的地块顶部坐标列表批量绘制 64x32 菱形外边框
-static func draw_tiles_borders(ci: CanvasItem, tile_tops: Array, color: Color, width: float = 1.0) -> void:
-	if color.a <= 0.001 or ci == null or tile_tops.is_empty():
+## 依据已有的地块列表批量绘制 64x32 菱形或半砖三角外边框
+static func draw_tiles_borders(ci: CanvasItem, tile_items: Array, color: Color, width: float = 1.0) -> void:
+	if color.a <= 0.001 or ci == null or tile_items.is_empty():
 		return
 	var lines := PackedVector2Array()
-	lines.resize(tile_tops.size() * 8)
-	var idx := 0
-	for top in tile_tops:
-		var cell_top: Vector2 = top
+	for item in tile_items:
+		var cell_top: Vector2
+		var shape := 0
+		if item is Dictionary:
+			cell_top = item.get("top", Vector2.ZERO)
+			shape = item.get("shape", 0)
+		elif item is Vector2:
+			cell_top = item
+
 		var p_top := cell_top + Vector2(0, -16)
 		var p_right := cell_top + Vector2(32, 0)
 		var p_bot := cell_top + Vector2(0, 16)
 		var p_left := cell_top + Vector2(-32, 0)
-		lines[idx] = p_top; lines[idx + 1] = p_right
-		lines[idx + 2] = p_right; lines[idx + 3] = p_bot
-		lines[idx + 4] = p_bot; lines[idx + 5] = p_left
-		lines[idx + 6] = p_left; lines[idx + 7] = p_top
-		idx += 8
-	ci.draw_multiline(lines, color, width)
+
+		match shape:
+			1: # HALF_W
+				lines.push_back(p_top); lines.push_back(p_bot)
+				lines.push_back(p_bot); lines.push_back(p_left)
+				lines.push_back(p_left); lines.push_back(p_top)
+			2: # HALF_E
+				lines.push_back(p_top); lines.push_back(p_right)
+				lines.push_back(p_right); lines.push_back(p_bot)
+				lines.push_back(p_bot); lines.push_back(p_top)
+			3: # HALF_N
+				lines.push_back(p_top); lines.push_back(p_right)
+				lines.push_back(p_right); lines.push_back(p_left)
+				lines.push_back(p_left); lines.push_back(p_top)
+			4: # HALF_S
+				lines.push_back(p_left); lines.push_back(p_right)
+				lines.push_back(p_right); lines.push_back(p_bot)
+				lines.push_back(p_bot); lines.push_back(p_left)
+			_: # FULL
+				lines.push_back(p_top); lines.push_back(p_right)
+				lines.push_back(p_right); lines.push_back(p_bot)
+				lines.push_back(p_bot); lines.push_back(p_left)
+				lines.push_back(p_left); lines.push_back(p_top)
+
+	if not lines.is_empty():
+		ci.draw_multiline(lines, color, width)
 
 ## 绘制任意规格的 2:1 等轴测菱形区域 (支持填充色 + 边框轮廓)
 static func draw_diamond(ci: CanvasItem, center: Vector2, half_w: float, half_h: float, fill_color: Color, border_color: Color = Color.TRANSPARENT, border_width: float = 1.0) -> void:

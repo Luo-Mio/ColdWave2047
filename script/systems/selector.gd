@@ -60,7 +60,8 @@ func _rebuild_tile_cache(player: Node2D) -> void:
 			_cached_tiles.append({
 				"cell": cell,
 				"top": cell_top,
-				"floor": floor_val
+				"floor": floor_val,
+				"shape": GridData.get_tile_shape(cell, floor_val)
 			})
 
 # 【直觉鼠标拾取】：直接在缓存中做命中检测
@@ -143,10 +144,7 @@ func _draw() -> void:
 	var is_full_cell: bool = (grid_size == Vector2i(4, 4))
 
 	# 1. 绘制所有周围有效大格的外边框线（利用 IsoGridDrawer 极速合批，周围格子一律不画微格小点）
-	var tops: Array = []
-	for tile_data in _cached_tiles:
-		tops.append(tile_data["top"])
-	IsoGridDrawer.draw_tiles_borders(self, tops, Color(1.0, 1.0, 1.0, 0.15), 1.0)
+	IsoGridDrawer.draw_tiles_borders(self, _cached_tiles, Color(1.0, 1.0, 1.0, 0.15), 1.0)
 
 	# 2. 当前鼠标所指的大格 (target_cell) 专属微格与高亮展示
 	if target_cell != Vector2i(-99999, -99999):
@@ -181,7 +179,12 @@ func _draw() -> void:
 				draw_multiline(red_dots, Color(1.0, 0.25, 0.25, 0.65), 1.0)
 
 		# B. 统一绘制当前目标高亮菱形 (支持 1x1 小麦、2x2 灌木、4x4 大树/瓷砖等所有尺寸)
-		var is_occ := GridData.is_slot_occupied(target_cell, target_sub_cell, grid_size)
+		var is_occ: bool
+		if is_full_cell and item_type == 0:
+			# 放置地砖：只要本格没有种植大树或小麦，即可放置（半砖亦可被升级替换为完整砖块）
+			is_occ = GridData.has_any_object(target_cell)
+		else:
+			is_occ = GridData.is_slot_occupied(target_cell, target_sub_cell, grid_size)
 		var h_color: Color
 		if is_full_cell:
 			# 整格大物体/瓷砖：占用呈半透明红，可放呈半透明淡黄
