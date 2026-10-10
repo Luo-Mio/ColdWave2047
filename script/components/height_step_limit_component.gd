@@ -70,6 +70,27 @@ func is_cell_passable(target_cell: Vector2i, from_floor: int) -> bool:
 
 	return absi(target_floor - from_floor) <= max_step_height
 
+# 检验目标世界坐标是否允许从 from_floor 楼层合法通行 (支持 16px 对角桥)
+func is_pos_passable(target_pos: Vector2, from_floor: int) -> bool:
+	var gd = _get_grid()
+	if gd == null:
+		return true
+
+	var br: Dictionary = gd.call("check_diagonal_bridge", target_pos) if gd.has_method("check_diagonal_bridge") else { "has_bridge": false }
+	if br.get("has_bridge", false):
+		return absi(int(br.floor) - from_floor) <= max_step_height
+
+	var target_cell: Vector2i = gd.call("world_to_cell", target_pos) if gd.has_method("world_to_cell") else Vector2i.ZERO
+	if block_void and gd.has_method("has_any_tile"):
+		if not gd.call("has_any_tile", target_cell):
+			return false
+
+	var target_floor: int = 0
+	if gd.has_method("get_highest_floor"):
+		target_floor = gd.call("get_highest_floor", target_cell)
+
+	return absi(target_floor - from_floor) <= max_step_height
+
 # 判断当前移动是否属于纯正四向移动 (单键 W/A/S/D 或单轴向，撞斜边将被推开；对角双键直跨才放行翻越)
 func is_cardinal_movement(vel: Vector2) -> bool:
 	# 1. 优先检测当前玩家的物理输入按键 (最精准、零浮点与零透视失真)
@@ -89,7 +110,7 @@ func is_cardinal_movement(vel: Vector2) -> bool:
 	var min_v := minf(vmx, vmy)
 	return (min_v / max_v) < 0.25
 
-# 物理移动前的速度预处理：检测前方目标落点，若撞向不可进入的格子，则消除法向速度并投影至等距切向平滑滑动
+# 物理移动前的速度预处理：检测前方目标落点，若撞向不可进入的格子或对角桥，则消除法向速度并投影至切向平滑滑动
 func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -> Vector2:
 	if not is_enabled or velocity == Vector2.ZERO:
 		return velocity
@@ -99,51 +120,57 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 		return velocity
 
 	var curr_cell: Vector2i = gd.call("world_to_cell", current_pos)
-	var curr_floor: int = gd.call("get_highest_floor", curr_cell)
+	var curr_floor: int = gd.call("get_floor_at_pos", current_pos) if gd.has_method("get_floor_at_pos") else gd.call("get_highest_floor", curr_cell)
 
 	var motion := velocity * delta
 	var target_pos := current_pos + motion
 
-	# 优先判定下一帧身体直接进入的 target_cell；若仍在本格内，再用 margin_pixels 提前探查边缘防穿透
-	var target_cell: Vector2i = gd.call("world_to_cell", target_pos)
-	var probe_cell: Vector2i = target_cell
-	if probe_cell == curr_cell and margin_pixels > 0.0:
-		var probe_pos := target_pos + velocity.normalized() * margin_pixels
-		probe_cell = gd.call("world_to_cell", probe_pos)
+	var probe_pos := target_pos
+	if margin_pixels > 0.0:
+		probe_pos = target_pos + velocity.normalized() * margin_pixels
+	var probe_cell: Vector2i = gd.call("world_to_cell", probe_pos)
 
-	# 若探测点在同一格子内，完全合法
-	if probe_cell == curr_cell:
+	# 优先检测目标/探测点是否处于 16px 对角桥上
+	var probe_bridge: Dictionary = gd.call("check_diagonal_bridge", probe_pos) if gd.has_method("check_diagonal_bridge") else { "has_bridge": false }
+	var probe_floor: int = probe_bridge.floor if probe_bridge.get("has_bridge", false) else (gd.call("get_highest_floor", probe_cell) if gd.has_method("get_highest_floor") else 0)
+
+	# 若同一格子且未处于对角桥上，或者处于对角桥上但楼层与当前完全相同且同格，安全放行
+	if probe_cell == curr_cell and not probe_bridge.get("has_bridge", false):
+		return velocity
+	if probe_cell == curr_cell and probe_floor == curr_floor:
 		return velocity
 
-	# 若探测点所在格子不可通行（上下落差超过 max_step_height，或为虚空）
-	if not is_cell_passable(probe_cell, curr_floor):
-		# 计算该边界的外法线（由 2:1 等距几何推导：normal = (dx * 0.5, dy * 2.0).normalized()）
-		var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
-		var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
-		var cell_delta := center_probe - center_curr
-		if cell_delta == Vector2.ZERO:
-			return Vector2.ZERO
-		var normal := Vector2(cell_delta.x * 0.5, cell_delta.y * 2.0).normalized()
-		var dot_n := velocity.dot(normal)
+	# 检查是否可通行（上下落差超过 max_step_height，或为虚空深渊）
+	var is_passable := absi(probe_floor - curr_floor) <= max_step_height
+	if block_void and not probe_bridge.get("has_bridge", false) and gd.has_method("has_any_tile"):
+		if not gd.call("has_any_tile", probe_cell):
+			is_passable = false
 
+	# 若不可通行（撞向高墙、悬崖虚空或 16px 对角桥外壁）
+	if not is_passable:
+		var normal := Vector2.ZERO
+		if probe_bridge.get("has_bridge", false) and probe_bridge.normal != Vector2.ZERO:
+			normal = probe_bridge.normal
+		else:
+			var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
+			var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
+			var cell_delta := center_probe - center_curr
+			if cell_delta == Vector2.ZERO:
+				return Vector2.ZERO
+			normal = Vector2(cell_delta.x * 0.5, cell_delta.y * 2.0).normalized()
+
+		var dot_n := velocity.dot(normal)
 		if enable_sliding and dot_n > 0.0:
-			# 消除撞墙法向分量，投影到等距边缘切线
 			var slide_vel := velocity - normal * dot_n
-			# 二次校验：确保沿切线滑动时不会撞向另一个障碍角
 			var probe2 := current_pos + slide_vel * delta + slide_vel.normalized() * margin_pixels
-			var cell2: Vector2i = gd.call("world_to_cell", probe2)
-			if cell2 != curr_cell and not is_cell_passable(cell2, curr_floor):
+			if not is_pos_passable(probe2, curr_floor):
 				return Vector2.ZERO
 			return slide_vel
 		else:
 			return Vector2.ZERO
 
-	# 若探测点所在格子在允许跨越的高度内，但存在楼层落差：
-	# 若探测点所在格子在允许跨越的高度内，但存在楼层落差：
-	# 纯正四向检测：只要移动属于纯正四向 (单键 W/A/S/D 或单轴向)，撞上任何台阶斜边一律视为擦滑被推开；
-	# 只有对角双键直跨 (W+D, W+A, S+D, S+A) 朝向台阶冲才允许直接翻越！
-	if enable_step_edge_glide:
-		var probe_floor: int = gd.call("get_highest_floor", probe_cell)
+	# 若探测点在允许跨越的高度内，且开启了台阶边缘防抖 (仅限常规格子边缘)
+	if enable_step_edge_glide and not probe_bridge.get("has_bridge", false):
 		if probe_floor != curr_floor:
 			var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
 			var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
@@ -152,15 +179,13 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 				var normal := Vector2(cell_delta.x * 0.5, cell_delta.y * 2.0).normalized()
 				var dot_n := velocity.normalized().dot(normal)
 				if dot_n > 0.0:
-					# 纯正四向移动一律推开，对角直跨则放行
 					var is_grazing := is_cardinal_movement(velocity)
 					if is_grazing:
 						if enable_sliding:
 							var normal_speed := velocity.dot(normal)
 							var slide_vel := velocity - normal * normal_speed
 							var probe2 := current_pos + slide_vel * delta + slide_vel.normalized() * margin_pixels
-							var cell2: Vector2i = gd.call("world_to_cell", probe2)
-							if cell2 != curr_cell and not is_cell_passable(cell2, curr_floor):
+							if not is_pos_passable(probe2, curr_floor):
 								return Vector2.ZERO
 							return slide_vel
 						else:
@@ -174,26 +199,19 @@ func enforce_boundary(body: CharacterBody2D, prev_pos: Vector2) -> void:
 		return
 
 	var gd = _get_grid()
-	if gd == null or not gd.has_method("world_to_cell") or not gd.has_method("get_highest_floor"):
+	if gd == null or not gd.has_method("world_to_cell"):
 		return
 
 	var curr_pos := body.global_position
-	var curr_cell: Vector2i = gd.call("world_to_cell", curr_pos)
-	var prev_cell: Vector2i = gd.call("world_to_cell", prev_pos)
+	var prev_floor: int = gd.call("get_floor_at_pos", prev_pos) if gd.has_method("get_floor_at_pos") else gd.call("get_highest_floor", gd.call("world_to_cell", prev_pos))
 
-	# 依然在原格子里，安全
-	if curr_cell == prev_cell:
-		return
-
-	var prev_floor: int = gd.call("get_highest_floor", prev_cell)
-	if not is_cell_passable(curr_cell, prev_floor):
+	if not is_pos_passable(curr_pos, prev_floor):
 		# 发生了非法穿墙/跌落，二分法寻找边界接触点并弹回合法区域内
 		var low := prev_pos
 		var high := curr_pos
-		for i in range(6):
+		for i in range(8):
 			var mid := (low + high) * 0.5
-			var mid_cell: Vector2i = gd.call("world_to_cell", mid)
-			if is_cell_passable(mid_cell, prev_floor):
+			if is_pos_passable(mid, prev_floor):
 				low = mid
 			else:
 				high = mid

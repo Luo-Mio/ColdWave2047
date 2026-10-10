@@ -13,8 +13,7 @@ var current_floor: int = 0
 
 # 每物理帧更新角色贴图高度与摄像机阻尼
 func update_height(player_pos: Vector2, sprite: AnimatedSprite2D, camera: Camera2D, delta: float) -> void:
-	var cell := GridData.world_to_cell(player_pos)
-	current_floor = GridData.get_highest_floor(cell)
+	current_floor = GridData.get_floor_at_pos(player_pos)
 
 	var parent_node := get_parent() as Node2D
 	var s_y := parent_node.scale.y if (parent_node and parent_node.scale.y != 0.0) else 1.0

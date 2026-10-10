@@ -141,6 +141,74 @@ func cell_to_sort_key(cell: Vector2i) -> float:
 # 某格最高楼层（O(1) 瞬时查询，零循环零垃圾）
 func get_highest_floor(cell: Vector2i) -> int:
 	return highest_floor.get(cell_key(cell), 0)
+
+# === 2.5D 对角相邻同高表面 16px 桥接与防穿模系统 ===
+const BRIDGE_HALF_X: float = 8.0
+const BRIDGE_HALF_Y: float = 4.0
+
+# 检测世界坐标 pos 是否位于任何对角相邻同高表面形成的 16px 桥接区域内
+# 返回 Dictionary: { "has_bridge": bool, "floor": int, "normal": Vector2, "vertex": Vector2, "type": String }
+func check_diagonal_bridge(pos: Vector2) -> Dictionary:
+	if layers.is_empty():
+		return { "has_bridge": false, "floor": 0, "normal": Vector2.ZERO, "vertex": Vector2.ZERO, "type": "" }
+
+	var base_cell := world_to_cell(pos)
+	var base_center := cell_to_world(base_cell)
+
+	var vertices: Array[Vector2] = [
+		base_center + Vector2(-32.0, 0.0), # Left
+		base_center + Vector2(32.0, 0.0),  # Right
+		base_center + Vector2(0.0, -16.0), # Top
+		base_center + Vector2(0.0, 16.0)   # Bottom
+	]
+
+	for V: Vector2 in vertices:
+		var dx: float = pos.x - V.x
+		var dy: float = pos.y - V.y
+		if absf(dx) <= BRIDGE_HALF_X and absf(dy) <= BRIDGE_HALF_Y:
+			# 采样该顶点四周的 4 个格子
+			var c_W := world_to_cell(V + Vector2(-16.0, 0.0))
+			var c_E := world_to_cell(V + Vector2(16.0, 0.0))
+			var c_N := world_to_cell(V + Vector2(0.0, -8.0))
+			var c_S := world_to_cell(V + Vector2(0.0, 8.0))
+
+			var f_W := get_highest_floor(c_W)
+			var f_E := get_highest_floor(c_E)
+			var f_N := get_highest_floor(c_N)
+			var f_S := get_highest_floor(c_S)
+
+			# 1. 水平对角对 (W 与 E 同高，且高于 N 或 S)
+			if f_W == f_E and f_W > maxi(f_N, f_S):
+				var bridge_floor := f_W
+				if dy > 0.0 and f_S < bridge_floor:
+					# 南侧凹角：阻挡线为水平横线，面朝南 (+y)。向障碍物内部推进的方向为北 (0, -1)
+					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(0, -1), "vertex": V, "type": "horizontal_south" }
+				elif dy < 0.0 and f_N < bridge_floor:
+					# 北侧凹角：阻挡线为水平横线，面朝北 (-y)。向障碍物内部推进的方向为南 (0, 1)
+					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(0, 1), "vertex": V, "type": "horizontal_north" }
+				else:
+					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2.ZERO, "vertex": V, "type": "horizontal_center" }
+
+			# 2. 垂直对角对 (N 与 S 同高，且高于 W 或 E)
+			if f_N == f_S and f_N > maxi(f_W, f_E):
+				var bridge_floor := f_N
+				if dx < 0.0 and f_W < bridge_floor:
+					# 西侧凹角：阻挡线为垂直竖线，面朝西 (-x)。向障碍物内部推进的方向为东 (1, 0)
+					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(1, 0), "vertex": V, "type": "vertical_west" }
+				elif dx > 0.0 and f_E < bridge_floor:
+					# 东侧凹角：阻挡线为垂直竖线，面朝东 (+x)。向障碍物内部推进的方向为西 (-1, 0)
+					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(-1, 0), "vertex": V, "type": "vertical_east" }
+				else:
+					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2.ZERO, "vertex": V, "type": "vertical_center" }
+
+	return { "has_bridge": false, "floor": 0, "normal": Vector2.ZERO, "vertex": Vector2.ZERO, "type": "" }
+
+# 查询世界坐标位置处的有效楼层 (优先判定 16px 对角桥，否则返回底层格子最高楼层)
+func get_floor_at_pos(pos: Vector2) -> int:
+	var br := check_diagonal_bridge(pos)
+	if br.has_bridge:
+		return br.floor
+	return get_highest_floor(world_to_cell(pos))
 	
 # 楼层号 → Y 像素偏移 (0层=0px, 1层=-16px, 2层=-32px)
 func get_floor_pixel_offset(floor: int) -> float:

@@ -75,10 +75,9 @@ func update_depth(delta: float) -> void:
 
 	var s_y := parent_entity.scale.y if parent_entity.scale.y != 0.0 else 1.0
 
-	# 1. 查询当前脚底所在格子的楼层高度 (基于实体的物理地面坐标)
+	# 1. 查询当前脚底所在格子的楼层高度 (基于实体的物理地面坐标，支持 16px 对角桥)
 	var ground_pos := parent_entity.global_position
-	var cell := GridData.world_to_cell(ground_pos)
-	current_floor = GridData.get_highest_floor(cell)
+	current_floor = GridData.get_floor_at_pos(ground_pos)
 	var floor_offset := GridData.get_floor_pixel_offset(current_floor)
 	var local_floor_y := floor_offset / s_y
 
