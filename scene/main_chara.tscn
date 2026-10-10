@@ -194,7 +194,7 @@ enable_camera_follow = true
 
 [node name="MoverComponent" type="Node" parent="LogicScript" unique_id=1945927822]
 script = ExtResource("7_mover")
-move_speed = 80.0
+move_speed = 120.0
 snap_iso_diagonal = true
 
 [node name="IsoAnimComponent" type="Node" parent="LogicScript" unique_id=1168471338]

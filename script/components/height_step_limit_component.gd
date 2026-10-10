@@ -294,12 +294,17 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 			var dy := probe_cell.y - curr_cell.y
 			var is_diagonal := (dx == 0 and absi(dy) == 2) or (absi(dx) == 1 and dy == 0)
 			if is_diagonal:
-				# 对角相接格没有物理棱边，绝不能进行法向投影 (否则上下方向法向为 (0, ±1)，速度直接被归零清死！)
-				# 转由侧翼角落决议进行平滑翻越/侧翼导向
+				# 对角相接格没有物理棱边，绝不能进行法向投影
+				# 若玩家朝向目标对角格推进且目标格合法，直接放行直跨；否则尝试侧翼导向
+				var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
+				var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
+				var cell_delta := center_probe - center_curr
+				if cell_delta.dot(velocity) > 0.0:
+					return velocity
 				var flank_slide := resolve_corner_flank(curr_cell, probe_cell, current_pos, velocity, curr_floor)
 				if flank_slide != Vector2.ZERO:
 					return flank_slide.normalized() * velocity.length()
-				return Vector2.ZERO
+				return velocity
 
 			var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
 			var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)

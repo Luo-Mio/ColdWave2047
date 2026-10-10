@@ -1,0 +1,58 @@
+[gd_scene load_steps=2 format=3]
+
+[sub_resource type="GDScript" id="1"]
+script/source = "extends Node
+
+func _ready() -> void:
+	print(\"=== Testing Diagonal Step Functionality ===\")
+	
+	var cell_A := Vector2i(10, 10)
+	var cell_B := Vector2i(11, 10) # horizontal diagonal: abs(dx)==1, dy==0
+	
+	var pos_A: Vector2 = GridData.cell_to_world(cell_A)
+	var pos_B: Vector2 = GridData.cell_to_world(cell_B)
+	var shared_vertex: Vector2 = (pos_A + pos_B) * 0.5
+	
+	for z in range(0, 6):
+		GridData.set_tile(cell_A, z, true)
+	for z in range(0, 5):
+		GridData.set_tile(cell_B, z, true)
+		
+	var h_A := GridData.get_highest_floor(cell_A)
+	var h_B := GridData.get_highest_floor(cell_B)
+	print(\"Pillar A (5-high): %d, Pillar B (4-high): %d\" % [h_A, h_B])
+	assert(h_A == 5 and h_B == 4)
+	
+	var br: Dictionary = GridData.check_diagonal_bridge(shared_vertex)
+	print(\"Bridge detected: \", br.has_bridge, \", floor: \", br.floor, \", type: \", br.type)
+	assert(br.has_bridge == true, \"Bridge between 5 and 4 must exist!\")
+	
+	var comp := HeightStepLimitComponent.new()
+	add_child(comp)
+	
+	var vel_to_B: Vector2 = (pos_B - pos_A).normalized() * 100.0
+	var vel_step: Vector2 = comp.constrain_velocity(pos_A, vel_to_B, 0.016)
+	print(\"Moving towards 4-high pillar from 5-high pillar: vel = \", vel_step)
+	assert(vel_step.length() > 50.0, \"Must be able to move towards 4-high pillar!\")
+	
+	# Moving back from 4-high to 5-high
+	var vel_to_A: Vector2 = (pos_A - pos_B).normalized() * 100.0
+	var vel_step_back: Vector2 = comp.constrain_velocity(pos_B, vel_to_A, 0.016)
+	print(\"Moving back to 5-high pillar from 4-high pillar: vel = \", vel_step_back)
+	assert(vel_step_back.length() > 50.0, \"Must be able to move back up to 5-high pillar!\")
+	
+	# Moving towards void (floor 0)
+	var void_cell := Vector2i(10, 12)
+	var pos_void: Vector2 = GridData.cell_to_world(void_cell)
+	var vel_to_void: Vector2 = (pos_void - pos_A).normalized() * 100.0
+	var vel_void: Vector2 = comp.constrain_velocity(pos_A + Vector2(0, 14), vel_to_void, 0.016)
+	print(\"Moving towards void: vel = \", vel_void)
+	assert(vel_void == Vector2.ZERO or vel_void.dot(vel_to_void) <= 0.001, \"Must block falling from 5 to 0!\")
+	
+	print(\"=== ALL TESTS PASSED! ===\")
+	get_tree().quit(0)
+"
+
+[node name="TestRunner" type="Node"]
+script = SubResource("1")
+

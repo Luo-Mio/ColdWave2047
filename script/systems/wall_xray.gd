@@ -52,8 +52,8 @@ extends Node
 	set(v):
 		cap_enable_dither = v
 		if cap_material: cap_material.set_shader_parameter("enable_dither", cap_enable_dither)
-## 截面封顶的 Z-Index 渲染层级 (默认 0，完美融入 SortWorld 动态排序)
-@export var cap_z_index: int = 0
+## 截面封顶的 Z-Index 渲染层级 (默认 1，高于所有 Z=0 瓷砖与物件，防止被前景立面截断)
+@export var cap_z_index: int = 1
 
 # 轻量截面封顶多边形绘制节点 (配合 GPU Shader 实现平滑淡入淡出)
 class XRayCap extends Node2D:
@@ -72,7 +72,7 @@ class XRayCap extends Node2D:
 var material: ShaderMaterial
 var cap_material: ShaderMaterial
 var active_xray_layers: Array[TileMapLayer] = []
-var active_xray_objects: Dictionary = {} # CanvasItem -> Material (记录透视前原始材质，用于精准还原)
+var active_xray_objects: Dictionary = {} # CanvasItem -> Dictionary { "material": Material, "z_index": int }
 var active_caps: Array[Node2D] = [] # 记录当前活跃的同层封顶盖板
 
 func _ready() -> void:
@@ -150,12 +150,19 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 	for layer in active_xray_layers:
 		if is_instance_valid(layer):
 			layer.material = VisionFogComponent.get_tile_shadow_material()
+			layer.z_index = 0
 	active_xray_layers.clear()
 
 	# 还原上一批透视的柱顶/高处物体精灵与草皮表面 (树木、小麦、掉落物、surf切片等)
 	for item in active_xray_objects.keys():
 		if is_instance_valid(item):
-			item.material = active_xray_objects[item]
+			var data = active_xray_objects[item]
+			if data is Dictionary:
+				item.material = data.get("material")
+				item.z_index = data.get("z_index", 0)
+			else:
+				item.material = data
+				item.z_index = 0
 	active_xray_objects.clear()
 
 	# 清理上一批截面封顶
@@ -167,6 +174,8 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 	active_caps.clear()
 
 	if player_node == null or material == null or sort_world == null:
+		if is_instance_valid(player_node) and player_node.z_index != 0:
+			player_node.z_index = 0
 		return
 
 	var player_visual: Vector2 = player_node.global_position
@@ -233,6 +242,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 					if cell_layer:
 						if not active_xray_layers.has(cell_layer):
 							cell_layer.material = material
+							cell_layer.z_index = cap_z_index + 2
 							active_xray_layers.append(cell_layer)
 						is_cell_occluding = true
 
@@ -244,6 +254,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 					var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
 					if cell_layer and not active_xray_layers.has(cell_layer):
 						cell_layer.material = material
+						cell_layer.z_index = cap_z_index + 2
 						active_xray_layers.append(cell_layer)
 					# 4.2 挂载该楼层对应的所有草皮/表面切片 (surf)
 					_apply_xray_to_surf(front_cell, z, sort_world)
@@ -265,7 +276,13 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 				created_caps = true
 
 	if created_caps:
+		if is_instance_valid(player_node):
+			player_node.z_index = cap_z_index + 1
 		sort_world.call("sort_now")
+	else:
+		if is_instance_valid(player_node) and player_node.z_index != 0:
+			player_node.z_index = 0
+			sort_world.call("sort_now")
 
 # 为某格子在第 z 层涉及的所有双网格表面切片挂载 X-Ray 材质
 func _apply_xray_to_surf(cell: Vector2i, z: int, sort_world: Node2D) -> void:
@@ -280,8 +297,12 @@ func _apply_xray_to_surf(cell: Vector2i, z: int, sort_world: Node2D) -> void:
 			surf_node = sort_world.get_node_or_null("turf_z%d_%d_%d" % [z, d.x, d.y]) as CanvasItem
 		
 		if surf_node and not active_xray_objects.has(surf_node):
-			active_xray_objects[surf_node] = surf_node.material
+			active_xray_objects[surf_node] = {
+				"material": surf_node.material,
+				"z_index": surf_node.z_index
+			}
 			surf_node.material = material
+			surf_node.z_index = cap_z_index + 2
 
 # 为某格子上高于 min_floor 的所有物体 (树木、小麦、掉落物等) 挂载 X-Ray 材质
 func _apply_xray_to_objects_at(cell: Vector2i, min_floor: int) -> void:
@@ -318,10 +339,22 @@ func _apply_xray_to_objects_at(cell: Vector2i, min_floor: int) -> void:
 				_apply_xray_to_node_sprites(drop)
 
 func _apply_xray_to_node_sprites(obj: Node) -> void:
+	if obj is CanvasItem and not active_xray_objects.has(obj):
+		active_xray_objects[obj] = {
+			"material": (obj as CanvasItem).material,
+			"z_index": (obj as CanvasItem).z_index
+		}
+		(obj as CanvasItem).z_index = cap_z_index + 2
+
 	for sprite in _get_all_visual_sprites(obj):
 		if not active_xray_objects.has(sprite):
-			active_xray_objects[sprite] = sprite.material
+			active_xray_objects[sprite] = {
+				"material": sprite.material,
+				"z_index": sprite.z_index
+			}
 		sprite.material = material
+		if not (obj is CanvasItem):
+			sprite.z_index = cap_z_index + 2
 
 func _get_all_visual_sprites(obj: Node) -> Array[CanvasItem]:
 	var result: Array[CanvasItem] = []

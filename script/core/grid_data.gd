@@ -177,25 +177,32 @@ func check_diagonal_bridge(pos: Vector2) -> Dictionary:
 			var f_N := get_highest_floor(c_N)
 			var f_S := get_highest_floor(c_S)
 
-			# 1. 水平对角对 (W 与 E 同高，且高于 N 或 S)
-			if f_W == f_E and f_W > maxi(f_N, f_S):
-				var bridge_floor := f_W
-				if dy > 0.0 and f_S < bridge_floor:
+			var has_W := has_any_tile(c_W)
+			var has_E := has_any_tile(c_E)
+			var has_N := has_any_tile(c_N)
+			var has_S := has_any_tile(c_S)
+
+			# 1. 水平对角对 (W 与 E 均有地砖，高度差在允许跨越落差内，且两侧高度均高于 N 或 S)
+			if has_W and has_E and absi(f_W - f_E) <= 4 and mini(f_W, f_E) > maxi(f_N, f_S):
+				var bridge_floor := f_W if pos.x < V.x else f_E
+				var min_bridge := mini(f_W, f_E)
+				if dy > 0.0 and f_S < min_bridge:
 					# 南侧凹角：阻挡线为水平横线，面朝南 (+y)。向障碍物内部推进的方向为北 (0, -1)
 					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(0, -1), "vertex": V, "type": "horizontal_south" }
-				elif dy < 0.0 and f_N < bridge_floor:
+				elif dy < 0.0 and f_N < min_bridge:
 					# 北侧凹角：阻挡线为水平横线，面朝北 (-y)。向障碍物内部推进的方向为南 (0, 1)
 					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(0, 1), "vertex": V, "type": "horizontal_north" }
 				else:
 					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2.ZERO, "vertex": V, "type": "horizontal_center" }
 
-			# 2. 垂直对角对 (N 与 S 同高，且高于 W 或 E)
-			if f_N == f_S and f_N > maxi(f_W, f_E):
-				var bridge_floor := f_N
-				if dx < 0.0 and f_W < bridge_floor:
+			# 2. 垂直对角对 (N 与 S 均有地砖，高度差在允许跨越落差内，且两侧高度均高于 W 或 E)
+			if has_N and has_S and absi(f_N - f_S) <= 4 and mini(f_N, f_S) > maxi(f_W, f_E):
+				var bridge_floor := f_N if pos.y < V.y else f_S
+				var min_bridge := mini(f_N, f_S)
+				if dx < 0.0 and f_W < min_bridge:
 					# 西侧凹角：阻挡线为垂直竖线，面朝西 (-x)。向障碍物内部推进的方向为东 (1, 0)
 					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(1, 0), "vertex": V, "type": "vertical_west" }
-				elif dx > 0.0 and f_E < bridge_floor:
+				elif dx > 0.0 and f_E < min_bridge:
 					# 东侧凹角：阻挡线为垂直竖线，面朝东 (+x)。向障碍物内部推进的方向为西 (-1, 0)
 					return { "has_bridge": true, "floor": bridge_floor, "normal": Vector2(-1, 0), "vertex": V, "type": "vertical_east" }
 				else:
