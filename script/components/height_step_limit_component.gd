@@ -110,6 +110,94 @@ func is_cardinal_movement(vel: Vector2) -> bool:
 	var min_v := minf(vmx, vmy)
 	return (min_v / max_v) < 0.25
 
+# 当遭遇对角格阻挡或角落夹角死锁时，探测两侧翼格子，若存在合法通路则提供平滑导向滑动
+func resolve_corner_flank(curr_cell: Vector2i, probe_cell: Vector2i, curr_pos: Vector2, vel: Vector2, curr_floor: int) -> Vector2:
+	var gd = _get_grid()
+	if gd == null or not gd.has_method("world_to_cell") or not gd.has_method("cell_to_world"):
+		return Vector2.ZERO
+
+	var dx := probe_cell.x - curr_cell.x
+	var dy := probe_cell.y - curr_cell.y
+	var is_diagonal := (dx == 0 and absi(dy) == 2) or (absi(dx) == 1 and dy == 0)
+
+	var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
+	var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
+	var V: Vector2
+	if is_diagonal:
+		V = (center_curr + center_probe) * 0.5
+	else:
+		var vertices: Array[Vector2] = [
+			center_curr + Vector2(0.0, -16.0),
+			center_curr + Vector2(0.0, 16.0),
+			center_curr + Vector2(-32.0, 0.0),
+			center_curr + Vector2(32.0, 0.0)
+		]
+		V = vertices[0]
+		var target_pt := curr_pos + vel.normalized() * 16.0
+		var min_d := (target_pt - V).length_squared()
+		for vi in range(1, 4):
+			var d := (target_pt - vertices[vi]).length_squared()
+			if d < min_d:
+				min_d = d
+				V = vertices[vi]
+
+	var c_W: Vector2i = gd.call("world_to_cell", V + Vector2(-16.0, 0.0))
+	var c_E: Vector2i = gd.call("world_to_cell", V + Vector2(16.0, 0.0))
+	var c_N: Vector2i = gd.call("world_to_cell", V + Vector2(0.0, -8.0))
+	var c_S: Vector2i = gd.call("world_to_cell", V + Vector2(0.0, 8.0))
+
+	var f1: Vector2i
+	var f2: Vector2i
+	var t1: Vector2
+	var t2: Vector2
+
+	if curr_cell == c_S or curr_cell == c_N:
+		f1 = c_W
+		f2 = c_E
+		if curr_cell == c_S:
+			t1 = Vector2(-32.0, -16.0).normalized()
+			t2 = Vector2(32.0, -16.0).normalized()
+		else:
+			t1 = Vector2(-32.0, 16.0).normalized()
+			t2 = Vector2(32.0, 16.0).normalized()
+	else:
+		f1 = c_N
+		f2 = c_S
+		if curr_cell == c_W:
+			t1 = Vector2(32.0, -16.0).normalized()
+			t2 = Vector2(32.0, 16.0).normalized()
+		else:
+			t1 = Vector2(-32.0, -16.0).normalized()
+			t2 = Vector2(-32.0, 16.0).normalized()
+
+	var can_f1 := is_cell_passable(f1, curr_floor)
+	var can_f2 := is_cell_passable(f2, curr_floor)
+
+	var speed := vel.length()
+	if can_f1 and not can_f2:
+		return t1 * speed
+	elif can_f2 and not can_f1:
+		return t2 * speed
+	elif can_f1 and can_f2:
+		var floor_f1: int = gd.call("get_highest_floor", f1) if gd.has_method("get_highest_floor") else 0
+		var floor_f2: int = gd.call("get_highest_floor", f2) if gd.has_method("get_highest_floor") else 0
+		if floor_f1 == curr_floor and floor_f2 != curr_floor:
+			return t1 * speed
+		elif floor_f2 == curr_floor and floor_f1 != curr_floor:
+			return t2 * speed
+
+		var d1 := vel.dot(t1)
+		var d2 := vel.dot(t2)
+		if absf(d1 - d2) > 0.01:
+			return t1 * speed if d1 > d2 else t2 * speed
+
+		if (curr_cell == c_S or curr_cell == c_N):
+			return t1 * speed if curr_pos.x < V.x else t2 * speed
+		else:
+			return t1 * speed if curr_pos.y < V.y else t2 * speed
+
+	return Vector2.ZERO
+
 # 物理移动前的速度预处理：检测前方目标落点，若撞向不可进入的格子或对角桥，则消除法向速度并投影至切向平滑滑动
 func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -> Vector2:
 	if not is_enabled or velocity == Vector2.ZERO:
@@ -125,14 +213,27 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 	var motion := velocity * delta
 	var target_pos := current_pos + motion
 
+	var target_cell: Vector2i = gd.call("world_to_cell", target_pos)
+	var target_bridge: Dictionary = gd.call("check_diagonal_bridge", target_pos) if gd.has_method("check_diagonal_bridge") else { "has_bridge": false }
+	var target_floor: int = target_bridge.floor if target_bridge.get("has_bridge", false) else (gd.call("get_highest_floor", target_cell) if gd.has_method("get_highest_floor") else 0)
+
 	var probe_pos := target_pos
 	if margin_pixels > 0.0:
 		probe_pos = target_pos + velocity.normalized() * margin_pixels
 	var probe_cell: Vector2i = gd.call("world_to_cell", probe_pos)
-
-	# 优先检测目标/探测点是否处于 16px 对角桥上
 	var probe_bridge: Dictionary = gd.call("check_diagonal_bridge", probe_pos) if gd.has_method("check_diagonal_bridge") else { "has_bridge": false }
 	var probe_floor: int = probe_bridge.floor if probe_bridge.get("has_bridge", false) else (gd.call("get_highest_floor", probe_cell) if gd.has_method("get_highest_floor") else 0)
+
+	# 防穿模：若 target_pos 自身已跨入新格子，且该格子阻挡或有台阶高低差，优先以 target_cell 进行阻挡/防抖决议
+	if target_cell != curr_cell and not target_bridge.get("has_bridge", false):
+		var target_is_blocked := absi(target_floor - curr_floor) > max_step_height
+		if block_void and gd.has_method("has_any_tile") and not gd.call("has_any_tile", target_cell):
+			target_is_blocked = true
+		if target_is_blocked or (enable_step_edge_glide and target_floor != curr_floor):
+			probe_cell = target_cell
+			probe_pos = target_pos
+			probe_bridge = target_bridge
+			probe_floor = target_floor
 
 	# 若同一格子且未处于对角桥上，或者处于对角桥上但楼层与当前完全相同且同格，安全放行
 	if probe_cell == curr_cell and not probe_bridge.get("has_bridge", false):
@@ -148,6 +249,16 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 
 	# 若不可通行（撞向高墙、悬崖虚空或 16px 对角桥外壁）
 	if not is_passable:
+		# 优先检测对角格直撞：若为无对角桥的纯对角相接格，通过侧翼寻路直接引导进入通畅侧翼
+		var dx := probe_cell.x - curr_cell.x
+		var dy := probe_cell.y - curr_cell.y
+		var is_diagonal := (dx == 0 and absi(dy) == 2) or (absi(dx) == 1 and dy == 0)
+		if is_diagonal and not probe_bridge.get("has_bridge", false):
+			var flank_slide := resolve_corner_flank(curr_cell, probe_cell, current_pos, velocity, curr_floor)
+			if flank_slide != Vector2.ZERO:
+				return flank_slide.normalized() * velocity.length()
+			return Vector2.ZERO
+
 		var normal := Vector2.ZERO
 		if probe_bridge.get("has_bridge", false) and probe_bridge.normal != Vector2.ZERO:
 			normal = probe_bridge.normal
@@ -162,8 +273,15 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 		var dot_n := velocity.dot(normal)
 		if enable_sliding and dot_n > 0.0:
 			var slide_vel := velocity - normal * dot_n
+			if slide_vel != Vector2.ZERO:
+				# 速度补正：消除沿高墙滑动时的顿挫感，保持满速
+				slide_vel = slide_vel.normalized() * velocity.length()
 			var probe2 := current_pos + slide_vel * delta + slide_vel.normalized() * margin_pixels
 			if not is_pos_passable(probe2, curr_floor):
+				# 滑动撞入角落死角：由侧翼导向决议寻找生路
+				var flank_slide := resolve_corner_flank(curr_cell, probe_cell, current_pos, velocity, curr_floor)
+				if flank_slide != Vector2.ZERO:
+					return flank_slide.normalized() * velocity.length()
 				return Vector2.ZERO
 			return slide_vel
 		else:
@@ -172,6 +290,17 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 	# 若探测点在允许跨越的高度内，且开启了台阶边缘防抖 (仅限常规格子边缘)
 	if enable_step_edge_glide and not probe_bridge.get("has_bridge", false):
 		if probe_floor != curr_floor:
+			var dx := probe_cell.x - curr_cell.x
+			var dy := probe_cell.y - curr_cell.y
+			var is_diagonal := (dx == 0 and absi(dy) == 2) or (absi(dx) == 1 and dy == 0)
+			if is_diagonal:
+				# 对角相接格没有物理棱边，绝不能进行法向投影 (否则上下方向法向为 (0, ±1)，速度直接被归零清死！)
+				# 转由侧翼角落决议进行平滑翻越/侧翼导向
+				var flank_slide := resolve_corner_flank(curr_cell, probe_cell, current_pos, velocity, curr_floor)
+				if flank_slide != Vector2.ZERO:
+					return flank_slide.normalized() * velocity.length()
+				return Vector2.ZERO
+
 			var center_probe: Vector2 = gd.call("cell_to_world", probe_cell)
 			var center_curr: Vector2 = gd.call("cell_to_world", curr_cell)
 			var cell_delta := center_probe - center_curr
@@ -184,8 +313,15 @@ func constrain_velocity(current_pos: Vector2, velocity: Vector2, delta: float) -
 						if enable_sliding:
 							var normal_speed := velocity.dot(normal)
 							var slide_vel := velocity - normal * normal_speed
+							if slide_vel != Vector2.ZERO:
+								# 速度补正：消除斜边推挤滑动时的降速与顿挫感，赋予满速顺滑推进
+								slide_vel = slide_vel.normalized() * velocity.length()
 							var probe2 := current_pos + slide_vel * delta + slide_vel.normalized() * margin_pixels
 							if not is_pos_passable(probe2, curr_floor):
+								# 角落到达：转由侧翼角落决议进行平滑翻越/导向
+								var flank_slide := resolve_corner_flank(curr_cell, probe_cell, current_pos, velocity, curr_floor)
+								if flank_slide != Vector2.ZERO:
+									return flank_slide.normalized() * velocity.length()
 								return Vector2.ZERO
 							return slide_vel
 						else:
