@@ -14,7 +14,7 @@ var tile_layers: Array[TileMapLayer] = []
 var _last_player_cell: Vector2i = Vector2i(-99999, -99999)
 var build_manager: BuildManager
 var wall_xray: WallXRayManager
-var air_wall: StaticBody2D
+var air_wall: AirWallManager
 var aim_controller: Node
 var aim_reticle: Node2D
 var layer_surf_system: LayerSurfSystem
@@ -38,9 +38,10 @@ func _ready() -> void:
 		wall_xray = WallXRayScript.new()
 		add_child(wall_xray)
 
-	air_wall = get_node_or_null("AirWall") as StaticBody2D
+	air_wall = get_node_or_null("AirWall") as AirWallManager
 	if air_wall == null:
 		air_wall = AirWallScript.new()
+		air_wall.name = "AirWall"
 		add_child(air_wall)
 
 	var player_node: Node2D = get_node_or_null("sortworld/CharacterBody2D")
@@ -192,9 +193,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			build_manager.place_active_item(cell, hotbar_node, sort_world, selector, tile_layers)
 			_refresh_xray()
+			if air_wall:
+				air_wall.rebuild_walls()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			build_manager.destroy_top_at(cell, sort_world, selector)
 			_refresh_xray()
+			if air_wall:
+				air_wall.rebuild_walls()
 
 func _process(_delta: float) -> void:
 	var player: Node2D = get_node_or_null("sortworld/CharacterBody2D")

@@ -116,6 +116,7 @@ func _physics_process(delta: float) -> void:
 		ground_pos = hit_ground
 		height_px = hit_surf
 		_update_3d_transform_and_sorting()
+		_check_creature_hit(ground_pos, hit_ground, hit_surf)
 		queue_free()
 		return
 
@@ -160,48 +161,117 @@ func _update_3d_transform_and_sorting() -> void:
 
 ## 检测飞弹是否与场景中的活体生物发生碰撞
 func _check_creature_hit(from_ground: Vector2, to_ground: Vector2, current_h: float) -> bool:
+	# 1. 优先通过 3D 生物体积精确检测所有活体生物 (跨楼层绝对精准，彻底消除 2D 碰撞体高度偏移或飞越盲区)
+	var tree := get_tree()
+	if tree != null:
+		var creatures := tree.get_nodes_in_group("creatures")
+		var seg := to_ground - from_ground
+		var seg_len_sq := seg.length_squared()
+
+		for creature: Node in creatures:
+			if not is_instance_valid(creature) or not (creature is Node2D):
+				continue
+			var target_body := creature as Node2D
+			if target_body == shooter:
+				continue
+			if target_body.has_method("is_alive") and not target_body.call("is_alive"):
+				continue
+
+			var c_pos: Vector2 = target_body.global_position # 生物的真实地面基准坐标
+			var c_scale: float = target_body.scale.y if ("scale" in target_body) else 1.0
+			var eye_h: float = float(target_body.get("eye_height")) if ("eye_height" in target_body) else 18.0
+
+			var target_floor: int = target_body.call("get_current_floor") if target_body.has_method("get_current_floor") else 0
+			var ground_h := float(target_floor) * 16.0
+			var top_h := ground_h + eye_h * c_scale + 6.0
+
+			# 垂直高度初筛：飞弹当前运动区间必须与生物高度重叠
+			var min_bh := minf(height_px, current_h)
+			var max_bh := maxf(height_px, current_h)
+			if max_bh < ground_h - 6.0 or min_bh > top_h:
+				continue
+
+			# 地面投影线段与生物底盘椭圆距离检测 (2:1 等距椭圆距离)
+			var t := 0.0
+			if seg_len_sq > 0.0001:
+				t = clampf((c_pos - from_ground).dot(seg) / seg_len_sq, 0.0, 1.0)
+
+			var p_closest := from_ground.lerp(to_ground, t)
+			var h_at_t := lerpf(height_px, current_h, t)
+
+			# 3D 垂直高度精确比对
+			if h_at_t < ground_h - 6.0 or h_at_t > top_h:
+				continue
+
+			# 2:1 等距底盘半径检测 (狼底盘约 14px，角色约 10px，统一容差 16px * 缩放)
+			var diff := p_closest - c_pos
+			var dist_iso_sq := diff.x * diff.x + 4.0 * diff.y * diff.y
+			var hit_r := maxf(16.0 * c_scale, 14.0)
+			if dist_iso_sq <= hit_r * hit_r:
+				_apply_damage_to_creature(target_body)
+				return true
+
+	# 2. 备用物理射线/落点检测 (兼容通过 Physics 直接布置的 Layer 3 活体对象)
 	var space := get_world_2d().direct_space_state
-	if space == null:
-		return false
+	if space != null:
+		var from_screen := from_ground - Vector2(0.0, height_px)
+		var to_screen := to_ground - Vector2(0.0, current_h)
 
-	# 1. 沿地面位移线段检测 Layer 3 (数值 4: 活体生物层)
-	var ray_param := PhysicsRayQueryParameters2D.create(from_ground, to_ground, 4)
-	ray_param.collide_with_bodies = true
-	ray_param.collide_with_areas = false
-	if shooter and shooter is CollisionObject2D:
-		ray_param.exclude = [shooter.get_rid()]
-
-	var hit_dict := space.intersect_ray(ray_param)
-	var target_body: Node2D = null
-
-	if not hit_dict.is_empty():
-		target_body = hit_dict.get("collider") as Node2D
-	else:
-		# 2. 射线未命中时，点检测终点位置
-		var point_param := PhysicsPointQueryParameters2D.new()
-		point_param.position = to_ground
-		point_param.collision_mask = 4
+		var ray_param := PhysicsRayQueryParameters2D.create(from_screen, to_screen, 4)
+		ray_param.collide_with_bodies = true
+		ray_param.collide_with_areas = false
 		if shooter and shooter is CollisionObject2D:
-			point_param.exclude = [shooter.get_rid()]
-		var point_hits := space.intersect_point(point_param, 1)
-		if not point_hits.is_empty():
-			target_body = point_hits[0].get("collider") as Node2D
+			ray_param.exclude = [shooter.get_rid()]
 
-	if target_body and is_instance_valid(target_body) and target_body != shooter:
-		# 3. 2.5D 垂直高度判定：飞弹离地高度必须处于生物垂直高度范围内
-		var target_floor: int = target_body.call("get_current_floor") if target_body.has_method("get_current_floor") else 0
-		var ground_h := float(target_floor) * 16.0
-		var eye_h: float = float(target_body.get("eye_height")) if ("eye_height" in target_body) else 18.0
-		var body_scale: float = target_body.scale.y if ("scale" in target_body) else 1.0
-		var top_h := ground_h + eye_h * body_scale + 6.0
+		var hit_dict := space.intersect_ray(ray_param)
+		var phys_target: Node2D = null
 
-		if current_h >= ground_h - 6.0 and current_h <= top_h:
-			if target_body.has_method("take_damage"):
-				target_body.call("take_damage", damage, shooter if shooter else self)
+		if not hit_dict.is_empty():
+			phys_target = hit_dict.get("collider") as Node2D
+		else:
+			var point_param := PhysicsPointQueryParameters2D.new()
+			point_param.position = to_screen
+			point_param.collision_mask = 4
+			if shooter and shooter is CollisionObject2D:
+				point_param.exclude = [shooter.get_rid()]
+			var point_hits := space.intersect_point(point_param, 1)
+			if not point_hits.is_empty():
+				phys_target = point_hits[0].get("collider") as Node2D
 			else:
-				var health: Node = target_body.find_child("HealthComponent", true, false)
-				if health and health.has_method("take_damage"):
-					health.call("take_damage", damage, shooter if shooter else self)
-			return true
+				var g_ray := PhysicsRayQueryParameters2D.create(from_ground, to_ground, 4)
+				g_ray.collide_with_bodies = true
+				if shooter and shooter is CollisionObject2D:
+					g_ray.exclude = [shooter.get_rid()]
+				var g_hit := space.intersect_ray(g_ray)
+				if not g_hit.is_empty():
+					phys_target = g_hit.get("collider") as Node2D
+				else:
+					var g_pt := PhysicsPointQueryParameters2D.new()
+					g_pt.position = to_ground
+					g_pt.collision_mask = 4
+					if shooter and shooter is CollisionObject2D:
+						g_pt.exclude = [shooter.get_rid()]
+					var g_pt_hits := space.intersect_point(g_pt, 1)
+					if not g_pt_hits.is_empty():
+						phys_target = g_pt_hits[0].get("collider") as Node2D
+
+		if phys_target and is_instance_valid(phys_target) and phys_target != shooter:
+			var target_floor: int = phys_target.call("get_current_floor") if phys_target.has_method("get_current_floor") else 0
+			var ground_h := float(target_floor) * 16.0
+			var eye_h: float = float(phys_target.get("eye_height")) if ("eye_height" in phys_target) else 18.0
+			var body_scale: float = phys_target.scale.y if ("scale" in phys_target) else 1.0
+			var top_h := ground_h + eye_h * body_scale + 6.0
+
+			if current_h >= ground_h - 6.0 and current_h <= top_h:
+				_apply_damage_to_creature(phys_target)
+				return true
 
 	return false
+
+func _apply_damage_to_creature(target_body: Node2D) -> void:
+	if target_body.has_method("take_damage"):
+		target_body.call("take_damage", damage, shooter if shooter else self)
+	else:
+		var health: Node = target_body.find_child("HealthComponent", true, false)
+		if health and health.has_method("take_damage"):
+			health.call("take_damage", damage, shooter if shooter else self)
