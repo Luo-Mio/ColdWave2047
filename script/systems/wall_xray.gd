@@ -183,7 +183,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 		player_visual = player_node.call("get_visual_foot_position")
 
 	var player_cell := GridData.world_to_cell(player_node.global_position)
-	var player_floor := GridData.get_highest_floor(player_cell)
+	var player_floor: int = player_node.call("get_current_floor") if player_node.has_method("get_current_floor") else GridData.get_floor_at_pos(player_node.global_position)
 	var player_sort_key: float = float(player_node.get("sort_key")) if player_node.get("sort_key") != null else GridData.cell_to_sort_key(player_cell)
 
 	var created_caps := false

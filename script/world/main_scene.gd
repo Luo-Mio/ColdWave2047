@@ -12,6 +12,7 @@ const LightOrbScene := preload("res://scene/particle/light.tscn")
 
 var tile_layers: Array[TileMapLayer] = []
 var _last_player_cell: Vector2i = Vector2i(-99999, -99999)
+var _last_player_floor: int = -99999
 var build_manager: BuildManager
 var wall_xray: WallXRayManager
 var air_wall: AirWallManager
@@ -212,10 +213,12 @@ func _process(_delta: float) -> void:
 		player_visual = player.call("get_visual_foot_position")
 	RenderingServer.global_shader_parameter_set("player_world_pos", player_visual)
 
-	# 2. 玩家跨格子移动时刷新高墙透视
+	# 2. 玩家跨格子或跨楼层移动时刷新高墙透视
 	var current_cell := GridData.world_to_cell(player.global_position)
-	if current_cell != _last_player_cell:
+	var current_floor: int = player.call("get_current_floor") if player.has_method("get_current_floor") else GridData.get_floor_at_pos(player.global_position)
+	if current_cell != _last_player_cell or current_floor != _last_player_floor:
 		_last_player_cell = current_cell
+		_last_player_floor = current_floor
 		_refresh_xray()
 
 
