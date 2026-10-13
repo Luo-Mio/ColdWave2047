@@ -3,6 +3,10 @@ shader_type canvas_item;
 // 全局角色世界坐标 (由 main_scene.gd 动态更新)
 global uniform vec2 player_world_pos;
 
+// 自定义中心点 (支持弹道落点、任意技能或物体中心)
+uniform bool use_custom_center = false;
+uniform vec2 center_world_pos = vec2(0.0, 0.0);
+
 // 截面基础颜色 (默认为纯黑，可在检查器微调)
 uniform vec4 cap_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 
@@ -30,7 +34,8 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 diff = world_pos - player_world_pos;
+	vec2 focal_pos = use_custom_center ? center_world_pos : player_world_pos;
+	vec2 diff = world_pos - focal_pos;
 	float dist = (diff.x * diff.x) / (rx * rx) + (diff.y * diff.y) / (ry * ry);
 
 	// GPU 硬件级椭圆平滑淡出：

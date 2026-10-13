@@ -104,6 +104,10 @@ const CameraAssist = preload("res://script/systems/aim_camera_assist.gd")
 @export var impact_cap_color: Color = Color(0.0, 0.0, 0.0, 1.0)
 ## 截面封顶适用范围 (0: 仅高墙底部 fl > hit_floor; 1: 高墙底与地表全部 fl >= hit_floor; 2: 仅地表 fl == hit_floor)
 @export_enum("仅高墙底 (Walls Only)", "高墙底与地表 (Walls & Floor)", "仅地表 (Floor Only)") var impact_cap_target: int = 0
+## 截面封顶边缘羽化渐变柔和度 (0.01=硬边, 1.0=极柔和淡出)
+@export var impact_cap_feather: float = 0.5
+## 是否启用复古 Bayer 4x4 像素点阵抖动镂空 (与高墙透视保持一致)
+@export var impact_cap_enable_dither: bool = false
 
 @export_group("目标锁敌与高亮 (Target Highlight)")
 ## 是否在准星瞄准活体生物碰撞箱时显示描边高亮
@@ -129,6 +133,7 @@ const CONFIG_PROPERTIES: Array[String] = [
 	"camera_aim_edge_threshold", "camera_aim_smooth_speed",
 	"show_impact_grid", "impact_grid_range", "impact_grid_radius_x", "impact_grid_radius_y", "impact_grid_color",
 	"impact_grid_occluded_alpha_ratio", "show_impact_cap", "impact_cap_color", "impact_cap_target",
+	"impact_cap_feather", "impact_cap_enable_dither",
 	"show_deadzone_ring", "show_horizontal_ring", "show_max_pitch_arc", "max_pitch_arc_angle", "max_pitch_arc_segments",
 	"show_ground_ray", "ground_ray_color", "ground_ray_occluded_alpha_ratio", "ground_ray_truncate_only_on_high", "ground_ray_require_same_floor",
 	"show_ground_cursor_point", "show_zero_cross",

@@ -4,9 +4,11 @@ extends Node2D
 
 const AimPixelDrawer = preload("res://script/systems/aim_pixel_drawer.gd")
 const IsoGridDrawer = preload("res://script/systems/iso_grid_drawer.gd")
+const TileCapManager = preload("res://script/systems/tile_cap_manager.gd")
 
 @export var player_path: NodePath
 var aim_controller: Node
+var tile_cap_manager: TileCapManager = null
 
 # 视觉颜色配置 (可由 AimController 动态覆盖)
 var ring_color: Color = Color(0.2, 0.9, 1.0, 0.6)        # 基准水平环 (亮青色)
@@ -53,6 +55,9 @@ func _ready() -> void:
 	z_index = 150
 	_ensure_references()
 	_setup_gpu_layers()
+
+func _exit_tree() -> void:
+	_clear_impact_caps()
 
 ## 初始化 GPU 渲染子图层与材质
 func _setup_gpu_layers() -> void:
@@ -111,6 +116,12 @@ func _ensure_references() -> bool:
 		if _grid_data == null and Engine.has_singleton("GridData"):
 			_grid_data = Engine.get_singleton("GridData")
 
+	if tile_cap_manager == null:
+		if get_parent() and get_parent().get("tile_cap_manager"):
+			tile_cap_manager = get_parent().tile_cap_manager
+		elif get_tree() and get_tree().root:
+			tile_cap_manager = get_tree().root.find_child("TileCapManager", true, false)
+
 	return is_instance_valid(_player) and is_instance_valid(aim_controller)
 
 ## 通知所有绘制层同步重绘
@@ -139,22 +150,28 @@ func _process(delta: float) -> void:
 		_was_aim_active = is_active
 		_update_timer = 0.0
 		_set_sublayers_visible(is_active)
+		if not is_active:
+			_clear_impact_caps()
 		_queue_all_redraw()
 		return
 
 	if not is_active:
+		_clear_impact_caps()
 		return
 
 	# 1. 更新本帧几何基准数据 (单次计算，供所有子层共享)
 	_update_frame_geometry()
 
-	# 2. 出膛落差消抖同步
+	# 2. 同步更新通用地基截面遮罩 (TileCapManager)
+	_update_impact_caps()
+
+	# 3. 出膛落差消抖同步
 	if "launch_height" in aim_controller:
 		var raw_lh: float = maxf(_frame_ground_center.y - _frame_chest_origin.y, 4.0)
 		if absf(raw_lh - aim_controller.launch_height) >= 2.0:
 			aim_controller.launch_height = roundf(raw_lh)
 
-	# 3. 刷新率节流控制
+	# 4. 刷新率节流控制
 	var target_hz: float = float(aim_controller.update_rate_hz) if ("update_rate_hz" in aim_controller) else update_rate_hz
 	if target_hz <= 0.0:
 		_queue_all_redraw()
@@ -165,6 +182,60 @@ func _process(delta: float) -> void:
 	if _update_timer >= interval:
 		_update_timer = fmod(_update_timer, interval)
 		_queue_all_redraw()
+
+func _clear_impact_caps() -> void:
+	if tile_cap_manager != null:
+		tile_cap_manager.clear_caps(&"aim_impact")
+
+func _update_impact_caps() -> void:
+	if tile_cap_manager == null:
+		return
+	var show_grid: bool = bool(aim_controller.show_impact_grid) if "show_impact_grid" in aim_controller else true
+	var show_cap: bool = bool(aim_controller.show_impact_cap) if "show_impact_cap" in aim_controller else true
+	if not show_grid or not show_cap or _grid_data == null:
+		tile_cap_manager.clear_caps(&"aim_impact")
+		return
+
+	var traj_info: Dictionary = _get_current_trajectory_info()
+	if traj_info.is_empty() or not traj_info.get("is_valid", false):
+		tile_cap_manager.clear_caps(&"aim_impact")
+		return
+
+	var hit_cell: Vector2i = traj_info.get("hit_cell", Vector2i.ZERO)
+	var hit_floor: int = traj_info.get("hit_floor", 0)
+	var hit_screen_pos: Vector2 = traj_info.get("hit_screen_pos", Vector2.ZERO)
+	var is_hit_occluded: bool = traj_info.get("is_hit_occluded", false)
+	var grid_rng: int = int(aim_controller.impact_grid_range) if "impact_grid_range" in aim_controller else 2
+	var rx: float = float(aim_controller.impact_grid_radius_x) if "impact_grid_radius_x" in aim_controller else 128.0
+	var ry: float = float(aim_controller.impact_grid_radius_y) if "impact_grid_radius_y" in aim_controller else 64.0
+	var cap_col: Color = aim_controller.impact_cap_color if "impact_cap_color" in aim_controller else Color(0.0, 0.0, 0.0, 1.0)
+	var cap_tgt: int = int(aim_controller.impact_cap_target) if "impact_cap_target" in aim_controller else 0
+	var feather: float = float(aim_controller.impact_cap_feather) if "impact_cap_feather" in aim_controller else 0.5
+	var dither: bool = bool(aim_controller.impact_cap_enable_dither) if "impact_cap_enable_dither" in aim_controller else false
+
+	var max_alpha: float = cap_col.a
+	if is_hit_occluded:
+		var grid_occ_ratio: float = float(aim_controller.impact_grid_occluded_alpha_ratio) if "impact_grid_occluded_alpha_ratio" in aim_controller else 1.0
+		max_alpha *= grid_occ_ratio
+
+	tile_cap_manager.update_caps_in_range(
+		&"aim_impact",
+		hit_cell,
+		grid_rng,
+		hit_floor,
+		cap_tgt,
+		{
+			"center_pos": hit_screen_pos,
+			"use_custom_center": true,
+			"rx": rx,
+			"ry": ry,
+			"feather": feather,
+			"max_alpha": max_alpha,
+			"cap_color": cap_col,
+			"enable_dither": dither,
+			"z_index": 1,
+		}
+	)
 
 ## 每帧单次计算共享的几何位置
 func _update_frame_geometry() -> void:
@@ -345,9 +416,11 @@ func _on_impact_grid_draw() -> void:
 	_impact_mat.set_shader_parameter("radius_y", ry)
 
 	# 提交几何多边形与边框线，GPU 片元级自动进行二次椭圆衰减
+	# 若已由 TileCapManager 统一渲染纯黑截面，则此处只绘制网格线条 (show_cap 传 false)
+	var delegate_to_manager := (tile_cap_manager != null)
 	IsoGridDrawer.draw_gpu_radial_falloff_grid(
 		_impact_grid_layer, hit_cell, grid_rng, hit_floor, _grid_data,
-		grid_col, 1.0, show_cap, cap_col, cap_tgt
+		grid_col, 1.0, (show_cap and not delegate_to_manager), cap_col, cap_tgt
 	)
 
 # =========================================================================

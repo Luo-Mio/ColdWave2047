@@ -7,6 +7,7 @@ const AirWallScript := preload("res://script/systems/air_wall.gd")
 const AimControllerScript := preload("res://script/components/aim_controller.gd")
 const AimReticleScript := preload("res://script/systems/aim_reticle.gd")
 const EdgeIndicateSystemScript := preload("res://script/systems/edge_indicate_system.gd")
+const TileCapManager := preload("res://script/systems/tile_cap_manager.gd")
 const MagicOrbScene := preload("res://scene/particle/magic_orb.tscn")
 const LightOrbScene := preload("res://scene/particle/light.tscn")
 
@@ -16,6 +17,7 @@ var _last_player_floor: int = -99999
 var build_manager: BuildManager
 var wall_xray: WallXRayManager
 var air_wall: AirWallManager
+var tile_cap_manager: TileCapManager
 var aim_controller: Node
 var aim_reticle: Node2D
 var layer_surf_system: LayerSurfSystem
@@ -48,9 +50,23 @@ func _ready() -> void:
 	var player_node: Node2D = get_node_or_null("sortworld/CharacterBody2D")
 	if player_node:
 		aim_controller = player_node.find_child("AimController", true, false)
+
+	# 初始化通用地基截面遮罩管理器 (TileCapManager)
+	tile_cap_manager = get_node_or_null("TileCapManager") as TileCapManager
+	if tile_cap_manager == null:
+		tile_cap_manager = TileCapManager.new()
+		tile_cap_manager.name = "TileCapManager"
+		add_child(tile_cap_manager)
+	tile_cap_manager.setup(sort_world, player_node)
+
+	if wall_xray:
+		wall_xray.tile_cap_manager = tile_cap_manager
+
 	aim_reticle = get_node_or_null("AimReticle")
-	if aim_reticle and aim_controller:
-		aim_reticle.aim_controller = aim_controller
+	if aim_reticle:
+		aim_reticle.tile_cap_manager = tile_cap_manager
+		if aim_controller:
+			aim_reticle.aim_controller = aim_controller
 
 	# 2. 收集并按 Y 坐标排序原始层 (过滤掉草皮层，仅收集泥土砖块层)
 	# 2. 收集并按 Y 坐标排序原始层 (过滤掉表面层，仅收集泥土砖块层)

@@ -27,35 +27,41 @@ extends Node
 	set(v):
 		base_floor_color = v
 		if cap_material: cap_material.set_shader_parameter("cap_color", base_floor_color)
+		if tile_cap_manager: tile_cap_manager.update_channel_config(&"wall_xray", {"cap_color": base_floor_color})
 ## GPU 截面显现水平半径 (椭圆长半轴)
 @export var cap_rx: float = 80.0:
 	set(v):
 		cap_rx = v
 		if cap_material: cap_material.set_shader_parameter("rx", cap_rx)
+		if tile_cap_manager: tile_cap_manager.update_channel_config(&"wall_xray", {"rx": cap_rx})
 ## GPU 截面显现垂直半径 (椭圆短半轴，适配 2:1 等距视角)
 @export var cap_ry: float = 48.0:
 	set(v):
 		cap_ry = v
 		if cap_material: cap_material.set_shader_parameter("ry", cap_ry)
+		if tile_cap_manager: tile_cap_manager.update_channel_config(&"wall_xray", {"ry": cap_ry})
 ## GPU 截面边缘羽化渐变柔和度 (0.01=硬边, 1.0=极柔和淡出)
 @export var cap_feather: float = 0.5:
 	set(v):
 		cap_feather = v
 		if cap_material: cap_material.set_shader_parameter("feather", cap_feather)
+		if tile_cap_manager: tile_cap_manager.update_channel_config(&"wall_xray", {"feather": cap_feather})
 ## GPU 截面最大不透明度
 @export var cap_max_alpha: float = 1.0:
 	set(v):
 		cap_max_alpha = v
 		if cap_material: cap_material.set_shader_parameter("max_alpha", cap_max_alpha)
+		if tile_cap_manager: tile_cap_manager.update_channel_config(&"wall_xray", {"max_alpha": cap_max_alpha})
 ## 是否启用复古 Bayer 4x4 像素点阵抖动镂空
 @export var cap_enable_dither: bool = false:
 	set(v):
 		cap_enable_dither = v
 		if cap_material: cap_material.set_shader_parameter("enable_dither", cap_enable_dither)
+		if tile_cap_manager: tile_cap_manager.update_channel_config(&"wall_xray", {"enable_dither": cap_enable_dither})
 ## 截面封顶的 Z-Index 渲染层级 (默认 1，高于所有 Z=0 瓷砖与物件，防止被前景立面截断)
 @export var cap_z_index: int = 1
 
-# 轻量截面封顶多边形绘制节点 (配合 GPU Shader 实现平滑淡入淡出)
+# 轻量截面封顶多边形绘制节点 (保留向后兼容别名)
 class XRayCap extends Node2D:
 	var sort_key: float = 0.0
 	var layer_no: int = 999
@@ -69,11 +75,13 @@ class XRayCap extends Node2D:
 		])
 		draw_colored_polygon(pts, Color.WHITE)
 
+const TileCapManager := preload("res://script/systems/tile_cap_manager.gd")
+var tile_cap_manager: TileCapManager = null
 var material: ShaderMaterial
 var cap_material: ShaderMaterial
 var active_xray_layers: Array[TileMapLayer] = []
 var active_xray_objects: Dictionary = {} # CanvasItem -> Dictionary { "material": Material, "z_index": int }
-var active_caps: Array[Node2D] = [] # 记录当前活跃的同层封顶盖板
+var active_caps: Array[Node2D] = [] # 兼容保留
 
 func _ready() -> void:
 	material = ShaderMaterial.new()
@@ -165,15 +173,11 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 				item.z_index = 0
 	active_xray_objects.clear()
 
-	# 清理上一批截面封顶
-	for cap in active_caps:
-		if is_instance_valid(cap):
-			if cap.get_parent():
-				cap.get_parent().remove_child(cap)
-			cap.queue_free()
-	active_caps.clear()
+	_ensure_tile_cap_manager(sort_world)
 
 	if player_node == null or material == null or sort_world == null:
+		if tile_cap_manager:
+			tile_cap_manager.clear_caps(&"wall_xray")
 		if is_instance_valid(player_node) and player_node.z_index != 0:
 			player_node.z_index = 0
 		return
@@ -186,7 +190,7 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 	var player_floor: int = player_node.call("get_current_floor") if player_node.has_method("get_current_floor") else GridData.get_floor_at_pos(player_node.global_position)
 	var player_sort_key: float = float(player_node.get("sort_key")) if player_node.get("sort_key") != null else GridData.cell_to_sort_key(player_cell)
 
-	var created_caps := false
+	var cap_items: Array = []
 
 	# 2. 向南方扫描可能遮挡玩家的高墙候选格 (在等距 2.5D 视角中，遮挡障碍必须在排序键上处于角色南侧前景)
 	for dy in range(-4, 16):
@@ -262,27 +266,38 @@ func update_wall_xray(player_node: Node2D, sort_world: Node2D) -> void:
 				# 4.3 挂载该柱顶及高出的所有物体精灵 (树木躯干/树冠、农作物、掉落物等)
 				_apply_xray_to_objects_at(front_cell, player_floor)
 
-				# 4.4 【核心截面封顶】：在角色同高度的地基顶部渲染 64x32 菱形封顶面并挂载 GPU 淡出材质！
-				var diamond_center := cell_center + Vector2(0.0, GridData.get_floor_pixel_offset(player_floor))
-				var cap := XRayCap.new()
-				cap.name = "xray_cap_%d_%d" % [front_cell.x, front_cell.y]
-				cap.position = diamond_center
-				cap.sort_key = GridData.cell_to_sort_key(front_cell)
-				cap.layer_no = 999
-				cap.material = cap_material
-				cap.z_index = cap_z_index
-				sort_world.add_child(cap)
-				active_caps.append(cap)
-				created_caps = true
+				# 4.4 【核心截面封顶需求收集】：在角色同高度的地基顶部配置 64x32 菱形封顶面
+				cap_items.append({"cell": front_cell, "floor": player_floor})
 
-	if created_caps:
+	if not cap_items.is_empty():
+		if tile_cap_manager:
+			tile_cap_manager.update_caps(&"wall_xray", cap_items, {
+				"use_custom_center": false,
+				"rx": cap_rx,
+				"ry": cap_ry,
+				"feather": cap_feather,
+				"max_alpha": cap_max_alpha,
+				"cap_color": base_floor_color,
+				"enable_dither": cap_enable_dither,
+				"z_index": cap_z_index
+			})
 		if is_instance_valid(player_node):
 			player_node.z_index = cap_z_index + 1
 		sort_world.call("sort_now")
 	else:
+		if tile_cap_manager:
+			tile_cap_manager.clear_caps(&"wall_xray")
 		if is_instance_valid(player_node) and player_node.z_index != 0:
 			player_node.z_index = 0
 			sort_world.call("sort_now")
+
+func _ensure_tile_cap_manager(sort_world: Node2D) -> void:
+	if tile_cap_manager != null:
+		return
+	if get_parent() and get_parent().get("tile_cap_manager"):
+		tile_cap_manager = get_parent().tile_cap_manager
+	elif get_tree() and get_tree().root:
+		tile_cap_manager = get_tree().root.find_child("TileCapManager", true, false)
 
 # 为某格子在第 z 层涉及的所有双网格表面切片挂载 X-Ray 材质
 func _apply_xray_to_surf(cell: Vector2i, z: int, sort_world: Node2D) -> void:
