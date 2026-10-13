@@ -9,6 +9,8 @@ const TileCapManager = preload("res://script/systems/tile_cap_manager.gd")
 @export var player_path: NodePath
 var aim_controller: Node
 var tile_cap_manager: TileCapManager = null
+var wall_xray: WallXRayManager = null
+var sort_world: Node2D = null
 
 # 视觉颜色配置 (可由 AimController 动态覆盖)
 var ring_color: Color = Color(0.2, 0.9, 1.0, 0.6)        # 基准水平环 (亮青色)
@@ -77,6 +79,8 @@ func _setup_gpu_layers() -> void:
 	# 2. 着弹点 5x5 网格 GPU 层 (由 impact_grid_falloff 着色器驱动椭圆二次衰减)
 	_impact_grid_layer = Node2D.new()
 	_impact_grid_layer.name = "GPUImpactGridLayer"
+	_impact_grid_layer.z_as_relative = false
+	_impact_grid_layer.z_index = 2
 	_impact_mat = ShaderMaterial.new()
 	_impact_mat.shader = preload("res://script/shaders/impact_grid_falloff.gdshader")
 	_impact_grid_layer.material = _impact_mat
@@ -121,6 +125,18 @@ func _ensure_references() -> bool:
 			tile_cap_manager = get_parent().tile_cap_manager
 		elif get_tree() and get_tree().root:
 			tile_cap_manager = get_tree().root.find_child("TileCapManager", true, false)
+
+	if not is_instance_valid(sort_world):
+		if get_parent() and get_parent().has_node("sortworld"):
+			sort_world = get_parent().get_node("sortworld") as Node2D
+		elif get_tree() and get_tree().root:
+			sort_world = get_tree().root.find_child("sortworld", true, false) as Node2D
+
+	if not is_instance_valid(wall_xray):
+		if get_parent() and get_parent().get("wall_xray"):
+			wall_xray = get_parent().wall_xray
+		elif get_tree() and get_tree().root:
+			wall_xray = get_tree().root.find_child("WallXRayManager", true, false) as WallXRayManager
 
 	return is_instance_valid(_player) and is_instance_valid(aim_controller)
 
@@ -184,58 +200,84 @@ func _process(delta: float) -> void:
 		_queue_all_redraw()
 
 func _clear_impact_caps() -> void:
+	if wall_xray != null:
+		wall_xray.clear_source_xray(&"aim_impact")
 	if tile_cap_manager != null:
 		tile_cap_manager.clear_caps(&"aim_impact")
 
 func _update_impact_caps() -> void:
-	if tile_cap_manager == null:
-		return
-	var show_grid: bool = bool(aim_controller.show_impact_grid) if "show_impact_grid" in aim_controller else true
-	var show_cap: bool = bool(aim_controller.show_impact_cap) if "show_impact_cap" in aim_controller else true
-	if not show_grid or not show_cap or _grid_data == null:
-		tile_cap_manager.clear_caps(&"aim_impact")
-		return
-
 	var traj_info: Dictionary = _get_current_trajectory_info()
 	if traj_info.is_empty() or not traj_info.get("is_valid", false):
-		tile_cap_manager.clear_caps(&"aim_impact")
+		_clear_impact_caps()
 		return
 
 	var hit_cell: Vector2i = traj_info.get("hit_cell", Vector2i.ZERO)
 	var hit_floor: int = traj_info.get("hit_floor", 0)
 	var hit_screen_pos: Vector2 = traj_info.get("hit_screen_pos", Vector2.ZERO)
 	var is_hit_occluded: bool = traj_info.get("is_hit_occluded", false)
-	var grid_rng: int = int(aim_controller.impact_grid_range) if "impact_grid_range" in aim_controller else 2
+	var show_grid: bool = bool(aim_controller.show_impact_grid) if "show_impact_grid" in aim_controller else true
+	var show_cap: bool = bool(aim_controller.show_impact_cap) if "show_impact_cap" in aim_controller else true
+
 	var rx: float = float(aim_controller.impact_grid_radius_x) if "impact_grid_radius_x" in aim_controller else 128.0
 	var ry: float = float(aim_controller.impact_grid_radius_y) if "impact_grid_radius_y" in aim_controller else 64.0
 	var cap_col: Color = aim_controller.impact_cap_color if "impact_cap_color" in aim_controller else Color(0.0, 0.0, 0.0, 1.0)
-	var cap_tgt: int = int(aim_controller.impact_cap_target) if "impact_cap_target" in aim_controller else 0
 	var feather: float = float(aim_controller.impact_cap_feather) if "impact_cap_feather" in aim_controller else 0.5
 	var dither: bool = bool(aim_controller.impact_cap_enable_dither) if "impact_cap_enable_dither" in aim_controller else false
+	var grid_rng: int = int(aim_controller.impact_grid_range) if "impact_grid_range" in aim_controller else 2
+	var cap_tgt: int = int(aim_controller.impact_cap_target) if "impact_cap_target" in aim_controller else 0
 
 	var max_alpha: float = cap_col.a
 	if is_hit_occluded:
 		var grid_occ_ratio: float = float(aim_controller.impact_grid_occluded_alpha_ratio) if "impact_grid_occluded_alpha_ratio" in aim_controller else 1.0
 		max_alpha *= grid_occ_ratio
 
-	tile_cap_manager.update_caps_in_range(
-		&"aim_impact",
-		hit_cell,
-		grid_rng,
-		hit_floor,
-		cap_tgt,
-		{
-			"center_pos": hit_screen_pos,
-			"use_custom_center": true,
-			"rx": rx,
-			"ry": ry,
-			"feather": feather,
-			"max_alpha": max_alpha,
-			"cap_color": cap_col,
-			"enable_dither": dither,
-			"z_index": 1,
-		}
-	)
+	if wall_xray != null and is_instance_valid(sort_world):
+		var hit_sort_key: float = GridData.cell_to_sort_key(hit_cell) if _grid_data else float(hit_cell.x + hit_cell.y)
+		wall_xray.update_target_xray(
+			&"aim_impact",
+			hit_screen_pos,
+			hit_cell,
+			hit_floor,
+			hit_sort_key,
+			sort_world,
+			{
+				"rx": rx,
+				"ry": ry,
+				"max_transparency": 0.85,
+				"cap_rx": rx,
+				"cap_ry": ry,
+				"cap_feather": feather,
+				"cap_max_alpha": max_alpha if show_cap else 0.0,
+				"cap_color": cap_col,
+				"cap_enable_dither": dither,
+				"cap_target": cap_tgt,
+				"cap_range": grid_rng,
+				"use_custom_center": true,
+				"center_pos": hit_screen_pos,
+				"target_height": 24.0,
+				"enable_stamp": true,
+				"channel_id": &"aim_impact",
+			}
+		)
+	elif tile_cap_manager != null and show_grid and show_cap and _grid_data != null:
+		tile_cap_manager.update_caps_in_range(
+			&"aim_impact",
+			hit_cell,
+			grid_rng,
+			hit_floor,
+			cap_tgt,
+			{
+				"center_pos": hit_screen_pos,
+				"use_custom_center": true,
+				"rx": rx,
+				"ry": ry,
+				"feather": feather,
+				"max_alpha": max_alpha,
+				"cap_color": cap_col,
+				"enable_dither": dither,
+				"z_index": 1,
+			}
+		)
 
 ## 每帧单次计算共享的几何位置
 func _update_frame_geometry() -> void:
@@ -416,11 +458,21 @@ func _on_impact_grid_draw() -> void:
 	_impact_mat.set_shader_parameter("radius_y", ry)
 
 	# 提交几何多边形与边框线，GPU 片元级自动进行二次椭圆衰减
-	# 若已由 TileCapManager 统一渲染纯黑截面，则此处只绘制网格线条 (show_cap 传 false)
-	var delegate_to_manager := (tile_cap_manager != null)
+	# 若已由 TileCapManager / WallXRayManager 统一渲染纯黑截面，则此处只绘制网格线条 (show_cap 传 false)
+	var delegate_to_manager := (tile_cap_manager != null or wall_xray != null)
 	IsoGridDrawer.draw_gpu_radial_falloff_grid(
 		_impact_grid_layer, hit_cell, grid_rng, hit_floor, _grid_data,
 		grid_col, 1.0, (show_cap and not delegate_to_manager), cap_col, cap_tgt
+	)
+
+	# 着弹点 2:1 像素红色宝石 (置于地表网格层 z=2，在透视切面中完美显现于地表之上)
+	var occ_ratio: float = float(aim_controller.trajectory_occluded_alpha_ratio) if "trajectory_occluded_alpha_ratio" in aim_controller else 0.5
+	var dot_scale := occ_ratio if is_hit_occluded else 1.0
+	AimPixelDrawer.draw_pixel_diamond(
+		_impact_grid_layer, hit_screen_pos,
+		Color(1.0, 0.25, 0.25, 0.85 * dot_scale),
+		Color(1.0, 0.1, 0.1, 0.95 * dot_scale),
+		Color(1.0, 0.85, 0.85, 0.95 * dot_scale)
 	)
 
 # =========================================================================
@@ -504,15 +556,3 @@ func _on_overlay_draw() -> void:
 
 	_overlay_layer.draw_string_outline(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 2, Color(0.0, 0.0, 0.0, 0.85))
 	_overlay_layer.draw_string(default_font, text_pos, text_str, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, end_color)
-
-	# 5.2 着弹点 2:1 像素红色宝石
-	if not traj_info.is_empty() and traj_info.get("is_valid", false):
-		var hit_screen_pos: Vector2 = traj_info.get("hit_screen_pos", Vector2.ZERO)
-		var is_hit_occluded: bool = traj_info.get("is_hit_occluded", false)
-		var dot_scale := occ_ratio if is_hit_occluded else 1.0
-		AimPixelDrawer.draw_pixel_diamond(
-			_overlay_layer, hit_screen_pos,
-			Color(1.0, 0.25, 0.25, 0.85 * dot_scale),
-			Color(1.0, 0.1, 0.1, 0.95 * dot_scale),
-			Color(1.0, 0.85, 0.85, 0.95 * dot_scale)
-		)

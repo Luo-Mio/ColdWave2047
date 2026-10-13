@@ -144,6 +144,26 @@ var xray_drawer: Node2D
 var _radial_tex_cache: Dictionary = {}
 var _visible_creatures: Array[Node2D] = []
 
+# 全局单例与多来源自定义透视印章 (例如弹道落点透视)
+static var active_instance: VisionFogComponent = null
+static var _custom_xray_stamps: Dictionary = {} # source_id (StringName) -> Dictionary
+
+static func set_custom_xray_stamp(source_id: StringName, center: Vector2, rx: float, ry: float, max_trans: float = 0.85, curve: float = 0.0) -> void:
+	_custom_xray_stamps[source_id] = {
+		"center": center,
+		"rx": rx,
+		"ry": ry,
+		"trans": max_trans,
+		"curve": curve,
+	}
+	if is_instance_valid(active_instance) and is_instance_valid(active_instance.xray_drawer):
+		active_instance.xray_drawer.queue_redraw()
+
+static func clear_custom_xray_stamp(source_id: StringName) -> void:
+	if _custom_xray_stamps.erase(source_id):
+		if is_instance_valid(active_instance) and is_instance_valid(active_instance.xray_drawer):
+			active_instance.xray_drawer.queue_redraw()
+
 # 视线丢失延迟与平滑淡出状态项
 class CreatureFadeItem:
 	var node: Node2D
@@ -239,6 +259,12 @@ func _ready() -> void:
 	_init_history_map()
 	_setup_fog_rendering_pipeline()
 	_sync_tile_shadow_params()
+	active_instance = self
+
+func _exit_tree() -> void:
+	if active_instance == self:
+		active_instance = null
+	_custom_xray_stamps.clear()
 
 func _physics_process(delta: float) -> void:
 	if entity == null:
@@ -1178,4 +1204,17 @@ func _on_xray_drawer_draw() -> void:
 		var c_tex := _get_radial_gradient_tex(c_curve)
 		if c_tex != null and c_trans > 0.001:
 			xray_drawer.draw_texture_rect(c_tex, c_rect, false, Color(1, 1, 1, c_trans))
+
+	# 3. 批量绘制外部注册的自定义透视印章 (例如弹道落点)
+	for stamp_id in _custom_xray_stamps.keys():
+		var stamp: Dictionary = _custom_xray_stamps[stamp_id]
+		var s_center: Vector2 = stamp.get("center", Vector2.ZERO)
+		var s_rx: float = float(stamp.get("rx", 85.0))
+		var s_ry: float = float(stamp.get("ry", 55.0))
+		var s_trans: float = float(stamp.get("trans", 0.85))
+		var s_curve: float = float(stamp.get("curve", default_xray_curve))
+		var s_rect := Rect2(s_center.x - s_rx, s_center.y - s_ry, s_rx * 2.0, s_ry * 2.0)
+		var s_tex := _get_radial_gradient_tex(s_curve)
+		if s_tex != null and s_trans > 0.001:
+			xray_drawer.draw_texture_rect(s_tex, s_rect, false, Color(1, 1, 1, s_trans))
 

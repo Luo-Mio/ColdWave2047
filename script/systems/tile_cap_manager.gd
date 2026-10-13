@@ -331,7 +331,7 @@ func _sync_player_z_index() -> void:
 		if not is_instance_valid(_player_node):
 			return
 
-	if get_total_active_caps() > 0:
+	if has_caps(&"wall_xray"):
 		_player_node.z_index = default_cap_z_index + 1
 	else:
 		if _player_node.z_index != 0:

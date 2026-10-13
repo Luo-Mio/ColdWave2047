@@ -65,6 +65,9 @@ func _ready() -> void:
 	aim_reticle = get_node_or_null("AimReticle")
 	if aim_reticle:
 		aim_reticle.tile_cap_manager = tile_cap_manager
+		if wall_xray:
+			aim_reticle.wall_xray = wall_xray
+		aim_reticle.sort_world = sort_world
 		if aim_controller:
 			aim_reticle.aim_controller = aim_controller
 
