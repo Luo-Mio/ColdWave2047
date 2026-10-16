@@ -1,5 +1,5 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1792142960
+::res://::1792153287
 ::res://resources/::1792138415
 ::res://resources/Bio/::1788437015
 ::res://resources/Bio/wolf/::1792134563
@@ -15,7 +15,7 @@ wolf-run.png::CompressedTexture2D::6963790236614627806::1689925778::1792134563::
 ::res://resources/Plant/wheat/::1792133553
 ::res://resources/Surface/::1792133562
 ::res://resources/Tile/::1792136983
-::res://resources/Tile/DirtBarren1/::1792143153
+::res://resources/Tile/DirtBarren1/::1792143334
 atlas.png::CompressedTexture2D::998718892072465262::1792142990::1792143334::1::::<><><>0<>0<>c5ff1ac29793db968a513414d75ca403<>res://.godot/imported/atlas.png-b9a6549c15754fbd4d1e1b57298b9018.ctex::
 ::res://resources/Tool/::1792138412
 ::res://scene/::1792137812
@@ -23,11 +23,11 @@ atlas.png::CompressedTexture2D::998718892072465262::1792142990::1792143334::1:::
 ::res://scene/Chara/MainChara/::1792139373
 main_chara.gd::GDScript::2627571030170974334::1792139538::0::1::::MainChara<>Node2D<><>0<>0<><>::
 Main_Chara.tscn::PackedScene::2639506911920136435::1792139373::0::1::::<><><>0<>0<><>::uid://bdo2yf5eeof3c::::res://scene/Chara/MainChara/main_chara.gd<>uid://dnnv4ye7txwod::::res://resources/Chara/MainChara/003.png
-::res://scene/surrounding/::1792142197
-Main_Scene.tscn::PackedScene::6420268590859870814::1792142197::0::1::::<><><>0<>0<><>::uid://bup6r8jgiv0ye::::res://resources/Tile/DirtBarren1/001.png<>uid://bduuj77bdwmnj::::res://scene/Chara/MainChara/Main_Chara.tscn<>uid://dds15wcbc06e5::::res://script/camera/game_camera.gd
+::res://scene/surrounding/::1792143618
+Main_Scene.tscn::PackedScene::6420268590859870814::1792143618::0::1::::<><><>0<>0<><>::uid://oh10v5tdhaiw::::res://resources/Tile/DirtBarren1/atlas.png<>uid://bduuj77bdwmnj::::res://scene/Chara/MainChara/Main_Chara.tscn<>uid://dds15wcbc06e5::::res://script/camera/game_camera.gd
 ::res://scratch/::1792139792
 ::res://script/::1792139105
 ::res://script/camera/::1792139259
-game_camera.gd::GDScript::7408620755847989930::1792139255::0::1::::GameCamera<>Camera2D<><>0<>1<><>::
+game_camera.gd::GDScript::7408620755847989930::1792143571::0::1::::GameCamera<>Camera2D<><>0<>1<><>::
 ::res://tools/::1792143323
 ::res://tools/PackTiles/::1792143311
