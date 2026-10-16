@@ -1,0 +1,12 @@
+[gd_scene format=3 uid="uid://bduuj77bdwmnj"]
+
+[ext_resource type="Script" uid="uid://bdo2yf5eeof3c" path="res://scene/Chara/MainChara/main_chara.gd" id="1_51ltt"]
+[ext_resource type="Texture2D" uid="uid://dnnv4ye7txwod" path="res://resources/Chara/MainChara/003.png" id="1_wyvl4"]
+
+[node name="Main_Chara" type="Node2D" unique_id=922893044]
+script = ExtResource("1_51ltt")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1652941419]
+texture_filter = 1
+texture = ExtResource("1_wyvl4")
+offset = Vector2(0, -45)

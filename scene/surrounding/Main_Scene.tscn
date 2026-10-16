@@ -1,0 +1,39 @@
+[gd_scene format=4 uid="uid://cxqa5d3yblx55"]
+
+[ext_resource type="Texture2D" uid="uid://oh10v5tdhaiw" path="res://resources/Tile/DirtBarren1/atlas.png" id="1_g5wkk"]
+[ext_resource type="PackedScene" uid="uid://bduuj77bdwmnj" path="res://scene/Chara/MainChara/Main_Chara.tscn" id="2_t41xw"]
+[ext_resource type="Script" uid="uid://dds15wcbc06e5" path="res://script/camera/game_camera.gd" id="3_cam"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_fn2e7"]
+texture = ExtResource("1_g5wkk")
+texture_region_size = Vector2i(128, 64)
+0:0/0 = 0
+1:0/0 = 0
+2:0/0 = 0
+0:1/0 = 0
+1:1/0 = 0
+2:1/0 = 0
+0:2/0 = 0
+1:2/0 = 0
+2:2/0 = 0
+
+[sub_resource type="TileSet" id="TileSet_hjb8m"]
+tile_shape = 1
+tile_size = Vector2i(128, 64)
+sources/0 = SubResource("TileSetAtlasSource_fn2e7")
+
+[node name="MainScene" type="Node2D" unique_id=649716637]
+
+[node name="Tile" type="Node2D" parent="." unique_id=888343591]
+
+[node name="TileMapLayer" type="TileMapLayer" parent="Tile" unique_id=1959620638]
+texture_filter = 1
+tile_map_data = PackedByteArray("AAD/////AAAAAAAAAAAAAP7/AAAAAAAAAAAAAP3/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP//AAAAAAAAAAABAP7/AAAAAAAAAAD+/wAAAAAAAAAAAAD+/wEAAAAAAAAAAAD+/wIAAAAAAAAAAAD//wAAAAAAAAAAAAD+////AAAAAAAAAAD///7/AAAAAAAAAAD///3/AAAAAAAAAAAAAPz/AAAAAAAAAAAAAPv/AAAAAAAAAAABAPz/AAAAAAAAAAABAP3/AAAAAAAAAAACAP7/AAAAAAAAAAABAP//AAAAAAAAAAABAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAD//wEAAAAAAAAAAAAAAAIAAAAAAAAAAAD//wIAAAAAAAAAAAD+/wMAAAAAAAAAAAD//wMAAAAAAAAAAAD//wQAAAAAAAAAAAD//wUAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAMAAAAAAAAAAAABAAIAAAAAAAAAAAABAAEAAAAAAAAAAAACAAAAAAAAAAAAAAACAP//AAAAAAAAAAAAAPr/AAAAAAAAAAD///v/AAAAAAAAAAD///z/AAAAAAAAAAD+//3/AAAAAAAAAAD+//7/AAAAAAAAAAD9////AAAAAAAAAAD9/wAAAAAAAAAAAAD9/wEAAAAAAAAAAAD8////AAAAAAAAAAD9//7/AAAAAAAAAAD9//3/AAAAAAAAAAD+//z/AAAAAAAAAAD+//v/AAAAAAAAAAD///r/AAAAAAAAAAD///n/AAAAAAAAAAA=")
+tile_set = SubResource("TileSet_hjb8m")
+
+[node name="Main_Chara" parent="." unique_id=922893044 instance=ExtResource("2_t41xw")]
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1605782228]
+zoom = Vector2(0.7, 0.7)
+script = ExtResource("3_cam")
+camera_distance = 0.7

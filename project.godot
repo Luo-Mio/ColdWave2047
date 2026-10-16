@@ -11,14 +11,10 @@ config_version=5
 [application]
 
 config/name="测试001"
-run/main_scene="uid://23bxsmk7brqo"
+run/main_scene="res://scene/surrounding/Main_Scene.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 run/max_fps=120
 config/icon="res://icon.svg"
-
-[autoload]
-
-GridData="*res://script/core/grid_data.gd"
 
 [display]
 
@@ -27,7 +23,7 @@ window/stretch/aspect="expand"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/TileCropper/plugin.cfg", "res://addons/TileMapDual/plugin.cfg")
+enabled=PackedStringArray()
 
 [input]
 
