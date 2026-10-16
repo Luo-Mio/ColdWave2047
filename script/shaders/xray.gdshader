@@ -4,6 +4,7 @@ shader_type canvas_item;
 global uniform sampler2D xray_mask_tex : filter_linear, repeat_disable;
 
 // 保持材质级可选参数兼容性 (供树木或高墙微调透视透光乘率)
+uniform bool fully_transparent = false;
 uniform float max_transparency : hint_range(0.0, 1.0) = 1.0;
 uniform vec2 target_offset = vec2(0.0, 0.0);
 uniform float rx : hint_range(4.0, 400.0) = 85.0;
@@ -40,6 +41,7 @@ const float bayer8[64] = float[64](
 );
 
 void fragment() {
+    if (fully_transparent) { discard; }
     vec4 col = COLOR;
     if (col.a <= 0.001) { discard; }
 

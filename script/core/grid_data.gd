@@ -266,7 +266,7 @@ func set_tile(cell: Vector2i, z: int, exists: bool) -> void:
 		var cy := cell.y + HEIGHT_MAP_OFFSET.y
 		if cx >= 0 and cx < HEIGHT_MAP_WIDTH and cy >= 0 and cy < HEIGHT_MAP_HEIGHT:
 			var fl: int = highest_floor.get(ck, 0)
-			height_map_image.set_pixel(cx, cy, Color(float(fl) / 16.0, 0, 0, 1))
+			height_map_image.set_pixel(cx, cy, Color((float(fl) * 16.0) / 255.0, 0, 0, 1))
 			if height_map_texture != null:
 				height_map_texture.update(height_map_image)
 
@@ -287,7 +287,7 @@ func _update_height_map() -> void:
 				var current_px := height_map_image.get_pixel(cx, cy)
 				var current_fl := int(round(current_px.r * 16.0))
 				if z > current_fl:
-					height_map_image.set_pixel(cx, cy, Color(float(z) / 16.0, 0, 0, 1))
+					height_map_image.set_pixel(cx, cy, Color((float(z) * 16.0) / 255.0, 0, 0, 1))
 
 	if height_map_texture == null:
 		height_map_texture = ImageTexture.create_from_image(height_map_image)

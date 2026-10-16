@@ -64,7 +64,7 @@ float get_cell_floor(vec2 cell) {
 	if (tex_coord.x < 0.0 || tex_coord.x > 1.0 || tex_coord.y < 0.0 || tex_coord.y > 1.0) {
 		return 0.0;
 	}
-	return texture(height_map_tex, tex_coord).r * max_floor_val;
+	return floor(texture(height_map_tex, tex_coord).r * max_floor_val + 0.5);
 }
 
 // ====== GPU 遮挡判定 (替代 CPU is_point_occluded 循环) ======

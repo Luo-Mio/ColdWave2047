@@ -8,6 +8,7 @@ const AimControllerScript := preload("res://script/components/aim_controller.gd"
 const AimReticleScript := preload("res://script/systems/aim_reticle.gd")
 const EdgeIndicateSystemScript := preload("res://script/systems/edge_indicate_system.gd")
 const TileCapManager := preload("res://script/systems/tile_cap_manager.gd")
+const TerrainRenderManager := preload("res://script/systems/terrain_render_manager.gd")
 const MagicOrbScene := preload("res://scene/particle/magic_orb.tscn")
 const LightOrbScene := preload("res://scene/particle/light.tscn")
 
@@ -18,6 +19,7 @@ var build_manager: BuildManager
 var wall_xray: WallXRayManager
 var air_wall: AirWallManager
 var tile_cap_manager: TileCapManager
+var terrain_render_manager: TerrainRenderManager
 var aim_controller: Node
 var aim_reticle: Node2D
 var layer_surf_system: LayerSurfSystem
@@ -124,7 +126,26 @@ func _ready() -> void:
 		add_child(edge_indicate_system)
 	edge_indicate_system.init_system(sort_world, $layers)
 
-	# 10. 连接 HUD 保存快照按钮
+	# 10. 初始化动态视距渲染管理器 (TerrainRenderManager)
+	terrain_render_manager = get_node_or_null("TerrainRenderManager") as TerrainRenderManager
+	if terrain_render_manager == null:
+		terrain_render_manager = TerrainRenderManager.new()
+		terrain_render_manager.name = "TerrainRenderManager"
+		add_child(terrain_render_manager)
+
+	var floor0_surf = layer_surf_system.floor0_surf_layer if layer_surf_system else null
+	terrain_render_manager.setup(sort_world, tile_layers[0], floor0_surf, player_node)
+	if wall_xray:
+		wall_xray.terrain_render_manager = terrain_render_manager
+
+	# 初始更新一次渲染窗口
+	if player_node:
+		var start_cell := GridData.world_to_cell(player_node.global_position)
+		_last_player_cell = start_cell
+		_last_player_floor = player_node.call("get_current_floor") if player_node.has_method("get_current_floor") else GridData.get_floor_at_pos(player_node.global_position)
+		terrain_render_manager.update_window(start_cell, true)
+
+	# 11. 连接 HUD 保存快照按钮
 	var save_btn := get_node_or_null("HUD/SaveMapBtn") as Button
 	if save_btn:
 		save_btn.pressed.connect(_on_save_map_btn_pressed)
@@ -212,11 +233,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			build_manager.place_active_item(cell, hotbar_node, sort_world, selector, tile_layers)
+			if terrain_render_manager:
+				terrain_render_manager.notify_tile_modified(cell, GridData.get_highest_floor(cell))
 			_refresh_xray()
 			if air_wall:
 				air_wall.rebuild_walls()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			build_manager.destroy_top_at(cell, sort_world, selector)
+			if terrain_render_manager:
+				terrain_render_manager.notify_tile_modified(cell, GridData.get_highest_floor(cell))
 			_refresh_xray()
 			if air_wall:
 				air_wall.rebuild_walls()
@@ -232,12 +257,14 @@ func _process(_delta: float) -> void:
 		player_visual = player.call("get_visual_foot_position")
 	RenderingServer.global_shader_parameter_set("player_world_pos", player_visual)
 
-	# 2. 玩家跨格子或跨楼层移动时刷新高墙透视
+	# 2. 玩家跨格子或跨楼层移动时刷新视距渲染与高墙透视
 	var current_cell := GridData.world_to_cell(player.global_position)
 	var current_floor: int = player.call("get_current_floor") if player.has_method("get_current_floor") else GridData.get_floor_at_pos(player.global_position)
 	if current_cell != _last_player_cell or current_floor != _last_player_floor:
 		_last_player_cell = current_cell
 		_last_player_floor = current_floor
+		if terrain_render_manager:
+			terrain_render_manager.update_window(current_cell)
 		_refresh_xray()
 
 

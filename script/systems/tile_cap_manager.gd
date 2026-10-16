@@ -110,6 +110,7 @@ func get_or_create_channel_material(source_id: StringName) -> ShaderMaterial:
 	mat.set_shader_parameter("feather", default_feather)
 	mat.set_shader_parameter("max_alpha", default_max_alpha)
 	mat.set_shader_parameter("enable_dither", default_enable_dither)
+	mat.set_shader_parameter("disable_distance_fade", false)
 	mat.set_shader_parameter("use_custom_center", false)
 	mat.set_shader_parameter("center_world_pos", Vector2.ZERO)
 	_channel_materials[source_id] = mat
@@ -130,6 +131,8 @@ func update_channel_config(source_id: StringName, config: Dictionary) -> void:
 		mat.set_shader_parameter("max_alpha", float(config["max_alpha"]))
 	if config.has("enable_dither"):
 		mat.set_shader_parameter("enable_dither", bool(config["enable_dither"]))
+	if config.has("disable_distance_fade"):
+		mat.set_shader_parameter("disable_distance_fade", bool(config["disable_distance_fade"]))
 	if config.has("use_custom_center"):
 		mat.set_shader_parameter("use_custom_center", bool(config["use_custom_center"]))
 	if config.has("center_pos"):

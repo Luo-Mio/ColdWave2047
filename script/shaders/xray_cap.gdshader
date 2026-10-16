@@ -7,6 +7,9 @@ global uniform vec2 player_world_pos;
 uniform bool use_custom_center = false;
 uniform vec2 center_world_pos = vec2(0.0, 0.0);
 
+// 是否禁用距离边缘淡出 (若开启，则所有生成的封顶格均保持满额封顶，不受与角色中心距离裁切)
+uniform bool disable_distance_fade = false;
+
 // 截面基础颜色 (默认为纯黑，可在检查器微调)
 uniform vec4 cap_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 
@@ -34,16 +37,19 @@ void vertex() {
 }
 
 void fragment() {
-	vec2 focal_pos = use_custom_center ? center_world_pos : player_world_pos;
-	vec2 diff = world_pos - focal_pos;
-	float dist = (diff.x * diff.x) / (rx * rx) + (diff.y * diff.y) / (ry * ry);
+	float alpha = max_alpha;
+	if (!disable_distance_fade) {
+		vec2 focal_pos = use_custom_center ? center_world_pos : player_world_pos;
+		vec2 diff = world_pos - focal_pos;
+		float dist = (diff.x * diff.x) / (rx * rx) + (diff.y * diff.y) / (ry * ry);
 
-	// GPU 硬件级椭圆平滑淡出：
-	// 距离中心越近，遮罩越明显；靠近边缘平滑渐隐至 0
-	float alpha = smoothstep(1.0, 1.0 - feather, dist) * max_alpha;
+		// GPU 硬件级椭圆平滑淡出：
+		// 距离中心越近，遮罩越明显；靠近边缘平滑渐隐至 0
+		alpha = smoothstep(1.0, 1.0 - feather, dist) * max_alpha;
 
-	if (alpha <= 0.001) {
-		discard;
+		if (alpha <= 0.001) {
+			discard;
+		}
 	}
 
 	if (enable_dither) {

@@ -209,6 +209,7 @@ var _last_draw_pos := Vector2(-99999, -99999)
 var _last_draw_player_pos := Vector2(-99999, -99999)
 var _last_history_stamp_pos := Vector2(-99999, -99999)
 var _last_quads_hash: int = -1
+var _last_draw_player_floor: int = -999
 
 # 历史探索记忆 (低分辨率图像)
 var history_image: Image
@@ -357,9 +358,10 @@ func _physics_process(delta: float) -> void:
 		# 脏标记智能重绘：仅当摄像机位移、角色位移或阴影形状变动时才重绘，静止时 0 额外 CPU/GPU 消耗！
 		var threshold_sq := move_threshold * move_threshold
 		var moved := player_pos.distance_squared_to(_last_draw_player_pos) > threshold_sq or cam_pos.distance_squared_to(_last_draw_pos) > threshold_sq
-		if is_instance_valid(fog_drawer) and (moved or quads_changed or _last_draw_pos == Vector2(-99999, -99999)):
+		if is_instance_valid(fog_drawer) and (moved or quads_changed or player_floor != _last_draw_player_floor or _last_draw_pos == Vector2(-99999, -99999)):
 			_last_draw_pos = cam_pos
 			_last_draw_player_pos = player_pos
+			_last_draw_player_floor = player_floor
 			_mask_cam_pos = cam_pos
 			# 同步视口摄像机
 			if is_instance_valid(fog_cam):
@@ -770,7 +772,7 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 		h_eye_total = float(p_floor) * 16.0 + player_eye_h
 
 	# 角色纯净地表坐标 (基准物理坐标，确保光线角度不受垂直高度污染)
-	var player_ground_pos := player_pos
+	var player_ground_pos := entity.global_position if entity != null else player_pos
 
 	for hit in hits:
 		var cid: int = hit.get("collider_id", 0)

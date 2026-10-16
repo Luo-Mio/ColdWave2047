@@ -54,7 +54,7 @@ float get_cell_floor(vec2 cell) {
 	if (tex_coord.x < 0.0 || tex_coord.x > 1.0 || tex_coord.y < 0.0 || tex_coord.y > 1.0) {
 		return 0.0;
 	}
-	return texture(height_map_tex, tex_coord).r * max_floor_val;
+	return floor(texture(height_map_tex, tex_coord).r * max_floor_val + 0.5);
 }
 
 // 根据屏幕像素反推出其展示的 3D 地表坐标 (Ground X, Ground Y, Surface Z)
@@ -66,7 +66,7 @@ vec3 find_surface_3d(vec2 vpos) {
 		vec2 ground_pos = vec2(vpos.x, vpos.y + float(f) * floor_height);
 		vec2 cell = world_to_cell(ground_pos);
 		float h_floor = get_cell_floor(cell);
-		if (h_floor >= float(f)) {
+		if (h_floor >= float(f) - 0.1) {
 			return vec3(ground_pos, float(f) * floor_height);
 		}
 	}

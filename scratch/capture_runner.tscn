@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://capture_runner_01"]
+
+[ext_resource type="Script" path="res://scratch/capture_game.gd" id="1_cap"]
+
+[node name="CaptureRunner" type="Node2D"]
+script = ExtResource("1_cap")
+
