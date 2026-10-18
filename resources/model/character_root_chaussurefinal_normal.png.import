@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bx0ndwv3mx7yg"
-path.s3tc="res://.godot/imported/character_root_chaussurefinal_normal.png-2a70ead4d1b45975451068b9a2391917.s3tc.ctex"
+path.s3tc="res://.godot/imported/character_root_chaussurefinal_normal.png-78e3e43d310ec21ccf5ee566cc1b2cb3.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -14,8 +14,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://resources/model/character_root_chaussurefinal_normal.png"
-dest_files=["res://.godot/imported/character_root_chaussurefinal_normal.png-2a70ead4d1b45975451068b9a2391917.s3tc.ctex"]
+source_file="res://resources/Model/character_root_chaussurefinal_normal.png"
+dest_files=["res://.godot/imported/character_root_chaussurefinal_normal.png-78e3e43d310ec21ccf5ee566cc1b2cb3.s3tc.ctex"]
 
 [params]
 

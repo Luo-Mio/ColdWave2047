@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bhgvcnv1kmqip"
-path.s3tc="res://.godot/imported/character_root_chaussurefinal_color.png-ff8cd385eb2acbc8dac11a675600213b.s3tc.ctex"
+path.s3tc="res://.godot/imported/character_root_chaussurefinal_color.png-a267e1597fa8365ae059aa529e6e42d9.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -14,8 +14,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://resources/model/character_root_chaussurefinal_color.png"
-dest_files=["res://.godot/imported/character_root_chaussurefinal_color.png-ff8cd385eb2acbc8dac11a675600213b.s3tc.ctex"]
+source_file="res://resources/Model/character_root_chaussurefinal_color.png"
+dest_files=["res://.godot/imported/character_root_chaussurefinal_color.png-a267e1597fa8365ae059aa529e6e42d9.s3tc.ctex"]
 
 [params]
 

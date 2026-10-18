@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://bthj4xqvcwxsx"
-path.s3tc="res://.godot/imported/character_root_robelowfix_metallic.png-robelowfix_roughness.png-49c6cf6d7bef82f69150a313ba11c712.s3tc.ctex"
+path.s3tc="res://.godot/imported/character_root_robelowfix_metallic.png-robelowfix_roughness.png-b5a8558ce1c82467125e7f4a442e3caf.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -14,8 +14,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://resources/model/character_root_robelowfix_metallic.png-robelowfix_roughness.png"
-dest_files=["res://.godot/imported/character_root_robelowfix_metallic.png-robelowfix_roughness.png-49c6cf6d7bef82f69150a313ba11c712.s3tc.ctex"]
+source_file="res://resources/Model/character_root_robelowfix_metallic.png-robelowfix_roughness.png"
+dest_files=["res://.godot/imported/character_root_robelowfix_metallic.png-robelowfix_roughness.png-b5a8558ce1c82467125e7f4a442e3caf.s3tc.ctex"]
 
 [params]
 

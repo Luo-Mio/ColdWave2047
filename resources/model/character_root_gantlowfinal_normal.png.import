@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://6ff3qwu1jro"
-path.s3tc="res://.godot/imported/character_root_gantlowfinal_normal.png-50fd9ef988658d972696780f26b8d6f2.s3tc.ctex"
+path.s3tc="res://.godot/imported/character_root_gantlowfinal_normal.png-4ca3765dd8b796b9a3a114137538cd82.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -14,8 +14,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://resources/model/character_root_gantlowfinal_normal.png"
-dest_files=["res://.godot/imported/character_root_gantlowfinal_normal.png-50fd9ef988658d972696780f26b8d6f2.s3tc.ctex"]
+source_file="res://resources/Model/character_root_gantlowfinal_normal.png"
+dest_files=["res://.godot/imported/character_root_gantlowfinal_normal.png-4ca3765dd8b796b9a3a114137538cd82.s3tc.ctex"]
 
 [params]
 

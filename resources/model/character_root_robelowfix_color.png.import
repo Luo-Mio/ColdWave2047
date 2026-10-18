@@ -3,7 +3,7 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://ctc40ar2l5jg6"
-path.s3tc="res://.godot/imported/character_root_robelowfix_color.png-3cb2738c9304117440641430642dd82e.s3tc.ctex"
+path.s3tc="res://.godot/imported/character_root_robelowfix_color.png-7b4bb464388a78cc557e0b1867b5fcc5.s3tc.ctex"
 metadata={
 "imported_formats": ["s3tc_bptc"],
 "vram_texture": true
@@ -14,8 +14,8 @@ generator_parameters={
 
 [deps]
 
-source_file="res://resources/model/character_root_robelowfix_color.png"
-dest_files=["res://.godot/imported/character_root_robelowfix_color.png-3cb2738c9304117440641430642dd82e.s3tc.ctex"]
+source_file="res://resources/Model/character_root_robelowfix_color.png"
+dest_files=["res://.godot/imported/character_root_robelowfix_color.png-7b4bb464388a78cc557e0b1867b5fcc5.s3tc.ctex"]
 
 [params]
 

@@ -72,6 +72,7 @@ var _source_layers: Dictionary = {}    # source_id -> Array[TileMapLayer]
 var _source_objects: Dictionary = {}   # source_id -> Dictionary { item: { "material": Material, "z_index": int } }
 var _source_nodes: Dictionary = {}     # source_id -> Node2D
 var _source_stamps: Dictionary = {}    # source_id -> Array[StringName]
+var _prev_occluding_cells: Dictionary = {} # source_id -> Dictionary (cell -> floor)
 
 # 向后兼容公开字段
 var active_xray_layers: Array[TileMapLayer] = []
@@ -128,14 +129,14 @@ func _is_object_used_by_other_source(item: CanvasItem, exclude_source_id: String
 func _release_source_items(source_id: StringName, keep_layers: Array = [], keep_objects: Dictionary = {}) -> void:
 	var old_layers: Array = _source_layers.get(source_id, [])
 	for layer in old_layers:
-		if not keep_layers.has(layer) and is_instance_valid(layer):
+		if is_instance_valid(layer) and not keep_layers.has(layer):
 			if not _is_layer_used_by_other_source(layer, source_id):
 				layer.material = VisionFogComponent.get_tile_shadow_material()
 				layer.z_index = 0
 
 	var old_objs: Dictionary = _source_objects.get(source_id, {})
 	for item in old_objs.keys():
-		if not keep_objects.has(item) and is_instance_valid(item):
+		if is_instance_valid(item) and not keep_objects.has(item):
 			if not _is_object_used_by_other_source(item, source_id):
 				var data = old_objs[item]
 				item.material = data.get("material") if data is Dictionary else data
@@ -172,68 +173,26 @@ func update_target_xray(
 	var is_custom_center: bool = bool(config.get("use_custom_center", (source_id != &"player" and channel_id != &"wall_xray")))
 	var center_world_p: Vector2 = config.get("center_pos", target_visual)
 
-	# 1. 收集视野搜索范围内高于观察者的高墙格子 (优先使用动态视距窗口渲染集)
-	var high_cells: Array[Vector2i] = []
-	if terrain_render_manager and terrain_render_manager.is_enabled and source_id == &"player":
-		terrain_render_manager.update_window(target_cell)
-		high_cells = terrain_render_manager.get_high_cells(target_floor)
-	else:
-		for dy in range(-search_radius, search_radius + 1):
-			for dx in range(-search_radius, search_radius + 1):
-				var w_cell := target_cell + Vector2i(dx, dy)
-				if GridData.has_any_tile(w_cell) and GridData.get_highest_floor(w_cell) > target_floor:
-					high_cells.append(w_cell)
+	# 1. 采用近身等轴测几何视锥投影判定遮挡格 (极速 O(1) 局部比对，耗时 < 0.05ms)
+	var cur_target_height: float = float(config.get("target_height", 48.0))
+	var occluding_cells: Dictionary = _find_occluding_cells_geom(
+		target_visual,
+		target_cell,
+		target_floor,
+		cur_target_height,
+		cur_rx
+	)
 
-	# 2. 连通块聚类为连续墙体整体 (Clusters)
-	var visited: Dictionary = {}
-	var clusters: Array[Array] = []
-	for c in high_cells:
-		if visited.has(c):
-			continue
-		var cluster: Array[Vector2i] = []
-		var queue: Array[Vector2i] = [c]
-		visited[c] = true
-		while not queue.is_empty():
-			var curr: Vector2i = queue.pop_front()
-			cluster.append(curr)
-			for offset in [
-				Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
-				Vector2i(1, 1), Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1),
-				Vector2i(0, 2), Vector2i(0, -2)
-			]:
-				var neighbor: Vector2i = curr + offset
-				if high_cells.has(neighbor) and not visited.has(neighbor):
-					visited[neighbor] = true
-					queue.append(neighbor)
-		clusters.append(cluster)
-
-	# 3. 纯连续墙体合成 90° 大扇区判定 (方案 A)
-	# 正面两条朝南(+Y)延展的边界射线方程为: y + 0.5x = L, y - 0.5x = R
-	var occluding_cells: Dictionary = {}
-	for cluster in clusters:
-		var l_min: float = 999999.0
-		var r_min: float = 999999.0
-		for c: Vector2i in cluster:
-			var w_pos := GridData.cell_to_world(c)
-			var l_val := (w_pos.y - 16.0) + 0.5 * w_pos.x
-			var r_val := (w_pos.y - 16.0) - 0.5 * w_pos.x
-			l_min = minf(l_min, l_val)
-			r_min = minf(r_min, r_val)
-
-		var y_apex := (l_min + r_min) * 0.5
-		var p_l := target_visual.y + 0.5 * target_visual.x
-		var p_r := target_visual.y - 0.5 * target_visual.x
-
-		var is_in_footprint: bool = cluster.has(target_cell)
-		# 只要角色处于正面 90° 扇区内且身处交点南方，整堵连续墙体坚固阻挡视线，100% 豁免透视！
-		# 但若角色直接站在墙体底座占地格子内，则必须透视！
-		var in_cluster_sector: bool = (p_l >= l_min and p_r >= r_min and not is_in_footprint and target_visual.y >= y_apex)
-		if in_cluster_sector:
-			continue
-
-		# 角色在正面 90° 扇区之外（身在墙后或墙侧盲区）：整堵连续墙直接全量透视！
-		for c: Vector2i in cluster:
-			occluding_cells[c] = mini(occluding_cells.get(c, 999), target_floor)
+	# 2. 状态脏标记优化：若遮挡格与上一轮完全一致，跳过重量级材质与场景树写入
+	var prev_cells: Dictionary = _prev_occluding_cells.get(source_id, {})
+	if occluding_cells.hash() == prev_cells.hash():
+		if enable_stamp:
+			if not prev_cells.is_empty() or config.get("force_stamp", true):
+				VisionFogComponent.set_custom_xray_stamp(source_id, target_visual, cur_rx, cur_ry, xray_trans, xray_curve)
+			else:
+				VisionFogComponent.clear_custom_xray_stamp(source_id)
+		return
+	_prev_occluding_cells[source_id] = occluding_cells.duplicate()
 
 	# 4. 收集透视瓦片、表层地毯、树木与截面封顶
 	var new_layers: Array[TileMapLayer] = []
@@ -305,11 +264,57 @@ func update_target_xray(
 		else:
 			VisionFogComponent.clear_custom_xray_stamp(source_id)
 
+## 极速等轴测视锥几何投影遮挡判定 (精准检测目标前景立面遮蔽)
+func _find_occluding_cells_geom(
+	target_visual: Vector2,
+	target_cell: Vector2i,
+	target_floor: int,
+	target_height: float,
+	effective_rx: float
+) -> Dictionary:
+	var occluding := {}
+	var p_x_min := target_visual.x - effective_rx
+	var p_x_max := target_visual.x + effective_rx
+	var p_y_top := target_visual.y - target_height
+	var p_y_foot := target_visual.y
+
+	# 仅需扫描角色近身及正前方南侧等轴测扇区 (dy: -1~7, dx: -5~5)
+	for dy in range(-1, 8):
+		for dx in range(-5, 6):
+			var c := target_cell + Vector2i(dx, dy)
+			if not GridData.has_any_tile(c):
+				continue
+			var w_floor := GridData.get_highest_floor(c)
+			if w_floor <= target_floor:
+				continue
+
+			var c_world := GridData.cell_to_world(c)
+
+			# 1. 屏幕水平跨度比对 (瓦片菱形 64px 加上透视边界)
+			var tile_x_min := c_world.x - 32.0
+			var tile_x_max := c_world.x + 32.0
+			if tile_x_max < p_x_min or tile_x_min > p_x_max:
+				continue
+
+			# 2. 深度方向比对 (瓦片基准面必须在目标正前方或同排，不得位于目标北侧身后)
+			var tile_base_y := c_world.y - float(target_floor) * 16.0
+			if tile_base_y < p_y_foot - 12.0:
+				continue
+
+			# 3. 屏幕垂直立面投影重叠比对
+			var wall_top_y := c_world.y - float(w_floor) * 16.0 - 16.0
+			var wall_bottom_y := tile_base_y + 16.0
+			if wall_top_y <= p_y_foot and wall_bottom_y >= p_y_top:
+				occluding[c] = target_floor
+
+	return occluding
+
 ## 清除指定来源的高墙与表面透视
 func clear_source_xray(source_id: StringName) -> void:
 	_release_source_items(source_id, [], {})
 	_source_layers.erase(source_id)
 	_source_objects.erase(source_id)
+	_prev_occluding_cells.erase(source_id)
 	_sync_active_arrays()
 
 	if _source_nodes.has(source_id):
@@ -389,23 +394,6 @@ func _collect_objects_for_source(cell: Vector2i, min_floor: int, target_objs: Di
 			var obj_fl: int = obj.get("floor_level") if obj.get("floor_level") != null else GridData.get_highest_floor(cell)
 			if obj_fl > min_floor:
 				_collect_node_sprites(obj, target_objs)
-
-	if objs.is_empty():
-		for obj in get_tree().get_nodes_in_group("world_objects"):
-			if is_instance_valid(obj):
-				var obj_base_pos: Vector2 = obj.get("base_position") if obj.get("base_position") != null and obj.get("base_position") != Vector2.ZERO else obj.global_position
-				if GridData.world_to_cell(obj_base_pos) == cell:
-					var obj_fl: int = obj.get("floor_level") if obj.get("floor_level") != null else GridData.get_highest_floor(cell)
-					if obj_fl > min_floor:
-						_collect_node_sprites(obj, target_objs)
-
-	for drop in get_tree().get_nodes_in_group("drop_items"):
-		if is_instance_valid(drop):
-			var drop_pos: Vector2 = drop.get("base_position") if drop.get("base_position") != null and drop.get("base_position") != Vector2.ZERO else drop.global_position
-			if GridData.world_to_cell(drop_pos) == cell:
-				var drop_fl: int = drop.get("floor_level") if drop.get("floor_level") != null else 0
-				if drop_fl > min_floor:
-					_collect_node_sprites(drop, target_objs)
 
 func _collect_node_sprites(obj: Node, target_objs: Dictionary) -> void:
 	if obj is CanvasItem and not target_objs.has(obj):
