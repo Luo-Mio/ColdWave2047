@@ -244,9 +244,7 @@ func dump_map_to_file(path: String = "res://data/editor_map_dump.json") -> bool:
 			if l1 and l1.get_cell_source_id(cell) != -1:
 				atlas = l1.get_cell_atlas_coords(cell)
 		elif sort_world:
-			var cell_layer := sort_world.get_node_or_null("row_z%d_y%d" % [z, cell.y]) as TileMapLayer
-			if cell_layer == null:
-				cell_layer = sort_world.get_node_or_null("cell_z%d_%d_%d" % [z, cell.x, cell.y]) as TileMapLayer
+			var cell_layer := sort_world.get_node_or_null("cell_z%d_%d_%d" % [z, cell.x, cell.y]) as TileMapLayer
 			if cell_layer and cell_layer.get_cell_source_id(cell) != -1:
 				atlas = cell_layer.get_cell_atlas_coords(cell)
 
