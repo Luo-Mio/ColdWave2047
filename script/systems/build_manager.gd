@@ -161,8 +161,9 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 		return
 
 	# 敲碎地砖
-	var key := "cell_z%d_%d_%d" % [z, cell.x, cell.y]
-	var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
+	var cell_layer := sort_world.get_node_or_null("row_z%d_y%d" % [z, cell.y]) as TileMapLayer
+	if cell_layer == null:
+		cell_layer = sort_world.get_node_or_null("cell_z%d_%d_%d" % [z, cell.x, cell.y]) as TileMapLayer
 	if cell_layer:
 		cell_layer.erase_cell(cell)
 		GridData.set_tile(cell, z, false)
@@ -191,9 +192,9 @@ func destroy_top_at(cell: Vector2i, sort_world: Node2D, selector: Node2D) -> voi
 
 		selector.call("force_update")
 
-# 查找或创建格级图层
+# 查找或创建行级图层 (按楼层与 Y 轴行合并，消除单格节点爆炸)
 func get_or_create_cell_layer(z: int, cell: Vector2i, sort_world: Node2D, tile_layers: Array[TileMapLayer]) -> TileMapLayer:
-	var key := "cell_z%d_%d_%d" % [z, cell.x, cell.y]
+	var key := "row_z%d_y%d" % [z, cell.y]
 	var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
 	if cell_layer != null:
 		return cell_layer
@@ -202,11 +203,11 @@ func get_or_create_cell_layer(z: int, cell: Vector2i, sort_world: Node2D, tile_l
 	cell_layer.name = key
 	# 统一使用第 0 层的 TileSet 材质图集
 	cell_layer.tile_set = tile_layers[0].tile_set
-# 每高 1 层往上移 16 像素
-	cell_layer.position = Vector2(0.0, -float(z) * 16.0) # 8.0 改为 16.0
+	# 每高 1 层往上移 16 像素
+	cell_layer.position = Vector2(0.0, -float(z) * 16.0)
 	cell_layer.y_sort_enabled = true
 	cell_layer.collision_enabled = false
-	cell_layer.set("sort_key", GridData.cell_to_sort_key(cell))
+	cell_layer.set("sort_key", GridData.cell_to_sort_key(Vector2i(0, cell.y)))
 	cell_layer.set("layer_no", z)
 	# 统一挂载地表动态阴影共享材质 (享元模式，所有瓦片共用一份 ShaderMaterial)
 	cell_layer.material = VisionFogComponent.get_tile_shadow_material()

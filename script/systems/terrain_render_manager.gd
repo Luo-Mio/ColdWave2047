@@ -134,9 +134,15 @@ func _rebuild_node_index() -> void:
 				_tracked_entities.append(child)
 			continue
 
-		# 地形节点：cell_z%d_%d_%d, surf_z%d_%d_%d, turf_z%d_%d_%d, edge_z%d_%d_%d
+		# 地形节点：row_z%d_y%d, cell_z%d_%d_%d, surf_z%d_%d_%d, turf_z%d_%d_%d, edge_z%d_%d_%d
 		var n_name: String = child.name
-		if n_name.begins_with("cell_z") or n_name.begins_with("surf_z") or n_name.begins_with("turf_z") or n_name.begins_with("edge_z"):
+		if n_name.begins_with("row_z") and child is TileMapLayer:
+			for c in (child as TileMapLayer).get_used_cells():
+				var ck := GridData.cell_key(c)
+				if not _cell_nodes_cache.has(ck):
+					_cell_nodes_cache[ck] = []
+				_cell_nodes_cache[ck].append(child)
+		elif n_name.begins_with("cell_z") or n_name.begins_with("surf_z") or n_name.begins_with("turf_z") or n_name.begins_with("edge_z"):
 			var parts := n_name.split("_")
 			if parts.size() >= 4:
 				var cx := int(parts[2])

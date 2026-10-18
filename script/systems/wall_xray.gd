@@ -205,8 +205,9 @@ func update_target_xray(
 		var w_floor: int = GridData.get_highest_floor(w_cell)
 
 		for z in range(base_floor + 1, w_floor + 1):
-			var key := "cell_z%d_%d_%d" % [z, w_cell.x, w_cell.y]
-			var cell_layer := sort_world.get_node_or_null(key) as TileMapLayer
+			var cell_layer := sort_world.get_node_or_null("row_z%d_y%d" % [z, w_cell.y]) as TileMapLayer
+			if cell_layer == null:
+				cell_layer = sort_world.get_node_or_null("cell_z%d_%d_%d" % [z, w_cell.x, w_cell.y]) as TileMapLayer
 			if cell_layer and not new_layers.has(cell_layer):
 				cell_layer.material = material
 				cell_layer.z_index = cap_z_index + 2
