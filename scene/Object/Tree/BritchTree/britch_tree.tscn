@@ -1,0 +1,21 @@
+[gd_scene format=3 uid="uid://xfp3at6m78oj"]
+
+[ext_resource type="Texture2D" uid="uid://dy3vwbo0pcf34" path="res://resources/object/Tree/BirchTree/BirchTreeTrunk002.png" id="1_2liqt"]
+[ext_resource type="Texture2D" uid="uid://qu47xu638187" path="res://resources/object/Tree/BirchTree/BirchTree002.png" id="2_q0wte"]
+
+[node name="BritchTree" type="StaticBody2D" unique_id=717628707]
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1576076505]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(0, 12, 12, 0, 0, -12, -12, 0)
+
+[node name="Visuals" type="Node2D" parent="." unique_id=1814766111]
+texture_repeat = 1
+
+[node name="Trunk" type="Sprite2D" parent="Visuals" unique_id=2004849035]
+texture = ExtResource("1_2liqt")
+offset = Vector2(8, -55)
+
+[node name="Canopy" type="Sprite2D" parent="Visuals" unique_id=1423551016]
+texture = ExtResource("2_q0wte")
+offset = Vector2(8, -55)

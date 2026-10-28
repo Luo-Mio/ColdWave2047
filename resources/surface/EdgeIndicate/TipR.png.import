@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://l3rk75jc5tbx"
-path="res://.godot/imported/TipR.png-9b0a1ee11b4fad489a15a523d1774436.ctex"
+uid="uid://dssthotufm62n"
+path="res://.godot/imported/TipR.png-fef1940d7f56aeb0f45f17fb0e6c48c6.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/Surface/EdgeIndicate/TipR.png"
-dest_files=["res://.godot/imported/TipR.png-9b0a1ee11b4fad489a15a523d1774436.ctex"]
+source_file="res://resources/surface/EdgeIndicate/TipR.png"
+dest_files=["res://.godot/imported/TipR.png-fef1940d7f56aeb0f45f17fb0e6c48c6.ctex"]
 
 [params]
 

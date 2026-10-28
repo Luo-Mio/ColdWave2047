@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c0mc3xgtudwd5"
-path="res://.godot/imported/wolf-idle.png-cc0b5e4e680ee98d92c970e9fa679262.ctex"
+uid="uid://h5x3di3lda3w"
+path="res://.godot/imported/wolf-idle.png-e3c615480a3bf74f09cfc7e66512d746.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://resources/Bio/wolf/wolf-idle.png"
-dest_files=["res://.godot/imported/wolf-idle.png-cc0b5e4e680ee98d92c970e9fa679262.ctex"]
+source_file="res://resources/bio/wolf/wolf-idle.png"
+dest_files=["res://.godot/imported/wolf-idle.png-e3c615480a3bf74f09cfc7e66512d746.ctex"]
 
 [params]
 

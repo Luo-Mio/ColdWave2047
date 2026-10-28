@@ -1,20 +1,23 @@
-# mover_component.gd —— 生物/角色物理运动与平滑驱动通用组件
+# mover_component.gd —— 通用物理移动驱动组件 (支持 2:1 等距视角透视投影)
 class_name MoverComponent
 extends Node
 
-@export_group("物理移动与平滑参数")
-## 基础最大移动速度 (像素/秒)。主角建议 80~120，狼/野兽建议 100~160
-@export var move_speed: float = 100.0
-## 起步加速度 (像素/秒²)。数值越大起步越灵敏，数值越小越有惯性厚重感
+@export_group("移动参数")
+## 基础最大横向移动速度 (像素/秒)
+@export var move_speed: float = 120.0
+## 起步加速度 (像素/秒²)，数值越大起步越灵敏
 @export var acceleration: float = 1200.0
-## 停止时的地面摩擦阻尼 (像素/秒²)。数值越大松手刹车越干脆，数值越小滑行越明显
-@export var friction: float = 1000.0
-## 是否吸附 2:1 等距斜向 (斜率 ±0.5)。开启后 WASD 八向输入将贴合等距菱形网格行走路线，手感更规范
-@export var snap_iso_diagonal: bool = false
+## 刹车阻尼摩擦力 (像素/秒²)，数值越大松手停得越快
+@export var friction: float = 1200.0
+
+@export_group("2:1 等距视角透视修正")
+## 是否开启 2:1 等距视角速度与斜向吸附 (开启后: 竖向速度为横向 1/2，斜向速度约为横向 79.1%，斜向严格贴合 2:1 菱形边)
+@export var snap_iso_diagonal: bool = true
 
 var parent_body: CharacterBody2D
 
 func _ready() -> void:
+	# 向上寻找所属的 CharacterBody2D 实体
 	var curr := get_parent()
 	while curr:
 		if curr is CharacterBody2D:
@@ -22,44 +25,34 @@ func _ready() -> void:
 			break
 		curr = curr.get_parent()
 
-# 接收目标方向向量，平滑加速并驱动物理滑动
-func move(target_dir: Vector2, delta: float) -> Vector2:
+## 核心物理驱动：传入目标方向向量并执行移动
+func move(input_dir: Vector2, delta: float) -> Vector2:
 	if parent_body == null:
 		return Vector2.ZERO
 
-	var move_dir := target_dir
-	# 2:1 等距对角斜率吸附
-	if snap_iso_diagonal and target_dir.x != 0.0 and target_dir.y != 0.0:
-		move_dir = Vector2(
-			signf(target_dir.x) * 16.0,
-			signf(target_dir.y) * 8.0
-		).normalized()
+	var target_velocity := Vector2.ZERO
 
-	var target_velocity := move_dir * move_speed
+	if input_dir != Vector2.ZERO:
+		if snap_iso_diagonal:
+			# 2:1 等距透视投影速度模型：
+			# - 纯横向 (A/D): 速度为 1.0 * move_speed (100%)
+			# - 纯竖向 (W/S): 速度为 0.5 * move_speed (50%，严格为横向 1/2)
+			# - 斜向 (W+D等): 速度约为 0.791 * move_speed (sqrt(10)/4)，斜率严格为 ±0.5 (2:1 菱形地砖切线)
+			target_velocity = Vector2(input_dir.x, input_dir.y * 0.5) * move_speed
+		else:
+			target_velocity = input_dir * move_speed
 
-	if move_dir != Vector2.ZERO:
+	# 平滑加速与减速阻尼
+	if target_velocity != Vector2.ZERO:
 		parent_body.velocity = parent_body.velocity.move_toward(target_velocity, acceleration * delta)
 	else:
 		parent_body.velocity = parent_body.velocity.move_toward(Vector2.ZERO, friction * delta)
 
-	# 楼层高低差跨越限制插件预处理：阻挡超过 4 层的格子并沿切向平滑滑动
-	var step_limit: Node = parent_body.find_child("HeightStepLimitComponent", true, false) if parent_body else null
-	if step_limit and step_limit.get("is_enabled"):
-		parent_body.velocity = step_limit.call("constrain_velocity", parent_body.global_position, parent_body.velocity, delta)
-
-	var prev_pos := parent_body.global_position
 	parent_body.move_and_slide()
-
-	# 物理移动后二次保险校验
-	if step_limit and step_limit.get("is_enabled"):
-		step_limit.call("enforce_boundary", parent_body, prev_pos)
-
 	return parent_body.velocity
 
-# 立即刹车停下
+## 强制立即刹车
 func stop(delta: float) -> void:
-	if parent_body == null:
-		return
-	parent_body.velocity = parent_body.velocity.move_toward(Vector2.ZERO, friction * delta)
-	parent_body.move_and_slide()
-
+	if parent_body:
+		parent_body.velocity = parent_body.velocity.move_toward(Vector2.ZERO, friction * delta)
+		parent_body.move_and_slide()
