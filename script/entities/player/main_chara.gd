@@ -5,6 +5,7 @@ extends CharacterBody2D
 @onready var input_comp: PlayerInputComponent = $PlayerInputComponent
 @onready var mover_comp: MoverComponent = $MoverComponent
 @onready var anim_comp: FourDirAnimComponent = $FourDirAnimComponent
+@onready var inventory_comp: InventoryComponent = $InventoryComponent
 
 func _physics_process(delta: float) -> void:
 	# 1. 从输入大脑获取 8 向输入向量

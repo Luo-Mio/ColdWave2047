@@ -2,6 +2,9 @@
 
 [ext_resource type="Texture2D" uid="uid://c8kh23ilhboeh" path="res://resources/tiles/base_dirt_tile/base_dirt_tile.png" id="1_itxqv"]
 [ext_resource type="PackedScene" uid="uid://do1wtcwwwxvgy" path="res://scene/main_chara.tscn" id="2_chara"]
+[ext_resource type="PackedScene" path="res://scene/ui/hotbar.tscn" id="3_hotbar"]
+[ext_resource type="Script" path="res://script/systems/selector.gd" id="4_selector"]
+[ext_resource type="Script" path="res://script/systems/build_manager.gd" id="5_builder"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_v0l8b"]
 texture = ExtResource("1_itxqv")
@@ -25,3 +28,15 @@ tile_set = SubResource("TileSet_lfxu0")
 y_sort_enabled = true
 
 [node name="main_chara" parent="Entities" unique_id=2057623877 instance=ExtResource("2_chara")]
+
+[node name="Hotbar" parent="." instance=ExtResource("3_hotbar")]
+
+[node name="Selector" type="Node2D" parent="." unique_id=2009993753]
+script = ExtResource("4_selector")
+
+[node name="BuildManager" type="Node" parent="." node_paths=PackedStringArray("selector", "entities_container", "ground_layer") unique_id=2009993754]
+script = ExtResource("5_builder")
+selector = NodePath("../Selector")
+entities_container = NodePath("../Entities")
+ground_layer = NodePath("../GroundLayer")
+

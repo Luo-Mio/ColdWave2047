@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://io5kb7h7m8wk" path="res://script/components/player_input_component.gd" id="3_input"]
 [ext_resource type="Script" uid="uid://cwv13vo8di6y5" path="res://script/components/mover_component.gd" id="4_mover"]
 [ext_resource type="Script" uid="uid://bf4ljjfopxjxx" path="res://script/components/four_dir_anim_component.gd" id="5_anim"]
+[ext_resource type="Script" path="res://script/components/inventory_component.gd" id="6_inv"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hjb8m"]
 radius = 6.0
@@ -144,7 +145,7 @@ animations = [{
 "speed": 8.0
 }]
 
-[node name="MainChara" type="CharacterBody2D" unique_id=1017530617]
+[node name="MainChara" type="CharacterBody2D" groups=["player"] unique_id=1017530617]
 motion_mode = 1
 script = ExtResource("2_script")
 
@@ -171,3 +172,6 @@ script = ExtResource("4_mover")
 
 [node name="FourDirAnimComponent" type="Node" parent="." unique_id=1168471338]
 script = ExtResource("5_anim")
+
+[node name="InventoryComponent" type="Node" parent="." unique_id=1210968015]
+script = ExtResource("6_inv")

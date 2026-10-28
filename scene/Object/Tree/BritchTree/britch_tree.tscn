@@ -10,6 +10,7 @@ scale = Vector2(1, 0.5)
 polygon = PackedVector2Array(0, 12, 12, 0, 0, -12, -12, 0)
 
 [node name="Visuals" type="Node2D" parent="." unique_id=1814766111]
+texture_filter = 1
 texture_repeat = 1
 
 [node name="Trunk" type="Sprite2D" parent="Visuals" unique_id=2004849035]

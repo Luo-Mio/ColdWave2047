@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://c8xq2318wheat"]
+
+[ext_resource type="Texture2D" uid="uid://dnb4002636wht" path="res://resources/object/Plant/wheat/wheat.png" id="1_wht"]
+
+[node name="Wheat" type="Node2D" unique_id=987654321]
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=987654322]
+texture_filter = 1
+texture = ExtResource("1_wht")
+offset = Vector2(0, -10)
+

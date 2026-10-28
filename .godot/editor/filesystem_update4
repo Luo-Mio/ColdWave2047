@@ -1,2 +1,4 @@
 res://scene/main_chara.tscn
 res://scene/Object/Tree/BritchTree/britch_tree.tscn
+res://script/components/inventory_component.gd
+res://script/entities/player/main_chara.gd
