@@ -48,7 +48,7 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 
 	var itype: int = item.get("type", 0)
 	var count: int = item.get("count", 0)
-	if count <= 0:
+	if count == 0:
 		return
 
 	if itype == 3: # OBJECT (树木、小麦、箱子等微格实体)
@@ -108,6 +108,8 @@ func _handle_demolish(cell: Vector2i, sub_cell: Vector2i) -> void:
 func _consume_active_item(amount: int = 1) -> void:
 	var item := inventory.get_active_item()
 	var cur_count: int = item.get("count", 0)
+	if cur_count < 0:
+		return # 无限数量物品，不进行扣减
 	var new_count := cur_count - amount
 	if new_count > 0:
 		item["count"] = new_count

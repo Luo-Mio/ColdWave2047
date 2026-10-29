@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 GridData="*res://script/core/grid_data.gd"
+ItemDatabase="*res://script/core/item_database.gd"
 
 [display]
 

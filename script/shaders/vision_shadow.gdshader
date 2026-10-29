@@ -81,7 +81,7 @@ void fragment() {
 	}
 
 	if (effective_darkness > threshold) {
-		COLOR = shadow_color;
+		COLOR = vec4(shadow_color.rgb, 1.0);
 	} else {
 		discard;
 	}

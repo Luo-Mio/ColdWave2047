@@ -25,50 +25,19 @@ func _ready() -> void:
 	if slots.is_empty():
 		_setup_default_slots()
 
-## 初始化默认 5 个槽位的测试物品
+## 初始化默认 5 个槽位的测试物品 (仅保留树和小麦，无数量限制)
 func _setup_default_slots() -> void:
 	slots.resize(max_slots)
 	for i in max_slots:
 		slots[i] = {}
 
-	# 1 号位：泥土砖
-	slots[0] = {
-		"id": "dirt_tile",
-		"name": "泥土砖",
-		"type": ItemType.TILE,
-		"icon": "res://resources/tiles/base_dirt_tile/base_dirt_tile.png",
-		"atlas": Vector2i(0, 0),
-		"count": 99
-	}
-	# 2 号位：草皮
-	slots[1] = {
-		"id": "grass_surf",
-		"name": "草皮",
-		"type": ItemType.SURF,
-		"icon": "res://resources/surface/GreenGrass/grass_icon.png",
-		"count": 99
-	}
-	# 3 号位：白桦树 (4x4 整格)
-	slots[2] = {
-		"id": "birch_tree",
-		"name": "白桦树",
-		"type": ItemType.OBJECT,
-		"icon": "res://resources/object/Tree/BirchTree/BirchTree002.png",
-		"scene": "res://scene/Object/Tree/BritchTree/britch_tree.tscn",
-		"grid_size": Vector2i(4, 4),
-		"count": 10
-	}
-	# 4 号位：小麦 (1x1 微格)
-	slots[3] = {
-		"id": "wheat",
-		"name": "小麦",
-		"type": ItemType.OBJECT,
-		"icon": "res://resources/object/Plant/wheat/wheat.png",
-		"scene": "res://scene/Object/Plant/wheat.tscn",
-		"grid_size": Vector2i(1, 1),
-		"count": 20
-	}
-	# 5 号位：空槽位
+	# 1 号位：白桦树 (4x4 整格，无限数量)
+	slots[0] = ItemDatabase.create_item("birch_tree", -1)
+
+	# 2 号位：小麦 (1x1 微格，无限数量)
+	slots[1] = ItemDatabase.create_item("wheat", -1)
+
+	# 3、4、5 号位：空槽位
 
 	# 触发初始选中信号
 	call_deferred("_emit_initial_selection")

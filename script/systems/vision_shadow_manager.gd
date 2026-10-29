@@ -1,6 +1,6 @@
-# vision_shadow_manager.gd —— 视线盲区几何阴影系统管理器 (纯 2D 平面几何切点投射 + 屏幕空间像素抖动)
+# vision_shadow_manager.gd —— 视线盲区几何阴影系统管理器 (CanvasGroup 单层无重叠半透合并 + 纯 2D 平面切点投射 + 屏幕空间像素抖动)
 class_name VisionShadowManager
-extends Node2D
+extends CanvasGroup
 
 @export_group("视线阴影外观")
 ## 是否启用视线阴影
@@ -10,13 +10,20 @@ extends Node2D
 		visible = value
 		if not enabled:
 			_shadow_items.clear()
-			queue_redraw()
+			if is_instance_valid(_drawer):
+				_drawer.queue_redraw()
 
 ## 阴影深度 (0.0 = 全透/无阴影, 0.65 = 经典半透点阵, 1.0 = 纯黑点阵)
 @export_range(0.0, 1.0) var shadow_darkness: float = 0.65:
 	set(value):
 		shadow_darkness = value
 		_sync_shader_params()
+
+## 阴影像素点阵透明度 (1.0 = 纯实心黑点，0.75 = 柔和半透黑点，CanvasGroup 单层合并绝不重叠变深)
+@export_range(0.0, 1.0, 0.05) var shadow_alpha: float = 0.75:
+	set(value):
+		shadow_alpha = value
+		self_modulate = Color(1.0, 1.0, 1.0, shadow_alpha)
 
 ## 阴影边缘柔和虚化强度 (0.0 = 锐利硬切, 0.15 = 经典自然点阵虚化, 0.5 = 全程平滑过渡)
 @export_range(0.0, 0.5, 0.01) var edge_softness: float = 0.15:
@@ -31,7 +38,7 @@ extends Node2D
 		_sync_shader_params()
 
 ## 像素颗粒缩放尺寸 (1 = 原生屏幕像素, 2 = 2x2 像素块，与 2x 摄像机缩放完美像素对齐)
-@export_range(1, 4) var dither_scale: int = 1:
+@export_range(1, 4) var dither_scale: int = 2:
 	set(value):
 		dither_scale = value
 		_sync_shader_params()
@@ -61,6 +68,9 @@ extends Node2D
 ## 屏幕内最大处理障碍物上限
 @export var max_obstacles: int = 256
 
+# 内部绘制器 (作为 CanvasGroup 的子节点，承载实心多边形绘制以实现全局单层 Alpha 合并)
+var _drawer: Node2D
+
 # 内部物理探测与脏标记检测
 var _rect_shape: RectangleShape2D
 var _shape_query: PhysicsShapeQueryParameters2D
@@ -70,9 +80,20 @@ var _last_cam_zoom := Vector2(-99999, -99999)
 var _shadow_items: Array[Dictionary] = []
 
 func _ready() -> void:
-	# 若未配置材质，动态载入默认材质
-	if material == null:
-		material = load("res://resources/materials/vision_shadow.tres")
+	# CanvasGroup 统一管理整层阴影的最终合成透明度
+	self_modulate = Color(1.0, 1.0, 1.0, shadow_alpha)
+
+	# 创建专门承载四边形绘制的内部子节点
+	_drawer = Node2D.new()
+	_drawer.name = "ShadowDrawer"
+	var shadow_mat = material
+	if shadow_mat == null:
+		shadow_mat = load("res://resources/materials/vision_shadow.tres")
+	_drawer.material = shadow_mat
+	material = null # 清空自身材质，使 CanvasGroup 仅作为纯净的高性能离屏合成器
+	_drawer.draw.connect(_on_drawer_draw)
+	add_child(_drawer)
+
 	_sync_shader_params()
 
 	# 初始化屏幕空间物理探测参数
@@ -84,10 +105,13 @@ func _ready() -> void:
 	_shape_query.collide_with_areas = false
 
 func _sync_shader_params() -> void:
-	if material is ShaderMaterial:
-		var sm := material as ShaderMaterial
+	self_modulate = Color(1.0, 1.0, 1.0, shadow_alpha)
+	var target_mat = _drawer.material if is_instance_valid(_drawer) and _drawer.material else material
+	if target_mat is ShaderMaterial:
+		var sm := target_mat as ShaderMaterial
 		if _last_player_pos != Vector2(-99999, -99999):
-			sm.set_shader_parameter("player_pos", to_local(_last_player_pos))
+			var local_p = _drawer.to_local(_last_player_pos) if is_instance_valid(_drawer) else to_local(_last_player_pos)
+			sm.set_shader_parameter("player_pos", local_p)
 		sm.set_shader_parameter("shadow_color", shadow_color)
 		sm.set_shader_parameter("shadow_darkness", shadow_darkness)
 		sm.set_shader_parameter("edge_softness", edge_softness)
@@ -121,14 +145,19 @@ func _physics_process(_delta: float) -> void:
 		_last_player_pos = player_pos
 		_last_cam_pos = cam_pos
 		_last_cam_zoom = cam_zoom
-		if material is ShaderMaterial:
-			(material as ShaderMaterial).set_shader_parameter("player_pos", to_local(player_pos))
+		var target_mat = _drawer.material if is_instance_valid(_drawer) and _drawer.material else material
+		if target_mat is ShaderMaterial:
+			var local_p = _drawer.to_local(player_pos) if is_instance_valid(_drawer) else to_local(player_pos)
+			(target_mat as ShaderMaterial).set_shader_parameter("player_pos", local_p)
 		_calculate_shadow_quads(player_pos, cam_pos, cam_zoom)
-		queue_redraw()
+		if is_instance_valid(_drawer):
+			_drawer.queue_redraw()
 
 ## 强制刷新阴影多边形
 func force_update() -> void:
 	_last_player_pos = Vector2(-99999, -99999)
+	if is_instance_valid(_drawer):
+		_drawer.queue_redraw()
 
 ## 计算屏幕世界矩形范围
 func _get_screen_world_rect(cam_pos: Vector2, cam_zoom: Vector2, margin: float = 0.0) -> Rect2:
@@ -271,18 +300,18 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 				"uv": Vector2(theta_left, span)
 			})
 
-func _draw() -> void:
+func _on_drawer_draw() -> void:
 	if not enabled or _shadow_items.is_empty():
 		return
 
-	# 绘制所有阴影多边形，片元着色器将自动应用屏幕空间像素抖动与基于极角的无扭曲边缘柔和衰减
+	# 在内部子节点上绘制所有阴影四边形，CanvasGroup 将在显存中以实心黑点合并所有相交区后统一单次应用 shadow_alpha
 	for item in _shadow_items:
 		var quad: PackedVector2Array = item["quad"]
 		var uv_val: Vector2 = item["uv"]
 		if quad.size() >= 3:
 			var local_quad := PackedVector2Array()
 			for pt in quad:
-				local_quad.append(to_local(pt))
+				local_quad.append(_drawer.to_local(pt))
 			# 四个顶点共享该四边形的真实极角参数 (theta_left, span)，避免 2D 梯形对角线仿射扭曲
 			var uvs := PackedVector2Array([uv_val, uv_val, uv_val, uv_val])
-			draw_colored_polygon(local_quad, shadow_color, uvs)
+			_drawer.draw_colored_polygon(local_quad, shadow_color, uvs)

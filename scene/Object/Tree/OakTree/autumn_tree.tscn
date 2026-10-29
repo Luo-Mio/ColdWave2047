@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="Texture2D" path="res://resources/object/Tree/OakTree/AutumnTreeTrunk.png" id="1_trunk"]
+[ext_resource type="Texture2D" path="res://resources/object/Tree/OakTree/AutumnTree.png" id="2_canopy"]
+[ext_resource type="Material" path="res://resources/materials/canopy_xray.tres" id="3_xray"]
+
+[node name="AutumnTree" type="StaticBody2D"]
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="."]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(0, 12, 12, 0, 0, -12, -12, 0)
+
+[node name="Visuals" type="Node2D" parent="."]
+texture_filter = 1
+texture_repeat = 1
+
+[node name="Trunk" type="Sprite2D" parent="Visuals"]
+texture = ExtResource("1_trunk")
+offset = Vector2(0, -55)
+
+[node name="Canopy" type="Sprite2D" parent="Visuals"]
+material = ExtResource("3_xray")
+texture = ExtResource("2_canopy")
+offset = Vector2(0, -55)
+
