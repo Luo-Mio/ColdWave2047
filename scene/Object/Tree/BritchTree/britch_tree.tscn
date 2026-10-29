@@ -2,6 +2,7 @@
 
 [ext_resource type="Texture2D" uid="uid://dy3vwbo0pcf34" path="res://resources/object/Tree/BirchTree/BirchTreeTrunk002.png" id="1_2liqt"]
 [ext_resource type="Texture2D" uid="uid://qu47xu638187" path="res://resources/object/Tree/BirchTree/BirchTree002.png" id="2_q0wte"]
+[ext_resource type="Material" path="res://resources/materials/canopy_xray.tres" id="3_xray"]
 
 [node name="BritchTree" type="StaticBody2D" unique_id=717628707]
 
@@ -18,5 +19,6 @@ texture = ExtResource("1_2liqt")
 offset = Vector2(8, -55)
 
 [node name="Canopy" type="Sprite2D" parent="Visuals" unique_id=1423551016]
+material = ExtResource("3_xray")
 texture = ExtResource("2_q0wte")
 offset = Vector2(8, -55)

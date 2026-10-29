@@ -5,10 +5,7 @@
 [ext_resource type="Script" uid="uid://io5kb7h7m8wk" path="res://script/components/player_input_component.gd" id="3_input"]
 [ext_resource type="Script" uid="uid://cwv13vo8di6y5" path="res://script/components/mover_component.gd" id="4_mover"]
 [ext_resource type="Script" uid="uid://bf4ljjfopxjxx" path="res://script/components/four_dir_anim_component.gd" id="5_anim"]
-[ext_resource type="Script" path="res://script/components/inventory_component.gd" id="6_inv"]
-
-[sub_resource type="CircleShape2D" id="CircleShape2D_hjb8m"]
-radius = 6.0
+[ext_resource type="Script" uid="uid://bx03787py4n0s" path="res://script/components/inventory_component.gd" id="6_inv"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_676l1"]
 atlas = ExtResource("1_aa1gj")
@@ -145,24 +142,27 @@ animations = [{
 "speed": 8.0
 }]
 
-[node name="MainChara" type="CharacterBody2D" groups=["player"] unique_id=1017530617]
+[node name="MainChara" type="CharacterBody2D" unique_id=1017530617 groups=["player"]]
+collision_layer = 4
+collision_mask = 3
 motion_mode = 1
 script = ExtResource("2_script")
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1549409586]
-position = Vector2(0, 9)
-scale = Vector2(1, 0.5)
-shape = SubResource("CircleShape2D_hjb8m")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1078200260]
 texture_filter = 1
 sprite_frames = SubResource("SpriteFrames_hjb8m")
 animation = &"walk_right"
 frame_progress = 0.95018595
+offset = Vector2(0, -9)
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=1916672727]
+zoom = Vector2(2, 2)
 process_callback = 0
 position_smoothing_enabled = true
+
+[node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=503521783]
+scale = Vector2(1, 0.5)
+polygon = PackedVector2Array(5, 0, 0, 5, -5, 0, 0, -5)
 
 [node name="PlayerInputComponent" type="Node" parent="." unique_id=1195795293]
 script = ExtResource("3_input")

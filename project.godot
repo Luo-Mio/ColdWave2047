@@ -82,6 +82,26 @@ player_world_pos={
 "type": "vec2",
 "value": Vector2(0, 0)
 }
+xray_radius={
+"type": "vec2",
+"value": Vector2(52, 38)
+}
+xray_max_transparency={
+"type": "float",
+"value": 0.85
+}
+xray_feather={
+"type": "float",
+"value": 0.6
+}
+xray_dither_scale={
+"type": "int",
+"value": 1
+}
+xray_dither_mode={
+"type": "int",
+"value": 0
+}
 vision_mask_tex={
 "type": "sampler2D",
 "value": ""

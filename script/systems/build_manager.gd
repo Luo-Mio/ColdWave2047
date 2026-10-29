@@ -7,6 +7,7 @@ const SelectorScript := preload("res://script/systems/selector.gd")
 @export var selector: Node2D
 @export var entities_container: Node2D
 @export var ground_layer: TileMapLayer
+@export var air_wall_manager: StaticBody2D
 
 var inventory: InventoryComponent = null
 
@@ -85,6 +86,8 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 			ground_layer.set_cell(cell, 0, atlas, 0)
 			_consume_active_item(1)
 			selector.force_update()
+			if air_wall_manager and air_wall_manager.has_method("rebuild_walls"):
+				air_wall_manager.call("rebuild_walls")
 
 ## 处理鼠标右键拆除/收割
 func _handle_demolish(cell: Vector2i, sub_cell: Vector2i) -> void:
