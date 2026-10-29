@@ -7,3 +7,6 @@ res://script/systems/build_manager.gd
 res://resources/materials/canopy_xray.tres
 res://script/shaders/xray.gdshader
 res://scene/main.tscn
+res://resources/materials/vision_shadow.tres
+res://script/shaders/vision_shadow.gdshader
+res://script/systems/vision_shadow_manager.gd

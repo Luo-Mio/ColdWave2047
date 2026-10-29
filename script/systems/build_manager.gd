@@ -8,6 +8,7 @@ const SelectorScript := preload("res://script/systems/selector.gd")
 @export var entities_container: Node2D
 @export var ground_layer: TileMapLayer
 @export var air_wall_manager: StaticBody2D
+@export var vision_shadow_manager: VisionShadowManager
 
 var inventory: InventoryComponent = null
 
@@ -79,6 +80,8 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 		GridData.register_object(cell, obj, sub_cell, grid_size)
 		_consume_active_item(1)
 		selector.force_update()
+		if vision_shadow_manager:
+			vision_shadow_manager.force_update()
 
 	elif itype == 1: # TILE (地砖)
 		if ground_layer:
@@ -98,6 +101,8 @@ func _handle_demolish(cell: Vector2i, sub_cell: Vector2i) -> void:
 		GridData.unregister_object(cell, sub_cell, size)
 		obj.queue_free()
 		selector.force_update()
+		if vision_shadow_manager:
+			vision_shadow_manager.force_update()
 
 ## 扣减当前激活槽位的物品数量
 func _consume_active_item(amount: int = 1) -> void:

@@ -1,0 +1,11 @@
+[gd_resource type="ShaderMaterial" format=3 uid="uid://ckidkd6jof2hq"]
+
+[ext_resource type="Shader" uid="uid://d1ustqy2hkx8s" path="res://script/shaders/vision_shadow.gdshader" id="1_shadow"]
+
+[resource]
+shader = ExtResource("1_shadow")
+shader_parameter/shadow_color = Color(0, 0, 0, 1)
+shader_parameter/shadow_darkness = 0.65
+shader_parameter/edge_softness = 0.15
+shader_parameter/dither_scale = 1
+shader_parameter/dither_mode = 0
