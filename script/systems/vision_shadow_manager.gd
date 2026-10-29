@@ -9,7 +9,7 @@ extends Node2D
 		enabled = value
 		visible = value
 		if not enabled:
-			_shadow_quads.clear()
+			_shadow_items.clear()
 			queue_redraw()
 
 ## 阴影深度 (0.0 = 全透/无阴影, 0.65 = 经典半透点阵, 1.0 = 纯黑点阵)
@@ -67,7 +67,7 @@ var _shape_query: PhysicsShapeQueryParameters2D
 var _last_player_pos := Vector2(-99999, -99999)
 var _last_cam_pos := Vector2(-99999, -99999)
 var _last_cam_zoom := Vector2(-99999, -99999)
-var _shadow_quads: Array[PackedVector2Array] = []
+var _shadow_items: Array[Dictionary] = []
 
 func _ready() -> void:
 	# 若未配置材质，动态载入默认材质
@@ -86,6 +86,8 @@ func _ready() -> void:
 func _sync_shader_params() -> void:
 	if material is ShaderMaterial:
 		var sm := material as ShaderMaterial
+		if _last_player_pos != Vector2(-99999, -99999):
+			sm.set_shader_parameter("player_pos", to_local(_last_player_pos))
 		sm.set_shader_parameter("shadow_color", shadow_color)
 		sm.set_shader_parameter("shadow_darkness", shadow_darkness)
 		sm.set_shader_parameter("edge_softness", edge_softness)
@@ -119,6 +121,8 @@ func _physics_process(_delta: float) -> void:
 		_last_player_pos = player_pos
 		_last_cam_pos = cam_pos
 		_last_cam_zoom = cam_zoom
+		if material is ShaderMaterial:
+			(material as ShaderMaterial).set_shader_parameter("player_pos", to_local(player_pos))
 		_calculate_shadow_quads(player_pos, cam_pos, cam_zoom)
 		queue_redraw()
 
@@ -182,7 +186,7 @@ func _points_from_shape(shape: Shape2D) -> PackedVector2Array:
 
 ## 核心算法：提取屏幕内障碍物极值切点并向外投射阴影四边形
 func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Vector2) -> void:
-	_shadow_quads.clear()
+	_shadow_items.clear()
 
 	if _shape_query == null:
 		return
@@ -257,25 +261,28 @@ func _calculate_shadow_quads(player_pos: Vector2, cam_pos: Vector2, cam_zoom: Ve
 			var e_left := player_pos + dir_left * extend_len
 			var e_right := player_pos + dir_right * extend_len
 
-			# 形成闭合的阴影四边形
-			_shadow_quads.append(PackedVector2Array([v_left, e_left, e_right, v_right]))
+			# 计算左切线世界角度与扇区张角
+			var theta_left := (v_left - player_pos).angle()
+			var span: float = max_rel - min_rel
 
-const QUAD_UVS: PackedVector2Array = [
-	Vector2(0.0, 0.0), # v_left (左切点基座)
-	Vector2(0.0, 1.0), # e_left (左延伸远端)
-	Vector2(1.0, 1.0), # e_right (右延伸远端)
-	Vector2(1.0, 0.0)  # v_right (右切点基座)
-]
+			# 形成闭合的阴影四边形与扇区极角参数
+			_shadow_items.append({
+				"quad": PackedVector2Array([v_left, e_left, e_right, v_right]),
+				"uv": Vector2(theta_left, span)
+			})
 
 func _draw() -> void:
-	if not enabled or _shadow_quads.is_empty():
+	if not enabled or _shadow_items.is_empty():
 		return
 
-	# 绘制所有阴影多边形，片元着色器将自动应用屏幕空间像素抖动与边缘柔和衰减
-	for quad in _shadow_quads:
+	# 绘制所有阴影多边形，片元着色器将自动应用屏幕空间像素抖动与基于极角的无扭曲边缘柔和衰减
+	for item in _shadow_items:
+		var quad: PackedVector2Array = item["quad"]
+		var uv_val: Vector2 = item["uv"]
 		if quad.size() >= 3:
 			var local_quad := PackedVector2Array()
 			for pt in quad:
 				local_quad.append(to_local(pt))
-			draw_colored_polygon(local_quad, shadow_color, QUAD_UVS)
-
+			# 四个顶点共享该四边形的真实极角参数 (theta_left, span)，避免 2D 梯形对角线仿射扭曲
+			var uvs := PackedVector2Array([uv_val, uv_val, uv_val, uv_val])
+			draw_colored_polygon(local_quad, shadow_color, uvs)

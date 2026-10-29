@@ -1,11 +1,12 @@
-[gd_resource type="ShaderMaterial" format=3 uid="uid://ckidkd6jof2hq"]
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
 
-[ext_resource type="Shader" uid="uid://d1ustqy2hkx8s" path="res://script/shaders/vision_shadow.gdshader" id="1_shadow"]
+[ext_resource type="Shader" path="res://script/shaders/vision_shadow.gdshader" id="1_shadow"]
 
 [resource]
 shader = ExtResource("1_shadow")
+shader_parameter/player_pos = Vector2(0, 0)
 shader_parameter/shadow_color = Color(0, 0, 0, 1)
 shader_parameter/shadow_darkness = 0.65
-shader_parameter/edge_softness = 0.15
+shader_parameter/edge_softness = 0.1
 shader_parameter/dither_scale = 1
 shader_parameter/dither_mode = 0

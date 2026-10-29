@@ -1,9 +1,12 @@
-// vision_shadow.gdshader —— 视线盲区多边形像素噪点着色器 (带边缘柔和虚化与屏幕空间抖动)
+// vision_shadow.gdshader —— 视线盲区多边形像素噪点着色器 (径向极角透视对齐 + 边缘柔和虚化)
 shader_type canvas_item;
 
+varying vec2 local_pos;
+
+uniform vec2 player_pos = vec2(0.0, 0.0);
 uniform vec4 shadow_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform float shadow_darkness : hint_range(0.0, 1.0) = 0.65;
-uniform float edge_softness : hint_range(0.0, 0.5) = 0.15;
+uniform float edge_softness : hint_range(0.0, 0.5) = 0.10;
 uniform int dither_scale : hint_range(1, 4) = 1;
 uniform int dither_mode : hint_range(0, 2) = 0; // 0 = Bayer 8x8 (64阶平滑), 1 = Interleaved Noise (无级噪波), 2 = Bayer 4x4 (16阶经典)
 
@@ -27,9 +30,24 @@ const float bayer8[64] = float[64](
 	63.0/64.0, 31.0/64.0, 55.0/64.0, 23.0/64.0, 61.0/64.0, 29.0/64.0, 53.0/64.0, 21.0/64.0
 );
 
+void vertex() {
+	// 在顶点着色阶段准确捕获片元本地坐标
+	local_pos = VERTEX;
+}
+
 void fragment() {
-	// 1. 边缘柔和衰减因子计算：两侧切线射线 U=0 和 U=1 处向内平滑渐变
-	float edge_dist = min(UV.x, 1.0 - UV.x);
+	// 1. 基于视线发射源的真实径向极角计算 (基于本地坐标插值，无对角线畸变)
+	float theta_left = UV.x;
+	float span = max(UV.y, 0.0001);
+
+	vec2 diff = local_pos - player_pos;
+	float frag_ang = atan(diff.y, diff.x);
+
+	float rel = mod(frag_ang - theta_left + PI, TAU) - PI;
+
+	float u = clamp(rel / span, 0.0, 1.0);
+	float edge_dist = min(u, 1.0 - u);
+
 	float edge_factor = 1.0;
 	if (edge_softness > 0.001) {
 		float t = clamp(edge_dist / edge_softness, 0.0, 1.0);
