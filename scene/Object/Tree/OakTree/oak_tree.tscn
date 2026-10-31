@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://buxxisgh3c7gd"]
+[gd_scene format=3]
 
 [ext_resource type="Texture2D" uid="uid://ccnd37afaj3nu" path="res://resources/object/Tree/OakTree/AutumnTreeTrunk.png" id="1_trunk"]
 [ext_resource type="Texture2D" uid="uid://bcwfy0tha30o5" path="res://resources/object/Tree/OakTree/AutumnTree.png" id="2_canopy"]
