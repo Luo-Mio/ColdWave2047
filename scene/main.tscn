@@ -5,9 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://upwf0c0w2qlj" path="res://scene/ui/hotbar.tscn" id="3_hotbar"]
 [ext_resource type="Script" uid="uid://cr5t54on2r4ha" path="res://script/systems/selector.gd" id="4_selector"]
 [ext_resource type="Script" uid="uid://8y8x3pqu0xov" path="res://script/systems/build_manager.gd" id="5_builder"]
-[ext_resource type="PackedScene" uid="uid://xfp3at6m78oj" path="res://scene/Object/Tree/BritchTree/britch_tree.tscn" id="5_k65ib"]
 [ext_resource type="Script" uid="uid://qu514y5s3gq2" path="res://script/systems/air_wall_manager.gd" id="6_airwall"]
-[ext_resource type="PackedScene" path="res://scene/Object/Tree/OakTree/oak_tree.tscn" id="6_wscrc"]
 [ext_resource type="Material" uid="uid://b0epay6vlu34c" path="res://resources/materials/vision_shadow.tres" id="7_shadowmat"]
 [ext_resource type="Script" uid="uid://t5tla8so3k7y" path="res://script/systems/vision_shadow_manager.gd" id="8_shadowmgr"]
 [ext_resource type="PackedScene" path="res://scene/ui/creative_menu.tscn" id="9_creative"]
@@ -47,97 +45,6 @@ y_sort_enabled = true
 [node name="main_chara" parent="Entities" unique_id=2057623877 instance=ExtResource("2_chara")]
 xray_offset = Vector2(0, -8)
 xray_radius = Vector2(128, 64)
-
-[node name="BritchTree" type="StaticBody2D" parent="Entities" unique_id=717628707 instance=ExtResource("5_k65ib")]
-position = Vector2(32, -48)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(0, -4)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73596" type="StaticBody2D" parent="Entities" unique_id=1613923829 instance=ExtResource("5_k65ib")]
-position = Vector2(-32, -112)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(-1, -8)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73597" type="StaticBody2D" parent="Entities" unique_id=1794531267 instance=ExtResource("5_k65ib")]
-position = Vector2(192, -64)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(2, -5)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73598" type="StaticBody2D" parent="Entities" unique_id=2143023786 instance=ExtResource("5_k65ib")]
-position = Vector2(128, 32)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(1, 1)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73599" type="StaticBody2D" parent="Entities" unique_id=988747262 instance=ExtResource("5_k65ib")]
-position = Vector2(-64, 64)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(-2, 3)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73600" type="StaticBody2D" parent="Entities" unique_id=1348869927 instance=ExtResource("5_k65ib")]
-position = Vector2(-192, 0)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(-4, -1)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73601" type="StaticBody2D" parent="Entities" unique_id=1274426780 instance=ExtResource("5_k65ib")]
-position = Vector2(64, 96)
-metadata/item_id = "birch_tree"
-metadata/cell = Vector2i(0, 5)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="AutumnTree" type="StaticBody2D" parent="Entities" unique_id=329355248 instance=ExtResource("6_wscrc")]
-position = Vector2(-64, -64)
-metadata/item_id = "oak_tree"
-metadata/cell = Vector2i(-2, -5)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73602" type="StaticBody2D" parent="Entities" unique_id=761208275 instance=ExtResource("6_wscrc")]
-position = Vector2(-160, -112)
-metadata/item_id = "oak_tree"
-metadata/cell = Vector2i(-3, -8)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73603" type="StaticBody2D" parent="Entities" unique_id=963017641 instance=ExtResource("6_wscrc")]
-position = Vector2(-320, 0)
-metadata/item_id = "oak_tree"
-metadata/cell = Vector2i(-6, -1)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73604" type="StaticBody2D" parent="Entities" unique_id=1637539286 instance=ExtResource("6_wscrc")]
-position = Vector2(-192, 96)
-metadata/item_id = "oak_tree"
-metadata/cell = Vector2i(-4, 5)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73605" type="StaticBody2D" parent="Entities" unique_id=381415583 instance=ExtResource("6_wscrc")]
-position = Vector2(96, -112)
-metadata/item_id = "oak_tree"
-metadata/cell = Vector2i(1, -8)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
-
-[node name="@StaticBody2D@73606" type="StaticBody2D" parent="Entities" unique_id=386150164 instance=ExtResource("6_wscrc")]
-position = Vector2(256, 0)
-metadata/item_id = "oak_tree"
-metadata/cell = Vector2i(3, -1)
-metadata/sub_cell = Vector2i(0, 0)
-metadata/grid_size = Vector2i(4, 4)
 
 [node name="Hotbar" parent="." unique_id=1345717757 instance=ExtResource("3_hotbar")]
 

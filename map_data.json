@@ -1,40 +1,10 @@
 {
-	"object_count": 13,
+	"object_count": 4,
 	"objects": [
 		{
 			"cell": [
 				0,
 				-4
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "birch_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				-1,
-				-8
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "birch_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				2,
-				-5
 			],
 			"grid_size": [
 				4,
@@ -78,113 +48,8 @@
 		},
 		{
 			"cell": [
-				-4,
-				-1
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "birch_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				0,
-				5
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "birch_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
 				-2,
 				-5
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "oak_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				-3,
-				-8
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "oak_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				-6,
-				-1
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "oak_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				-4,
-				5
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "oak_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				1,
-				-8
-			],
-			"grid_size": [
-				4,
-				4
-			],
-			"id": "oak_tree",
-			"sub_cell": [
-				0,
-				0
-			]
-		},
-		{
-			"cell": [
-				3,
-				-1
 			],
 			"grid_size": [
 				4,

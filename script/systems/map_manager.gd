@@ -1,4 +1,4 @@
-# map_manager.gd —— 地图数据持久化管理器 (支持运行时与 Godot 编辑器内直接保存/载入)
+# map_manager.gd —— 纯数据驱动地图系统管理器 (支持运行时启动自动载入 + 编辑器视口瞬时阅览)
 @tool
 class_name MapManager
 extends Node
@@ -13,39 +13,39 @@ signal map_loaded(file_path: String)
 @export var vision_shadow_manager: VisionShadowManager
 @export var selector: Node2D
 
-@export_group("文件路径")
+@export_group("数据文件")
 @export_file("*.json") var map_file_path: String = "res://map_data.json"
 
-@export_group("编辑器一键操作 (在检查器中点击或勾选)")
-## 在编辑器中点击直接载入地图数据并渲染到当前视口
-@export_tool_button("📂 在编辑器中载入地图数据") var btn_load = _editor_load_map
-## 在编辑器中点击将当前视口编辑的地图保存到 JSON 文件
-@export_tool_button("💾 在编辑器中保存地图数据") var btn_save = _editor_save_map
-## 在编辑器中点击将全图所有地砖随机分配变种贴图
+@export_group("编辑器视口实时阅览 (只读预览，绝不污染场景树与 .tscn)")
+## 是否在 Godot 编辑器 2D 视口中实时阅览地图 (不产生乱码节点，按 Ctrl+S 不会写入场景树)
+@export var show_editor_preview: bool = true:
+	set(v):
+		show_editor_preview = v
+		if Engine.is_editor_hint():
+			_update_editor_preview()
+
+@export_group("编辑器操作 (在检查器中点击直接执行)")
+## 在编辑器中重新刷新视口预览
+@export_tool_button("🔄 刷新编辑器视口预览") var btn_refresh = _update_editor_preview
+## 在编辑器中将当前地图保存到 JSON 文件
+@export_tool_button("💾 保存地图数据到 JSON") var btn_save = _editor_save_map
+## 在编辑器中将全图所有地砖随机分配变种贴图
 @export_tool_button("🎲 随机化所有地砖变种") var btn_randomize = _editor_randomize_tiles
 
-@export var trigger_load: bool = false:
-	set(v):
-		if v:
-			trigger_load = false
-			load_map(map_file_path)
-
-@export var trigger_save: bool = false:
-	set(v):
-		if v:
-			trigger_save = false
-			save_map(map_file_path)
-
-@export var trigger_randomize_tiles: bool = false:
-	set(v):
-		if v:
-			trigger_randomize_tiles = false
-			randomize_all_ground_tiles()
+# 专用瞬时预览容器 (无 owner，绝不序列化进场景文件)
+var _preview_container: Node2D = null
 
 func _ready() -> void:
-	# 运行时如果未手动指定，自动寻找依赖
-	if not Engine.is_editor_hint():
-		_auto_find_references()
+	_auto_find_references()
+
+	if Engine.is_editor_hint():
+		# 编辑器环境下：自动呈现视口预览
+		if show_editor_preview:
+			call_deferred("_update_editor_preview")
+	else:
+		# 游戏运行时：纯数据驱动，启动时自动从 map_data.json 载入全图并生成实体
+		if FileAccess.file_exists(map_file_path):
+			call_deferred("load_map", map_file_path)
 
 func _auto_find_references() -> void:
 	var root := get_parent()
@@ -95,9 +95,15 @@ func save_map(path: String = "") -> bool:
 		placed_objs = grid_data_node.call("get_all_placed_objects")
 
 	# 兼容编辑器模式或备用直接扫描实体容器
-	if placed_objs.is_empty() and entities_container:
-		for child in entities_container.get_children():
-			if child.is_in_group("player"):
+	if placed_objs.is_empty():
+		var source_nodes: Array = []
+		if entities_container:
+			source_nodes.append_array(entities_container.get_children())
+		if _preview_container:
+			source_nodes.append_array(_preview_container.get_children())
+
+		for child in source_nodes:
+			if child.is_in_group("player") or child == _preview_container:
 				continue
 			if child.has_meta("item_id"):
 				var c: Vector2i = child.get_meta("cell", Vector2i.ZERO)
@@ -144,7 +150,7 @@ func save_map(path: String = "") -> bool:
 	map_saved.emit(path)
 	return true
 
-## 从 JSON 文件载入地图数据并在场景中完全还原
+## 从 JSON 文件载入地图数据并在场景中完全还原 (运行时生成真实实体与网格数据)
 func load_map(path: String = "") -> bool:
 	_auto_find_references()
 	if path.is_empty():
@@ -190,10 +196,9 @@ func load_map(path: String = "") -> bool:
 		for child in children:
 			if child.is_in_group("player"):
 				continue
-			if Engine.is_editor_hint():
-				child.free()
-			else:
-				child.queue_free()
+			if child == _preview_container:
+				continue
+			child.queue_free()
 
 		# 实例化所有已记录物体
 		var objects_arr: Array = map_dict.get("objects", [])
@@ -213,11 +218,6 @@ func load_map(path: String = "") -> bool:
 					obj.position = cell_center + sub_offset
 					entities_container.add_child(obj)
 
-					if Engine.is_editor_hint():
-						var edited_root = get_tree().edited_scene_root
-						if edited_root:
-							obj.owner = edited_root
-
 					if not Engine.is_editor_hint() and grid_data_node and grid_data_node.has_method("register_object"):
 						grid_data_node.call("register_object", cell, obj, sub_cell, grid_size, item_id)
 					else:
@@ -232,6 +232,81 @@ func load_map(path: String = "") -> bool:
 	print("[MapManager] 地图成功载入: %s (还原地块: %d, 物体: %d)" % [path, map_dict.get("tile_count", 0), map_dict.get("object_count", 0)])
 	map_loaded.emit(path)
 	return true
+
+## === 编辑器视口瞬时阅览核心实现 (绝不设置 owner，保证场景树永远干净) ===
+func _update_editor_preview() -> void:
+	if not Engine.is_editor_hint():
+		return
+	_auto_find_references()
+	_clear_editor_preview()
+
+	if not show_editor_preview:
+		return
+
+	if not FileAccess.file_exists(map_file_path):
+		return
+
+	var file := FileAccess.open(map_file_path, FileAccess.READ)
+	if file == null:
+		return
+	var json_text := file.get_as_text()
+	file.close()
+
+	var parse_res = JSON.parse_string(json_text)
+	if not (parse_res is Dictionary):
+		return
+	var map_dict: Dictionary = parse_res
+
+	# 1. 刷新地砖视口呈现
+	if ground_layer:
+		ground_layer.clear()
+		for t in map_dict.get("tiles", []):
+			var cell := Vector2i(int(t["x"]), int(t["y"]))
+			var source_id := int(t.get("s", 0))
+			var atlas := Vector2i(int(t.get("ax", 0)), int(t.get("ay", 0)))
+			var alt := int(t.get("alt", 0))
+			ground_layer.set_cell(cell, source_id, atlas, alt)
+
+	# 2. 创建视口预览容器 (挂在 Entities 下，但不设 owner，绝不写进 .tscn)
+	if entities_container:
+		_preview_container = Node2D.new()
+		_preview_container.name = "EditorPreview"
+		_preview_container.y_sort_enabled = true
+		_preview_container.process_mode = Node.PROCESS_MODE_DISABLED # 禁用物理与脚本交互
+		entities_container.add_child(_preview_container)
+		# 重点: 绝对不要设置 _preview_container.owner = edited_root！
+
+		for o in map_dict.get("objects", []):
+			var item_id: String = o.get("id", "")
+			var cell := Vector2i(int(o["cell"][0]), int(o["cell"][1]))
+			var sub_cell := Vector2i(int(o["sub_cell"][0]), int(o["sub_cell"][1]))
+			var grid_size := Vector2i(int(o["grid_size"][0]), int(o["grid_size"][1]))
+
+			var scene_path := _resolve_scene_path(item_id)
+			if not scene_path.is_empty() and ResourceLoader.exists(scene_path):
+				var packed := load(scene_path) as PackedScene
+				if packed:
+					var obj := packed.instantiate() as Node2D
+					var cell_center := _get_cell_world_center(cell)
+					var sub_offset := _get_sub_offset(sub_cell, grid_size)
+					obj.position = cell_center + sub_offset
+					obj.set_meta("item_id", item_id)
+					obj.set_meta("cell", cell)
+					obj.set_meta("sub_cell", sub_cell)
+					obj.set_meta("grid_size", grid_size)
+					_preview_container.add_child(obj)
+					# 重点: 同样不设置 obj.owner！
+
+	print("[MapManager] 编辑器视口预览已刷新 (显示 %d 块地砖与 %d 个物体，场景树保持 0 污染)" % [map_dict.get("tile_count", 0), map_dict.get("object_count", 0)])
+
+func _clear_editor_preview() -> void:
+	if _preview_container and is_instance_valid(_preview_container):
+		_preview_container.free()
+		_preview_container = null
+	if entities_container:
+		var old = entities_container.get_node_or_null("EditorPreview")
+		if old:
+			old.free()
 
 ## 随机化全部地砖变种 (遍历当前图集内所有定义的变种编号并均匀分配)
 func randomize_all_ground_tiles(source_id: int = 0) -> void:
@@ -296,20 +371,14 @@ func _get_sub_offset(sub_cell: Vector2i, size: Vector2i) -> Vector2:
 	return Vector2(offset_x, offset_y).round()
 
 func _refresh_systems() -> void:
-	# 空气墙、视野阴影和选框属于游戏运行时逻辑，在编辑器模式下无需且不能调用占位实例
 	if Engine.is_editor_hint():
 		return
-
 	if air_wall_manager and air_wall_manager.has_method("rebuild_walls"):
 		air_wall_manager.call("rebuild_walls")
 	if vision_shadow_manager and vision_shadow_manager.has_method("force_update"):
 		vision_shadow_manager.call("force_update")
 	if selector and selector.has_method("force_update"):
 		selector.call("force_update")
-
-# === 编辑器快捷方法 ===
-func _editor_load_map() -> void:
-	load_map(map_file_path)
 
 func _editor_save_map() -> void:
 	save_map(map_file_path)
