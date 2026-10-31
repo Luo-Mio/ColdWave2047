@@ -22,16 +22,16 @@ var _items: Dictionary = {
 		"max_stack": 99,
 		"description": "挺拔优雅的白桦树。\n占地: 4x4 (整格)\n拥有树叶遮挡透视与投影效果。"
 	},
-	"autumn_tree": {
-		"id": "autumn_tree",
-		"name": "秋季橡树",
+	"oak_tree": {
+		"id": "oak_tree",
+		"name": "橡树",
 		"type": ItemType.OBJECT,
 		"category": "nature",
 		"icon": "res://resources/object/Tree/OakTree/AutumnTree.png",
-		"scene": "res://scene/Object/Tree/OakTree/autumn_tree.tscn",
+		"scene": "res://scene/Object/Tree/OakTree/oak_tree.tscn",
 		"grid_size": Vector2i(4, 4),
 		"max_stack": 99,
-		"description": "金黄秋色的橡树。\n占地: 4x4 (整格)\n拥有树叶遮挡透视与投影效果。"
+		"description": "挺拔茂密的橡树。\n占地: 4x4 (整格)\n拥有树叶遮挡透视与投影效果。"
 	},
 	"wheat": {
 		"id": "wheat",
@@ -70,6 +70,8 @@ var _items: Dictionary = {
 
 ## 获取单个物品的完整定义 (深拷贝，防止外部误改数据库)
 func get_item(id: String) -> Dictionary:
+	if id == "autumn_tree":
+		id = "oak_tree"
 	if _items.has(id):
 		return _items[id].duplicate(true)
 	return {}

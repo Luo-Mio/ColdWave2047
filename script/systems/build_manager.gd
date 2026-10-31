@@ -15,6 +15,8 @@ var inventory: InventoryComponent = null
 func _ready() -> void:
 	if ground_layer:
 		GridData.register_ground_layer(ground_layer)
+	if entities_container:
+		GridData.scan_and_register_existing_entities(entities_container)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed):
@@ -77,7 +79,7 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 		else:
 			get_parent().add_child(obj)
 
-		GridData.register_object(cell, obj, sub_cell, grid_size)
+		GridData.register_object(cell, obj, sub_cell, grid_size, item.get("id", ""))
 		_consume_active_item(1)
 		selector.force_update()
 		if vision_shadow_manager:
@@ -85,7 +87,8 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 
 	elif itype == 1: # TILE (地砖)
 		if ground_layer:
-			var atlas: Vector2i = item.get("atlas", Vector2i(0, 0))
+			# 自动从全部可用变种列表中随机选择一个瓦片坐标 (无论贴图未来扩充多少种均自适应)
+			var atlas: Vector2i = GridData.get_random_tile_coords(0)
 			ground_layer.set_cell(cell, 0, atlas, 0)
 			_consume_active_item(1)
 			selector.force_update()

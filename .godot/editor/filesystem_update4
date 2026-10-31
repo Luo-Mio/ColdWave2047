@@ -10,3 +10,9 @@ res://scene/main.tscn
 res://resources/materials/vision_shadow.tres
 res://script/shaders/vision_shadow.gdshader
 res://script/systems/vision_shadow_manager.gd
+res://script/core/grid_data.gd
+res://script/ui/creative_menu.gd
+res://script/ui/hotbar.gd
+res://script/ui/item_slot.gd
+res://script/systems/map_manager.gd
+res://scene/Object/Tree/OakTree/autumn_tree.tscn

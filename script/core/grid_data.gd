@@ -37,6 +37,23 @@ func has_ground_tile(cell: Vector2i) -> bool:
 		return ground_layer.get_cell_source_id(cell) != -1
 	return true
 
+## 获取指定图集源的所有可用瓦片坐标列表 (遍历 TileSetAtlasSource 所有定义的变种)
+func get_tile_variant_coords(source_id: int = 0) -> Array[Vector2i]:
+	var list: Array[Vector2i] = []
+	if ground_layer and ground_layer.tile_set:
+		var source := ground_layer.tile_set.get_source(source_id) as TileSetAtlasSource
+		if source:
+			for i in source.get_tiles_count():
+				list.append(source.get_tile_id(i))
+	return list
+
+## 获取随机一个瓷砖变种坐标 (无论未来增加多少行多少列均自动支持)
+func get_random_tile_coords(source_id: int = 0) -> Vector2i:
+	var variants := get_tile_variant_coords(source_id)
+	if not variants.is_empty():
+		return variants[randi() % variants.size()]
+	return Vector2i.ZERO
+
 ## 【4x4 微网格核心算法】给定大格内 (0~3, 0~3) 子格及物体尺寸，计算出世界相对偏移像素
 func sub_cell_to_local_offset(sub_cell: Vector2i, size: Vector2i = Vector2i(1, 1)) -> Vector2:
 	var center_u := float(sub_cell.x) + float(size.x) * 0.5 - 2.0
@@ -80,7 +97,14 @@ func is_slot_occupied(cell: Vector2i, sub_pos: Vector2i = Vector2i.ZERO, size: V
 	return false
 
 ## 登记物体占用
-func register_object(cell: Vector2i, obj: Node, sub_pos: Vector2i = Vector2i.ZERO, size: Vector2i = Vector2i(4, 4)) -> void:
+func register_object(cell: Vector2i, obj: Node, sub_pos: Vector2i = Vector2i.ZERO, size: Vector2i = Vector2i(4, 4), item_id: String = "") -> void:
+	if obj:
+		obj.set_meta("cell", cell)
+		obj.set_meta("sub_cell", sub_pos)
+		obj.set_meta("grid_size", size)
+		if not item_id.is_empty():
+			obj.set_meta("item_id", item_id)
+
 	if size == Vector2i(4, 4):
 		objects_at[cell] = obj
 	else:
@@ -98,6 +122,41 @@ func unregister_object(cell: Vector2i, sub_pos: Vector2i = Vector2i.ZERO, size: 
 			for dx in range(size.x):
 				var sp := sub_pos + Vector2i(dx, dy)
 				sub_objects_at.erase(_sub_slot_key(cell, sp))
+
+## 获取所有已放置物体的详细信息列表 (供保存地图与查询使用)
+func get_all_placed_objects() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	var seen: Dictionary = {}
+
+	for cell in objects_at:
+		var node: Node = objects_at[cell]
+		if is_instance_valid(node) and not seen.has(node):
+			seen[node] = true
+			result.append({
+				"id": node.get_meta("item_id", ""),
+				"cell": cell,
+				"sub_cell": node.get_meta("sub_cell", Vector2i.ZERO),
+				"grid_size": node.get_meta("grid_size", Vector2i(4, 4)),
+				"node": node
+			})
+
+	for key in sub_objects_at:
+		var node: Node = sub_objects_at[key]
+		if is_instance_valid(node) and not seen.has(node):
+			seen[node] = true
+			result.append({
+				"id": node.get_meta("item_id", ""),
+				"cell": node.get_meta("cell", Vector2i(key.x, key.y)),
+				"sub_cell": node.get_meta("sub_cell", Vector2i(key.z % 4, int(key.z / 4))),
+				"grid_size": node.get_meta("grid_size", Vector2i(1, 1)),
+				"node": node
+			})
+	return result
+
+## 清空所有已登记的物体数据
+func clear_all_objects() -> void:
+	objects_at.clear()
+	sub_objects_at.clear()
 
 ## 获取指定槽位的物体节点
 func get_object_at(cell: Vector2i, sub_pos: Vector2i = Vector2i.ZERO) -> Node:
@@ -121,4 +180,53 @@ func get_cell_sub_occupancies(cell: Vector2i) -> Array[bool]:
 			else:
 				mask[idx] = false
 	return mask
+
+## 扫描并自动登记场景中已存在的预置物体 (无论是编辑器手动摆放的还是地图载入后保存的)
+func scan_and_register_existing_entities(container: Node2D) -> int:
+	if container == null:
+		return 0
+
+	var count := 0
+	for child in container.get_children():
+		if not (child is Node2D):
+			continue
+		if child.is_in_group("player"):
+			continue
+
+		var cell := Vector2i(-99999, -99999)
+		var sub_cell := Vector2i.ZERO
+		var grid_size := Vector2i(4, 4)
+		var item_id := ""
+
+		# 1. 优先读取持久化元数据 (由地图系统载入并保存到场景中的实体)
+		if child.has_meta("cell"):
+			cell = child.get_meta("cell")
+			sub_cell = child.get_meta("sub_cell", Vector2i.ZERO)
+			grid_size = child.get_meta("grid_size", Vector2i(4, 4))
+			item_id = child.get_meta("item_id", "")
+		else:
+			# 2. 启发式自动推导 (适用于策划直接在编辑器中拖入场景摆放的实体)
+			var node_name := child.name.to_lower()
+			if node_name.contains("wheat") or node_name.contains("plant"):
+				grid_size = Vector2i(1, 1)
+				cell = world_to_cell(child.position)
+				sub_cell = world_to_sub_cell(child.position, cell)
+				item_id = "wheat"
+			else:
+				# 默认大物体 (树木、建筑等 4x4)
+				grid_size = Vector2i(4, 4)
+				cell = world_to_cell(child.position)
+				sub_cell = Vector2i.ZERO
+				if node_name.contains("birch") or node_name.contains("britch"):
+					item_id = "birch_tree"
+				elif node_name.contains("oak") or node_name.contains("autumn"):
+					item_id = "oak_tree"
+
+		if cell != Vector2i(-99999, -99999):
+			register_object(cell, child, sub_cell, grid_size, item_id)
+			count += 1
+
+	if count > 0:
+		print("[GridData] 场景初始化已自动扫描并登记 %d 个预置物体占用！" % count)
+	return count
 

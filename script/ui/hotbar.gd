@@ -100,7 +100,19 @@ func _update_slot_view(index: int, item_data: Dictionary) -> void:
 	if icon_rect:
 		var icon_path: String = item_data.get("icon", "")
 		if icon_path != "" and ResourceLoader.exists(icon_path):
-			icon_rect.texture = load(icon_path)
+			var base_tex: Texture2D = load(icon_path)
+			if item_data.has("icon_region"):
+				var atlas_tex := AtlasTexture.new()
+				atlas_tex.atlas = base_tex
+				atlas_tex.region = item_data.get("icon_region")
+				icon_rect.texture = atlas_tex
+			elif base_tex and base_tex.get_width() > 64 and item_data.get("type", 0) == 1:
+				var atlas_tex := AtlasTexture.new()
+				atlas_tex.atlas = base_tex
+				atlas_tex.region = Rect2(0, 0, 64, 64)
+				icon_rect.texture = atlas_tex
+			else:
+				icon_rect.texture = base_tex
 		else:
 			icon_rect.texture = null
 

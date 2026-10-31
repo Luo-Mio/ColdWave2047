@@ -14,11 +14,14 @@ const ItemSlotScript := preload("res://script/ui/item_slot.gd")
 @onready var backdrop: ColorRect = $Backdrop
 @onready var main_panel: PanelContainer = $CenterContainer/MainPanel
 @onready var close_btn: Button = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/Header/CloseButton
+@onready var save_map_btn: Button = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/Header/SaveMapButton
+@onready var load_map_btn: Button = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/Header/LoadMapButton
 @onready var catalog_grid: GridContainer = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/ScrollContainer/CatalogGrid
 @onready var hotbar_container: HBoxContainer = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/HotbarSection/HotbarGrid
 @onready var tab_all: Button = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/TabContainer/TabAll
 @onready var tab_nature: Button = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/TabContainer/TabNature
 @onready var tab_terrain: Button = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/TabContainer/TabTerrain
+@onready var status_label: Label = $CenterContainer/MainPanel/MarginContainer/VBoxContainer/StatusLabel
 
 var current_category: String = "all"
 var selected_hotbar_index: int = 0
@@ -48,6 +51,11 @@ func bind_inventory(inv: InventoryComponent) -> void:
 func _setup_signals() -> void:
 	if close_btn:
 		close_btn.pressed.connect(close)
+
+	if save_map_btn:
+		save_map_btn.pressed.connect(_on_save_map_pressed)
+	if load_map_btn:
+		load_map_btn.pressed.connect(_on_load_map_pressed)
 
 	if tab_all:
 		tab_all.pressed.connect(func(): _switch_tab("all"))
@@ -103,6 +111,8 @@ func toggle() -> void:
 
 func open() -> void:
 	visible = true
+	if status_label:
+		status_label.text = ""
 	_set_gameplay_active(false)
 	_switch_tab(current_category)
 	_sync_all_hotbar_slots()
@@ -226,4 +236,42 @@ func _on_inventory_active_changed(index: int, _data: Dictionary) -> void:
 func _on_inventory_slot_updated(index: int, data: Dictionary) -> void:
 	if index >= 0 and index < hotbar_slots.size():
 		hotbar_slots[index].set_item(data)
+
+## 点击储存地图按钮
+func _on_save_map_pressed() -> void:
+	var map_mgr: Node = get_tree().get_first_node_in_group("map_manager")
+	if map_mgr and map_mgr.has_method("save_map"):
+		var ok: bool = map_mgr.call("save_map")
+		if ok:
+			_show_status("✓ 地图已成功保存至 res://map_data.json！", Color(0.4, 0.95, 0.6))
+		else:
+			_show_status("✗ 保存地图失败，请查看控制台日志！", Color(1.0, 0.4, 0.4))
+	else:
+		_show_status("✗ 未找到 MapManager 节点！", Color(1.0, 0.4, 0.4))
+
+## 点击读取地图按钮
+func _on_load_map_pressed() -> void:
+	var map_mgr: Node = get_tree().get_first_node_in_group("map_manager")
+	if map_mgr and map_mgr.has_method("load_map"):
+		var ok: bool = map_mgr.call("load_map")
+		if ok:
+			_sync_all_hotbar_slots()
+			_show_status("✓ 地图数据已从 res://map_data.json 成功载入！", Color(0.4, 0.85, 1.0))
+		else:
+			_show_status("✗ 载入地图失败，未找到地图文件！", Color(1.0, 0.4, 0.4))
+	else:
+		_show_status("✗ 未找到 MapManager 节点！", Color(1.0, 0.4, 0.4))
+
+var _status_tween: Tween
+func _show_status(text: String, col: Color) -> void:
+	if status_label == null:
+		return
+	if _status_tween and _status_tween.is_valid():
+		_status_tween.kill()
+	status_label.text = text
+	status_label.modulate = col
+	status_label.modulate.a = 1.0
+	_status_tween = create_tween()
+	_status_tween.tween_interval(3.0)
+	_status_tween.tween_property(status_label, "modulate:a", 0.0, 0.8)
 
