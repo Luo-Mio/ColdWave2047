@@ -14,7 +14,8 @@
 			"sub_cell": [
 				0,
 				0
-			]
+			],
+			"variant": 0
 		},
 		{
 			"cell": [
@@ -29,7 +30,8 @@
 			"sub_cell": [
 				0,
 				0
-			]
+			],
+			"variant": 1
 		},
 		{
 			"cell": [
@@ -44,7 +46,8 @@
 			"sub_cell": [
 				0,
 				0
-			]
+			],
+			"variant": 0
 		},
 		{
 			"cell": [
@@ -59,7 +62,8 @@
 			"sub_cell": [
 				0,
 				0
-			]
+			],
+			"variant": 0
 		}
 	],
 	"tile_count": 441,

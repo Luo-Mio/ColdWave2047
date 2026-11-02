@@ -79,7 +79,14 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 		else:
 			get_parent().add_child(obj)
 
-		GridData.register_object(cell, obj, sub_cell, grid_size, item.get("id", ""))
+		# 放置时如果实体具备多样化变体功能，自动随机选取一个形态变体
+		var variant_idx: int = 0
+		if obj.has_method("randomize_variant"):
+			variant_idx = obj.call("randomize_variant")
+		elif obj.has_method("get_variant"):
+			variant_idx = obj.call("get_variant")
+
+		GridData.register_object(cell, obj, sub_cell, grid_size, item.get("id", ""), variant_idx)
 		_consume_active_item(1)
 		selector.force_update()
 		if vision_shadow_manager:

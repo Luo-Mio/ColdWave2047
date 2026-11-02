@@ -1,11 +1,13 @@
 [gd_scene format=3 uid="uid://c8xq2318wheat"]
 
-[ext_resource type="Texture2D" uid="uid://dnb4002636wht" path="res://resources/object/Plant/wheat/wheat.png" id="1_wht"]
+[ext_resource type="Script" path="res://script/entities/objects/prop_entity.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://depox8miel2em" path="res://resources/object/Plant/wheat/wheat.png" id="2_wht"]
 
 [node name="Wheat" type="Node2D" unique_id=987654321]
+script = ExtResource("1_script")
+texture_variants = [ExtResource("2_wht")]
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=987654322]
 texture_filter = 1
-texture = ExtResource("1_wht")
+texture = ExtResource("2_wht")
 offset = Vector2(0, -10)
-

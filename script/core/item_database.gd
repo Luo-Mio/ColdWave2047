@@ -20,7 +20,7 @@ var _items: Dictionary = {
 		"scene": "res://scene/Object/Tree/BritchTree/britch_tree.tscn",
 		"grid_size": Vector2i(4, 4),
 		"max_stack": 99,
-		"description": "挺拔优雅的白桦树。\n占地: 4x4 (整格)\n拥有树叶遮挡透视与投影效果。"
+		"description": "挺拔优雅的白桦树。\n占地: 4x4 (整格)\n拥有树叶遮挡透视与投影效果。\n具备多种形态外观变体。"
 	},
 	"oak_tree": {
 		"id": "oak_tree",

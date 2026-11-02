@@ -17,3 +17,5 @@ res://script/ui/item_slot.gd
 res://script/systems/map_manager.gd
 res://scene/Object/Tree/OakTree/autumn_tree.tscn
 res://script/core/item_database.gd
+res://script/entities/objects/prop_entity.gd
+res://script/entities/objects/tree_entity.gd

@@ -109,22 +109,26 @@ func save_map(path: String = "") -> bool:
 				var c: Vector2i = child.get_meta("cell", Vector2i.ZERO)
 				var sc: Vector2i = child.get_meta("sub_cell", Vector2i.ZERO)
 				var sz: Vector2i = child.get_meta("grid_size", Vector2i(4, 4))
+				var var_idx: int = child.call("get_variant") if child.has_method("get_variant") else int(child.get_meta("variant", 0))
 				objects_data.append({
 					"id": child.get_meta("item_id"),
 					"cell": [c.x, c.y],
 					"sub_cell": [sc.x, sc.y],
-					"grid_size": [sz.x, sz.y]
+					"grid_size": [sz.x, sz.y],
+					"variant": var_idx
 				})
 	else:
 		for obj_info in placed_objs:
 			var c: Vector2i = obj_info["cell"]
 			var sc: Vector2i = obj_info["sub_cell"]
 			var sz: Vector2i = obj_info["grid_size"]
+			var var_idx: int = int(obj_info.get("variant", 0))
 			objects_data.append({
 				"id": obj_info["id"],
 				"cell": [c.x, c.y],
 				"sub_cell": [sc.x, sc.y],
-				"grid_size": [sz.x, sz.y]
+				"grid_size": [sz.x, sz.y],
+				"variant": var_idx
 			})
 
 	# 3. 组装整张地图结构并写入 JSON
@@ -216,10 +220,19 @@ func load_map(path: String = "") -> bool:
 					var cell_center := _get_cell_world_center(cell)
 					var sub_offset := _get_sub_offset(sub_cell, grid_size)
 					obj.position = cell_center + sub_offset
+
+					# 恢复保存的变体 (若无记录则自动随机)
+					var var_idx: int = int(o.get("variant", -1))
+					if var_idx >= 0:
+						obj.set_meta("variant", var_idx)
 					entities_container.add_child(obj)
+					if var_idx >= 0 and obj.has_method("set_variant"):
+						obj.call("set_variant", var_idx)
+					elif var_idx < 0 and obj.has_method("randomize_variant"):
+						obj.call("randomize_variant")
 
 					if not Engine.is_editor_hint() and grid_data_node and grid_data_node.has_method("register_object"):
-						grid_data_node.call("register_object", cell, obj, sub_cell, grid_size, item_id)
+						grid_data_node.call("register_object", cell, obj, sub_cell, grid_size, item_id, var_idx)
 					else:
 						obj.set_meta("item_id", item_id)
 						obj.set_meta("cell", cell)
@@ -294,7 +307,12 @@ func _update_editor_preview() -> void:
 					obj.set_meta("cell", cell)
 					obj.set_meta("sub_cell", sub_cell)
 					obj.set_meta("grid_size", grid_size)
+					var var_idx: int = int(o.get("variant", -1))
+					if var_idx >= 0:
+						obj.set_meta("variant", var_idx)
 					_preview_container.add_child(obj)
+					if var_idx >= 0 and obj.has_method("set_variant"):
+						obj.call("set_variant", var_idx)
 					# 重点: 同样不设置 obj.owner！
 
 	print("[MapManager] 编辑器视口预览已刷新 (显示 %d 块地砖与 %d 个物体，场景树保持 0 污染)" % [map_dict.get("tile_count", 0), map_dict.get("object_count", 0)])

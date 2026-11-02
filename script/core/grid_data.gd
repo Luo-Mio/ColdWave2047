@@ -96,14 +96,18 @@ func is_slot_occupied(cell: Vector2i, sub_pos: Vector2i = Vector2i.ZERO, size: V
 				return true
 	return false
 
-## 登记物体占用
-func register_object(cell: Vector2i, obj: Node, sub_pos: Vector2i = Vector2i.ZERO, size: Vector2i = Vector2i(4, 4), item_id: String = "") -> void:
+## 登记物体占用 (支持记录变体编号)
+func register_object(cell: Vector2i, obj: Node, sub_pos: Vector2i = Vector2i.ZERO, size: Vector2i = Vector2i(4, 4), item_id: String = "", variant_idx: int = -1) -> void:
 	if obj:
 		obj.set_meta("cell", cell)
 		obj.set_meta("sub_cell", sub_pos)
 		obj.set_meta("grid_size", size)
 		if not item_id.is_empty():
 			obj.set_meta("item_id", item_id)
+		if variant_idx >= 0:
+			obj.set_meta("variant", variant_idx)
+		elif obj.has_method("get_variant"):
+			obj.set_meta("variant", obj.call("get_variant"))
 
 	if size == Vector2i(4, 4):
 		objects_at[cell] = obj
@@ -132,11 +136,13 @@ func get_all_placed_objects() -> Array[Dictionary]:
 		var node: Node = objects_at[cell]
 		if is_instance_valid(node) and not seen.has(node):
 			seen[node] = true
+			var var_idx: int = node.call("get_variant") if node.has_method("get_variant") else int(node.get_meta("variant", 0))
 			result.append({
 				"id": node.get_meta("item_id", ""),
 				"cell": cell,
 				"sub_cell": node.get_meta("sub_cell", Vector2i.ZERO),
 				"grid_size": node.get_meta("grid_size", Vector2i(4, 4)),
+				"variant": var_idx,
 				"node": node
 			})
 
@@ -144,11 +150,13 @@ func get_all_placed_objects() -> Array[Dictionary]:
 		var node: Node = sub_objects_at[key]
 		if is_instance_valid(node) and not seen.has(node):
 			seen[node] = true
+			var var_idx: int = node.call("get_variant") if node.has_method("get_variant") else int(node.get_meta("variant", 0))
 			result.append({
 				"id": node.get_meta("item_id", ""),
 				"cell": node.get_meta("cell", Vector2i(key.x, key.y)),
 				"sub_cell": node.get_meta("sub_cell", Vector2i(key.z % 4, int(key.z / 4))),
 				"grid_size": node.get_meta("grid_size", Vector2i(1, 1)),
+				"variant": var_idx,
 				"node": node
 			})
 	return result
@@ -223,7 +231,12 @@ func scan_and_register_existing_entities(container: Node2D) -> int:
 					item_id = "oak_tree"
 
 		if cell != Vector2i(-99999, -99999):
-			register_object(cell, child, sub_cell, grid_size, item_id)
+			var var_idx: int = -1
+			if child.has_meta("variant"):
+				var_idx = int(child.get_meta("variant"))
+			elif child.has_method("get_variant"):
+				var_idx = child.call("get_variant")
+			register_object(cell, child, sub_cell, grid_size, item_id, var_idx)
 			count += 1
 
 	if count > 0:

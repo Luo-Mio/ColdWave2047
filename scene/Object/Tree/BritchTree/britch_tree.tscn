@@ -1,10 +1,17 @@
 [gd_scene format=3 uid="uid://xfp3at6m78oj"]
 
-[ext_resource type="Texture2D" uid="uid://dy3vwbo0pcf34" path="res://resources/object/Tree/BirchTree/BirchTreeTrunk002.png" id="1_2liqt"]
-[ext_resource type="Texture2D" uid="uid://qu47xu638187" path="res://resources/object/Tree/BirchTree/BirchTree002.png" id="2_q0wte"]
-[ext_resource type="Material" path="res://resources/materials/canopy_xray.tres" id="3_xray"]
+[ext_resource type="Script" path="res://script/entities/objects/tree_entity.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://b25pvwpssdpl0" path="res://resources/object/Tree/BirchTree/BirchTree.png" id="2_canopy0"]
+[ext_resource type="Texture2D" uid="uid://qu47xu638187" path="res://resources/object/Tree/BirchTree/BirchTree002.png" id="3_canopy1"]
+[ext_resource type="Texture2D" uid="uid://b2bq2r3utq5uv" path="res://resources/object/Tree/BirchTree/BirchTreeTrunk.png" id="4_trunk0"]
+[ext_resource type="Texture2D" uid="uid://dy3vwbo0pcf34" path="res://resources/object/Tree/BirchTree/BirchTreeTrunk002.png" id="5_trunk1"]
+[ext_resource type="Material" uid="uid://bjkdmx2cw47vj" path="res://resources/materials/canopy_xray.tres" id="6_xray"]
 
 [node name="BritchTree" type="StaticBody2D" unique_id=717628707]
+script = ExtResource("1_script")
+canopy_variants = [ExtResource("2_canopy0"), ExtResource("3_canopy1")]
+trunk_variants = [ExtResource("4_trunk0"), ExtResource("5_trunk1")]
+variant_offsets = [Vector2(0, -58), Vector2(6, -58)]
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1576076505]
 scale = Vector2(1, 0.5)
@@ -15,10 +22,10 @@ texture_filter = 1
 texture_repeat = 1
 
 [node name="Trunk" type="Sprite2D" parent="Visuals" unique_id=2004849035]
-texture = ExtResource("1_2liqt")
-offset = Vector2(8, -55)
+texture = ExtResource("4_trunk0")
+offset = Vector2(0, -58)
 
 [node name="Canopy" type="Sprite2D" parent="Visuals" unique_id=1423551016]
-material = ExtResource("3_xray")
-texture = ExtResource("2_q0wte")
-offset = Vector2(8, -55)
+material = ExtResource("6_xray")
+texture = ExtResource("2_canopy0")
+offset = Vector2(0, -58)

@@ -123,11 +123,3 @@ xray_feather={
 "type": "float",
 "value": 0.6
 }
-xray_dither_scale={
-"type": "int",
-"value": 1
-}
-xray_dither_mode={
-"type": "int",
-"value": 0
-}

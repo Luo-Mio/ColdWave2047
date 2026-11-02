@@ -147,6 +147,7 @@ collision_layer = 4
 collision_mask = 3
 motion_mode = 1
 script = ExtResource("2_script")
+xray_max_transparency = 0.7
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=1078200260]
 texture_filter = 1
@@ -175,3 +176,5 @@ script = ExtResource("5_anim")
 
 [node name="InventoryComponent" type="Node" parent="." unique_id=1210968015]
 script = ExtResource("6_inv")
+max_slots = null
+active_slot_index = null
