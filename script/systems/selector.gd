@@ -173,7 +173,13 @@ func _draw() -> void:
 					IsoGridDrawer.draw_diamond(self, sub_pos, 8.0, 4.0, Color.TRANSPARENT, Color(1.0, 1.0, 1.0, 0.18), 1.0)
 
 	# 3. 绘制当前目标选区菱形高亮 (所选微格或整格)
-	var is_occ := GridData.is_slot_occupied(target_cell, target_sub_cell, grid_size)
+	var is_occ := false
+	if itype == 2:
+		# 草皮覆盖层：需有地面且尚未铺设草皮才允许放置
+		is_occ = not GridData.has_ground_tile(target_cell) or GridData.has_surf(target_cell)
+	else:
+		is_occ = GridData.is_slot_occupied(target_cell, target_sub_cell, grid_size)
+
 	var sub_center := cell_center + GridData.sub_cell_to_local_offset(target_sub_cell, grid_size)
 	var half_w := float(grid_size.x) * 8.0
 	var half_h := float(grid_size.y) * 4.0
@@ -184,7 +190,12 @@ func _draw() -> void:
 		fill_color = Color(1.0, 0.15, 0.15, 0.55) # 占用：半透明警告红
 		border_color = Color(1.0, 0.9, 0.9, 0.95)
 	else:
-		fill_color = Color(0.2, 1.0, 0.4, 0.55) if not is_full_cell else Color(1.0, 1.0, 0.2, 0.45) # 可放：翠绿或浅金
+		if itype == 2:
+			fill_color = Color(0.2, 0.9, 0.35, 0.55) # 草皮选区：鲜亮青草绿
+		elif not is_full_cell:
+			fill_color = Color(0.2, 1.0, 0.4, 0.55) # 微格：翠绿
+		else:
+			fill_color = Color(1.0, 1.0, 0.2, 0.45) # 整格物体：浅金
 		border_color = Color(1.0, 1.0, 1.0, 0.95)
 
 	IsoGridDrawer.draw_diamond(self, sub_center, half_w, half_h, fill_color, border_color, 1.2)

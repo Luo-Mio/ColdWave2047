@@ -37,6 +37,32 @@ func has_ground_tile(cell: Vector2i) -> bool:
 		return ground_layer.get_cell_source_id(cell) != -1
 	return true
 
+## 表层草皮/覆盖物数据字典 (key: cell Vector2i, value: String "grass")
+var surf_grid: Dictionary = {}
+
+## 检查某格是否有表层草皮/覆盖物
+func has_surf(cell: Vector2i) -> bool:
+	return surf_grid.has(cell)
+
+## 获取某格表层覆盖物类型
+func get_surf(cell: Vector2i) -> String:
+	return surf_grid.get(cell, "")
+
+## 登记或移除表层覆盖物
+func set_surf(cell: Vector2i, exists: bool, type_name: String = "grass") -> void:
+	if exists:
+		surf_grid[cell] = type_name
+	else:
+		surf_grid.erase(cell)
+
+## 获取全部表层覆盖物字典副本 (供地图保存使用)
+func get_all_surfaces() -> Dictionary:
+	return surf_grid.duplicate()
+
+## 清空所有表层覆盖物数据
+func clear_all_surfaces() -> void:
+	surf_grid.clear()
+
 ## 获取指定图集源的所有可用瓦片坐标列表 (遍历 TileSetAtlasSource 所有定义的变种)
 func get_tile_variant_coords(source_id: int = 0) -> Array[Vector2i]:
 	var list: Array[Vector2i] = []

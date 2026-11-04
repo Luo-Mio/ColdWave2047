@@ -37,7 +37,10 @@ func _setup_default_slots() -> void:
 	# 2 号位：小麦 (1x1 微格，无限数量)
 	slots[1] = ItemDatabase.create_item("wheat", -1)
 
-	# 3、4、5 号位：空槽位
+	# 3 号位：青草地表 (双网格表层草皮覆盖物，无限数量)
+	slots[2] = ItemDatabase.create_item("grass_surf", -1)
+
+	# 4、5 号位：空槽位
 
 	# 触发初始选中信号
 	call_deferred("_emit_initial_selection")

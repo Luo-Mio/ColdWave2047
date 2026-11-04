@@ -3,12 +3,14 @@ class_name BuildManager
 extends Node
 
 const SelectorScript := preload("res://script/systems/selector.gd")
+const SurfManagerScript := preload("res://script/systems/surf_manager.gd")
 
 @export var selector: Node2D
 @export var entities_container: Node2D
 @export var ground_layer: TileMapLayer
 @export var air_wall_manager: StaticBody2D
 @export var vision_shadow_manager: VisionShadowManager
+@export var surf_manager: Node
 
 var inventory: InventoryComponent = null
 
@@ -103,6 +105,14 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 			if air_wall_manager and air_wall_manager.has_method("rebuild_walls"):
 				air_wall_manager.call("rebuild_walls")
 
+	elif itype == 2: # SURF (草皮表层覆盖物)
+		if GridData.has_ground_tile(cell) and not GridData.has_surf(cell):
+			var sm = surf_manager if surf_manager else SurfManagerScript.instance
+			if sm:
+				sm.set_surf(cell, true, "grass")
+			_consume_active_item(1)
+			selector.force_update()
+
 ## 处理鼠标右键拆除/收割
 func _handle_demolish(cell: Vector2i, sub_cell: Vector2i) -> void:
 	var obj := GridData.get_object_at(cell, sub_cell)
@@ -114,6 +124,12 @@ func _handle_demolish(cell: Vector2i, sub_cell: Vector2i) -> void:
 		selector.force_update()
 		if vision_shadow_manager:
 			vision_shadow_manager.force_update()
+	elif GridData.has_surf(cell):
+		# 无物体时右键铲除该格草皮
+		var sm = surf_manager if surf_manager else SurfManagerScript.instance
+		if sm:
+			sm.set_surf(cell, false)
+		selector.force_update()
 
 ## 扣减当前激活槽位的物品数量
 func _consume_active_item(amount: int = 1) -> void:

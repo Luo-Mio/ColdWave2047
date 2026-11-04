@@ -3,6 +3,8 @@
 class_name MapManager
 extends Node
 
+const SurfManagerScript := preload("res://script/systems/surf_manager.gd")
+
 signal map_saved(file_path: String)
 signal map_loaded(file_path: String)
 
@@ -12,6 +14,7 @@ signal map_loaded(file_path: String)
 @export var air_wall_manager: StaticBody2D
 @export var vision_shadow_manager: VisionShadowManager
 @export var selector: Node2D
+@export var surf_manager: Node
 
 @export_group("数据文件")
 @export_file("*.json") var map_file_path: String = "res://map_data.json"
@@ -60,6 +63,8 @@ func _auto_find_references() -> void:
 			vision_shadow_manager = root.find_child("VisionShadowManager", true, false) as VisionShadowManager
 		if selector == null:
 			selector = root.find_child("Selector", true, false) as Node2D
+		if surf_manager == null:
+			surf_manager = root.find_child("SurfManager", true, false)
 
 ## 保存地图数据到 JSON 文件 (记录所有地砖位置与随机编号，以及全部实体对象)
 func save_map(path: String = "") -> bool:
@@ -131,12 +136,27 @@ func save_map(path: String = "") -> bool:
 				"variant": var_idx
 			})
 
-	# 3. 组装整张地图结构并写入 JSON
+	# 3. 收集表层草皮/覆盖物数据
+	var surfaces_data: Array[Dictionary] = []
+	if grid_data_node == null:
+		grid_data_node = get_node_or_null("/root/GridData")
+	if grid_data_node and grid_data_node.has_method("get_all_surfaces"):
+		var surfs: Dictionary = grid_data_node.call("get_all_surfaces")
+		for cell in surfs:
+			surfaces_data.append({
+				"x": cell.x,
+				"y": cell.y,
+				"type": surfs[cell]
+			})
+
+	# 4. 组装整张地图结构并写入 JSON
 	var map_dict: Dictionary = {
 		"version": 1,
 		"tile_count": tiles_data.size(),
+		"surface_count": surfaces_data.size(),
 		"object_count": objects_data.size(),
 		"tiles": tiles_data,
+		"surfaces": surfaces_data,
 		"objects": objects_data
 	}
 
@@ -190,8 +210,21 @@ func load_map(path: String = "") -> bool:
 			var alt := int(t.get("alt", 0))
 			ground_layer.set_cell(cell, source_id, atlas, alt)
 
-	# 2. 清除并重建实体层
+	# 1.5 重建表层草皮覆盖层
 	var grid_data_node = get_node_or_null("/root/GridData")
+	if grid_data_node and grid_data_node.has_method("clear_all_surfaces"):
+		grid_data_node.call("clear_all_surfaces")
+	var surfaces_arr: Array = map_dict.get("surfaces", [])
+	for s in surfaces_arr:
+		var cell := Vector2i(int(s["x"]), int(s["y"]))
+		var stype: String = s.get("type", "grass")
+		if grid_data_node:
+			grid_data_node.call("set_surf", cell, true, stype)
+	var sm = surf_manager if surf_manager else SurfManagerScript.instance
+	if sm and sm.has_method("rebuild_all_surf"):
+		sm.call("rebuild_all_surf")
+
+	# 2. 清除并重建实体层
 	if not Engine.is_editor_hint() and grid_data_node and grid_data_node.has_method("clear_all_objects"):
 		grid_data_node.call("clear_all_objects")
 
