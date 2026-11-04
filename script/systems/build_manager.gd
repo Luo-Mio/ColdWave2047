@@ -73,6 +73,7 @@ func _handle_place(cell: Vector2i, sub_cell: Vector2i) -> void:
 		var cell_center := GridData.cell_to_world(cell)
 		var sub_offset := GridData.sub_cell_to_local_offset(sub_cell, grid_size)
 		obj.position = cell_center + sub_offset
+		obj.name = "%s_%d_%d" % [item.get("id", "obj"), cell.x, cell.y]
 
 		if entities_container:
 			entities_container.add_child(obj)

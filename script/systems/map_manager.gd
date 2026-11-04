@@ -220,6 +220,7 @@ func load_map(path: String = "") -> bool:
 					var cell_center := _get_cell_world_center(cell)
 					var sub_offset := _get_sub_offset(sub_cell, grid_size)
 					obj.position = cell_center + sub_offset
+					obj.name = "%s_%d_%d" % [item_id, cell.x, cell.y]
 
 					# 恢复保存的变体 (若无记录则自动随机)
 					var var_idx: int = int(o.get("variant", -1))
@@ -303,6 +304,7 @@ func _update_editor_preview() -> void:
 					var cell_center := _get_cell_world_center(cell)
 					var sub_offset := _get_sub_offset(sub_cell, grid_size)
 					obj.position = cell_center + sub_offset
+					obj.name = "%s_%d_%d" % [item_id, cell.x, cell.y]
 					obj.set_meta("item_id", item_id)
 					obj.set_meta("cell", cell)
 					obj.set_meta("sub_cell", sub_cell)

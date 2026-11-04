@@ -121,5 +121,13 @@ xray_max_transparency={
 }
 xray_feather={
 "type": "float",
-"value": 0.6
+"value": 0.5
+}
+xray_dither_scale={
+"type": "int",
+"value": 0
+}
+xray_dither_mode={
+"type": "int",
+"value": 0
 }
