@@ -23,8 +23,9 @@ ItemDatabase="*res://script/core/item_database.gd"
 
 [display]
 
-window/stretch/mode="canvas_items"
-window/stretch/aspect="expand"
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/stretch/aspect="ignore"
 
 [input]
 
@@ -101,7 +102,7 @@ vision_cam_zoom={
 }
 vision_screen_size={
 "type": "vec2",
-"value": Vector2(1152, 648)
+"value": Vector2(1920, 1080)
 }
 player_facing_dir={
 "type": "vec2",
@@ -130,4 +131,8 @@ xray_dither_scale={
 xray_dither_mode={
 "type": "int",
 "value": 0
+}
+xray_y_sort_filter={
+"type": "bool",
+"value": true
 }

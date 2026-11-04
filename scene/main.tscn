@@ -44,7 +44,7 @@ y_sort_enabled = true
 
 [node name="main_chara" parent="Entities" unique_id=2057623877 instance=ExtResource("2_chara")]
 xray_offset = Vector2(0, -8)
-xray_radius = Vector2(128, 64)
+xray_radius = Vector2(55, 25)
 
 [node name="Hotbar" parent="." unique_id=1345717757 instance=ExtResource("3_hotbar")]
 

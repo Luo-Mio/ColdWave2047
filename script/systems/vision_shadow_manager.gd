@@ -104,6 +104,9 @@ func _ready() -> void:
 	_shape_query.collide_with_bodies = true
 	_shape_query.collide_with_areas = false
 
+	# 监听窗口尺寸变化，窗口拖动缩放时立即重新计算可见范围内的阴影
+	get_viewport().size_changed.connect(force_update)
+
 func _sync_shader_params() -> void:
 	self_modulate = Color(1.0, 1.0, 1.0, shadow_alpha)
 	var target_mat = _drawer.material if is_instance_valid(_drawer) and _drawer.material else material

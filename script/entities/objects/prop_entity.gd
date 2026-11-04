@@ -13,12 +13,34 @@ extends Node2D
 		variant_offsets = v
 		_apply_variant(current_variant)
 
-@export_group("实时预览与调试")
+@export_group("实时预览与快捷微调")
 ## 当前选中的变体索引
 @export var current_variant: int = 0:
 	set(v):
 		current_variant = v
 		_apply_variant(current_variant)
+
+## 当前预览变体的专属偏移量 (在检查器中直接调节此数值，即时在视口中移动并自动保存至变体配置中)
+@export var current_variant_offset: Vector2:
+	get:
+		if current_variant >= 0 and current_variant < variant_offsets.size():
+			return variant_offsets[current_variant]
+		return Vector2.ZERO
+	set(v):
+		if current_variant >= 0:
+			while variant_offsets.size() <= current_variant:
+				variant_offsets.append(Vector2.ZERO)
+			variant_offsets[current_variant] = v
+			_apply_variant(current_variant)
+
+## 从子节点抓取当前偏移 (若您在 2D 视口或子节点 Sprite2D 上直接调整了 offset，点击勾选即可抓取并保存为当前变体偏移)
+@export var sync_from_sprite_offset_trigger: bool = false:
+	set(v):
+		if v:
+			var s := _get_sprite()
+			if s:
+				current_variant_offset = s.offset
+			sync_from_sprite_offset_trigger = false
 
 @onready var sprite: Sprite2D = $Sprite2D if has_node("Sprite2D") else null
 

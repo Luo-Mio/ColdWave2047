@@ -1,19 +1,20 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://54lv5jkuyjxt"]
 
-[ext_resource type="Script" path="res://script/entities/objects/tree_entity.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://bix3uor8m5ec8" path="res://script/entities/objects/tree_entity.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://ccnd37afaj3nu" path="res://resources/object/Tree/OakTree/AutumnTreeTrunk.png" id="2_trunk"]
 [ext_resource type="Texture2D" uid="uid://bcwfy0tha30o5" path="res://resources/object/Tree/OakTree/AutumnTree.png" id="3_canopy"]
 [ext_resource type="Material" uid="uid://bjkdmx2cw47vj" path="res://resources/materials/canopy_xray.tres" id="4_xray"]
 
 [node name="AutumnTree" type="StaticBody2D" unique_id=329355248]
 script = ExtResource("1_script")
-canopy_variants = [ExtResource("3_canopy")]
-trunk_variants = [ExtResource("2_trunk")]
-variant_offsets = [Vector2(0, -58)]
+canopy_variants = Array[Texture2D]([ExtResource("3_canopy")])
+trunk_variants = Array[Texture2D]([ExtResource("2_trunk")])
+variant_offsets = Array[Vector2]([Vector2(0, -56)])
+current_variant_offset = Vector2(0, -56)
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=319178101]
 scale = Vector2(1, 0.5)
-polygon = PackedVector2Array(0, 12, 12, 0, 0, -12, -12, 0)
+polygon = PackedVector2Array(0, 8, 8, 0, 0, -8, -8, 0)
 
 [node name="Visuals" type="Node2D" parent="." unique_id=1224980262]
 texture_filter = 1
@@ -21,10 +22,10 @@ texture_repeat = 1
 
 [node name="Trunk" type="Sprite2D" parent="Visuals" unique_id=656538990]
 texture = ExtResource("2_trunk")
-offset = Vector2(0, -58)
+offset = Vector2(0, -56)
 
 [node name="Canopy" type="Sprite2D" parent="Visuals" unique_id=773116546]
 material = ExtResource("4_xray")
+instance_shader_parameters/object_height = 120.0
 texture = ExtResource("3_canopy")
-offset = Vector2(0, -58)
-
+offset = Vector2(0, -56)

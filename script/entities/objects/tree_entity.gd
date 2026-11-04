@@ -16,12 +16,40 @@ extends StaticBody2D
 		variant_offsets = v
 		_apply_variant(current_variant)
 
-@export_group("实时预览与调试")
+## 树冠相对树干的独立微调偏移 (例如 Vector2(0, 0) 为同位对齐，Vector2(0, -4) 代表树冠再往上移 4px)
+@export var canopy_offset_delta: Vector2 = Vector2.ZERO:
+	set(v):
+		canopy_offset_delta = v
+		_apply_variant(current_variant)
+
+@export_group("实时预览与快捷微调")
 ## 当前选中的变体索引 (在编辑器修改可实时在 2D 视口内预览形态与树根对齐位置)
 @export var current_variant: int = 0:
 	set(v):
 		current_variant = v
 		_apply_variant(current_variant)
+
+## 当前预览变体的专属偏移量 (在检查器中直接调节此数值，即时在视口中移动并自动保存至变体配置中)
+@export var current_variant_offset: Vector2:
+	get:
+		if current_variant >= 0 and current_variant < variant_offsets.size():
+			return variant_offsets[current_variant]
+		return Vector2.ZERO
+	set(v):
+		if current_variant >= 0:
+			while variant_offsets.size() <= current_variant:
+				variant_offsets.append(Vector2.ZERO)
+			variant_offsets[current_variant] = v
+			_apply_variant(current_variant)
+
+## 从子节点抓取当前偏移 (若您在 2D 视口或子节点 Trunk 上直接调整了 offset，点击勾选即可抓取并保存为当前变体偏移)
+@export var sync_from_sprite_offset_trigger: bool = false:
+	set(v):
+		if v:
+			var trunk := _get_trunk_sprite()
+			if trunk:
+				current_variant_offset = trunk.offset
+			sync_from_sprite_offset_trigger = false
 
 ## 一键自动推算并填充全部变体的树根居中偏移 (点击勾选即可自动计算)
 @export var auto_align_roots_trigger: bool = false:
@@ -94,13 +122,20 @@ func _apply_variant(idx: int) -> void:
 		if trunk_variants[idx]:
 			trunk.texture = trunk_variants[idx]
 
-	# 应用该变体专属的树根对齐偏移量
+	# 应用该变体专属的树根对齐偏移量与树冠独立微调
+	var off := Vector2.ZERO
 	if idx >= 0 and idx < variant_offsets.size():
-		var off: Vector2 = variant_offsets[idx]
-		if canopy:
-			canopy.offset = off
-		if trunk:
-			trunk.offset = off
+		off = variant_offsets[idx]
+	if trunk:
+		trunk.offset = off
+	if canopy:
+		canopy.offset = off + canopy_offset_delta
+
+	# 自动根据树冠贴图尺寸与偏移推算向上延伸的遮挡高度，并同步给 Shader 胶囊体
+	if canopy and canopy.texture:
+		var tex_h: float = float(canopy.texture.get_height())
+		var calc_h: float = (tex_h * 0.5) - canopy.offset.y
+		canopy.set_instance_shader_parameter("object_height", maxf(calc_h, 30.0))
 
 ## 自动扫描树干底边像素并推算各变体理论对齐偏移量
 func auto_calculate_offsets() -> void:

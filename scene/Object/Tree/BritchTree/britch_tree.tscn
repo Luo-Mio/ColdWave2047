@@ -11,11 +11,12 @@
 script = ExtResource("1_script")
 canopy_variants = Array[Texture2D]([ExtResource("2_canopy0"), ExtResource("3_canopy1")])
 trunk_variants = Array[Texture2D]([ExtResource("4_trunk0"), ExtResource("5_trunk1")])
-variant_offsets = Array[Vector2]([Vector2(0, -58), Vector2(6, -58)])
+variant_offsets = Array[Vector2]([Vector2(-1, -56), Vector2(7, -55)])
+current_variant_offset = Vector2(-1, -56)
 
 [node name="CollisionPolygon2D" type="CollisionPolygon2D" parent="." unique_id=1576076505]
 scale = Vector2(1, 0.5)
-polygon = PackedVector2Array(0, 12, 12, 0, 0, -12, -12, 0)
+polygon = PackedVector2Array(0, 8, 8, 0, 0, -8, -8, 0)
 
 [node name="Visuals" type="Node2D" parent="." unique_id=1814766111]
 texture_filter = 1
@@ -23,9 +24,10 @@ texture_repeat = 1
 
 [node name="Trunk" type="Sprite2D" parent="Visuals" unique_id=2004849035]
 texture = ExtResource("4_trunk0")
-offset = Vector2(0, -58)
+offset = Vector2(-1, -56)
 
 [node name="Canopy" type="Sprite2D" parent="Visuals" unique_id=1423551016]
 material = ExtResource("6_xray")
+instance_shader_parameters/object_height = 120.0
 texture = ExtResource("2_canopy0")
-offset = Vector2(0, -58)
+offset = Vector2(-1, -56)

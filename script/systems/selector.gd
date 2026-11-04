@@ -23,6 +23,7 @@ var inventory: InventoryComponent = null
 
 func _ready() -> void:
 	z_index = 100 # 始终在最上层绘制选框
+	get_viewport().size_changed.connect(force_update)
 
 func _process(_delta: float) -> void:
 	_ensure_references()

@@ -1,2 +1,3 @@
-res://script/entities/player/main_chara.gd
+res://scene/Object/Tree/BritchTree/britch_tree.tscn
 res://script/shaders/xray.gdshader
+res://scene/Object/Tree/OakTree/oak_tree.tscn
