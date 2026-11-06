@@ -17,8 +17,10 @@ uniform float horizontal_shear : hint_range(-12.0, 12.0, 0.1) = 0.0;
 uniform float base_rotation_deg : hint_range(-60.0, 60.0, 1.0) = 0.0;
 // 弯曲柔韧指数 (Bend Exponent)：1.0 为直斜切，1.8 为自然抛物线弯曲，3.0 为尖端剧烈折叠
 uniform float bend_exponent : hint_range(0.8, 3.5, 0.05) = 1.8;
-// 重采样模式：true 为双线性平滑插值 (像 PS 缩放插值)，false 为邻近硬像素重采样 (经典像素画)
-uniform bool resample_bilinear = true;
+// 完整像素量化开关 (Pixel-Perfect Quantization)：将每一个采样点严格锁定到整像素网格，输出 100% 完整饱满的像素块
+uniform bool snap_to_integer_pixel = true;
+// 重采样平滑模式 (开启为双线性插值，关闭为硬像素点，完整像素量化开启时自动强制硬像素)
+uniform bool resample_bilinear = false;
 
 group_uniforms Display_Mode;
 // 是否为无形变的原图幽灵参考层 (半透明白/灰色)
@@ -86,17 +88,25 @@ void fragment() {
 		eff_top_scale = clamp(1.0 + (sim_wind_dir_y * abs(gust) * 0.6), 0.3, 2.5);
 	}
 
-	// 绕草根 (0, 0) 逆旋转局部采样坐标
+	// 1. 完整像素采样点确定 (Pixel-Perfect Quantization)
+	// 若开启完整像素量化，将每个片段严格吸附到 1:1 本地纹素像素块的中心 (floor + 0.5)
+	// 确保整个像素格单元内的所有微片元计算结果完全一致，形成 100% 饱满立体的完整像素方块！
+	vec2 sample_pos = local_pos;
+	if (snap_to_integer_pixel) {
+		sample_pos = floor(local_pos) + vec2(0.5, 0.5);
+	}
+
+	// 2. 绕草根 (0, 0) 逆旋转采样坐标
 	float rot_rad = radians(eff_rot);
 	float cos_r = cos(rot_rad);
 	float sin_r = sin(rot_rad);
-	vec2 p = vec2(local_pos.x * cos_r + local_pos.y * sin_r, -local_pos.x * sin_r + local_pos.y * cos_r);
+	vec2 p = vec2(sample_pos.x * cos_r + sample_pos.y * sin_r, -sample_pos.x * sin_r + sample_pos.y * cos_r);
 
 	// p.y = 0 是小草根部接地线，向上为负 Y (0 到 -8)
 	float y_up = -p.y;
 	float cur_total_h = 8.0 * eff_height_scale;
 
-	// 垂直范围超出小草当前高度直接剔除
+	// 垂直范围超出小草当前高度直接剔除完整像素
 	if (y_up < 0.0 || y_up > cur_total_h) {
 		discard;
 	}
@@ -104,45 +114,47 @@ void fragment() {
 	// 归一化高度比例：h = 0.0 (草根) ~ 1.0 (草尖)
 	float h = clamp(y_up / cur_total_h, 0.0, 1.0);
 
-	// 1. 中轴线弧形弯曲与水平侧倾 (Photoshop 弯曲曲线)
+	// 3. 中轴线弧形弯曲与水平侧倾 (Photoshop 弯曲曲线)
 	float center_x = eff_shear * pow(h, bend_exponent);
 
-	// 2. 顶边梯形拉伸/收窄：当前高度截面下的实际宽度 (Photoshop 自由变换透视拉伸)
+	// 4. 顶边梯形拉伸/收窄：当前高度截面下的实际宽度 (Photoshop 自由变换透视拉伸)
 	float cur_w = 4.0 * mix(1.0, eff_top_scale, h);
 
-	// 3. 相对中轴线的横向距离
+	// 5. 相对中轴线的横向距离
 	float rel_x = p.x - center_x;
 
-	// 4. 重采样纹理坐标 (U, V)
+	// 6. 逆映射计算原图纹理坐标 (U, V)
 	float u = (rel_x / cur_w) + 0.5;
 	float v = 1.0 - h;
 
-	// 横向超出小草当前宽度直接剔除
+	// 横向超出小草当前宽度直接剔除完整像素
 	if (u < 0.0 || u > 1.0) {
 		discard;
 	}
 
-	// 5. 纹理重采样 (支持双线性平滑抗锯齿插值 或 经典像素邻近重采样)
+	// 7. 纹理重采样：当开启完整像素量化时，严格执行整像素离散索引
 	vec4 tex = vec4(0.0);
-	if (resample_bilinear) {
+	vec2 tex_size = vec2(textureSize(TEXTURE, 0));
+	vec2 orig_pixel = clamp(floor(vec2(u, v) * tex_size), vec2(0.0), tex_size - vec2(1.0));
+	vec2 snapped_uv = (orig_pixel + vec2(0.5)) / tex_size;
+
+	if (resample_bilinear && !snap_to_integer_pixel) {
 		tex = texture(TEXTURE, vec2(u, v));
 	} else {
-		// 邻近硬重采样
-		vec2 tex_size = vec2(textureSize(TEXTURE, 0));
-		vec2 snapped_uv = (floor(vec2(u, v) * tex_size) + 0.5) / tex_size;
 		tex = texture(TEXTURE, snapped_uv);
 	}
 
-	if (tex.a < 0.1) {
+	if (tex.a < 0.5) {
 		discard;
 	}
 
-	// 6. 草皮基础三阶赋色与草尖高光
+	// 8. 草皮基础三阶赋色与草尖高光
 	vec3 final_color = tuft_color.rgb;
 	if (tip_brightness > 0.0) {
 		final_color += vec3(tip_brightness * (1.0 - v));
 	}
 
-	COLOR = vec4(final_color, tex.a * COLOR.a);
+	// 9. 输出纯正无半透明毛边的 100% 完整像素
+	COLOR = vec4(final_color, 1.0);
 	}
 }

@@ -29,6 +29,8 @@ uniform float wind_strength : hint_range(0.0, 10.0, 0.1) = 3.0;
 uniform float perspective_expand : hint_range(0.0, 1.0, 0.05) = 0.35;
 // 高度压缩比率：草被风吹倒下时的纵向透视变矮压扁比例
 uniform float height_squash : hint_range(0.0, 1.0, 0.05) = 0.25;
+// 横风旋转倾倒强度：横风吹拂时草身绕底部中心基点旋转倾斜的最大强度 (0.0 为纯剪切，1.0 强横风时草尖旋转达 45 度)
+uniform float wind_rotation_strength : hint_range(0.0, 1.5, 0.05) = 0.8;
 // 主导风向：风在世界坐标系中的流动方向向量
 uniform vec2 wind_base_dir = vec2(1.0, 0.3);
 // 是否开启风向周期性偏摆 (像麦浪一样左右缓缓摇曳)
@@ -231,8 +233,17 @@ void vertex() {
 
 			vec2 force = cur_wind * t;
 
-			// 现象 1：水平剪切 (平行四边形)
-			VERTEX.x += force.x;
+			// 现象 0：绕底部中心 (0, 0) 渐进旋转倾倒 (草根 t=0 保持接地，草尖 t=1 旋转至 45°)
+			if (wind_rotation_strength > 0.001 && abs(force.x) > 0.001) {
+				float tilt_angle = clamp(force.x * 0.13 * wind_rotation_strength, -0.785398, 0.785398);
+				float cos_t = cos(tilt_angle);
+				float sin_t = sin(tilt_angle);
+				vec2 rot_v = vec2(VERTEX.x * cos_t - VERTEX.y * sin_t, VERTEX.x * sin_t + VERTEX.y * cos_t);
+				VERTEX = mix(VERTEX, rot_v, t);
+			}
+
+			// 现象 1：水平剪切平移 (补足柔韧弯曲剩余侧移)
+			VERTEX.x += force.x * (1.0 - clamp(wind_rotation_strength * 0.4, 0.0, 0.7));
 
 			// 现象 2：上下风 —— 近大远小梯形形变 (以精灵水平中心 UV.x = 0.5 为对称轴)
 			// force.y > 0 (风向下/靠近镜头) -> 顶端向两侧扩张 (倒梯形)
@@ -245,7 +256,7 @@ void vertex() {
 			// 现象 4：纵向位移
 			VERTEX.y += force.y * 0.4;
 
-			// 像素艺术整数吸附：锁定顶点至整像素，彻底杜绝摄像机平滑移动时的亚像素光栅化高频抖动 (Subpixel Shimmer)
+			// 完整像素吸附：锁定顶点至世界整像素，彻底杜绝亚像素浮点抖动并形成规整的完整像素阶梯
 			VERTEX = round(VERTEX);
 		}
 	}
@@ -288,7 +299,7 @@ void fragment() {
 	} else {
 		// 【正常游戏场景渲染】针对 4x8 像素真实小草精灵：
 		vec4 mask = texture(TEXTURE, UV);
-		if (mask.a < 0.1) {
+		if (mask.a < 0.5) {
 			discard;
 		}
 		vec3 final_color = tuft_color;
@@ -311,7 +322,7 @@ void fragment() {
 			}
 		}
 
-		// 遮罩纯白部分上色为对应颜色
-		COLOR = vec4(final_color, mask.a * COLOR.a);
+		// 确保输出 100% 完整纯色像素，无半透明边缘杂色
+		COLOR = vec4(final_color, 1.0);
 	}
 }

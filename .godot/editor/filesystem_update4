@@ -1,11 +1,10 @@
+res://script/shaders/weed_distortion_lab.gdshader
 res://script/tools/weed_distortion_lab.gd
-res://resources/materials/grass_tuft.tres
 res://scene/tools/weed_distortion_lab.tscn
 res://resources/surface/GreenGrass/grass_tileset.tres
 res://script/shaders/grass_surface.gdshader
 res://resources/surface/wind/wind_noise.tres
 res://resources/materials/grass_surface.tres
 res://script/shaders/grass_tuft.gdshader
+res://resources/materials/grass_tuft.tres
 res://script/shaders/wind_synthesizer.gdshader
-res://scene/main.tscn
-res://script/shaders/weed_distortion_lab.gdshader

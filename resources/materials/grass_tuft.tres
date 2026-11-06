@@ -37,6 +37,7 @@ shader_parameter/wind_speed = 1.2
 shader_parameter/wind_strength = 6.0
 shader_parameter/perspective_expand = 0.4
 shader_parameter/height_squash = 0.5
+shader_parameter/wind_rotation_strength = 0.8
 shader_parameter/wind_base_dir = Vector2(0, 1)
 shader_parameter/enable_wind_wander = true
 shader_parameter/wind_wander_angle = 0.3490658503988659

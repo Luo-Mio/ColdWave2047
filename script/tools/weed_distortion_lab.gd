@@ -51,8 +51,14 @@ extends Control
 		bend_exponent = v
 		_sync_parameters()
 
-## 重采样平滑模式：开启为双线性抗锯齿重采样 (像 PS 缩放插值)，关闭为邻近硬像素重采样 (经典像素画风格)
-@export var resample_bilinear: bool = true:
+## 完整像素量化采样 (Pixel-Perfect Quantization)：将扭曲采样严格锁定到整像素网格中心，输出 100% 完整饱满的像素块
+@export var snap_to_integer_pixel: bool = true:
+	set(v):
+		snap_to_integer_pixel = v
+		_sync_parameters()
+
+## 重采样平滑模式：开启为双线性抗锯齿重采样，关闭为邻近硬像素重采样 (开启完整像素时强制硬像素)
+@export var resample_bilinear: bool = false:
 	set(v):
 		resample_bilinear = v
 		_sync_parameters()
@@ -151,20 +157,25 @@ func _ready() -> void:
 
 func _reposition_stage() -> void:
 	if stage_area and stage_node:
-		stage_node.position = Vector2(stage_area.size.x * 0.5, stage_area.size.y * 0.65)
+		stage_node.position = (Vector2(stage_area.size.x * 0.5, stage_area.size.y * 0.65)).round()
 
 func _init_materials() -> void:
+	if not is_inside_tree():
+		return
 	if deformed_sprite and deformed_sprite.material is ShaderMaterial:
 		lab_material = deformed_sprite.material as ShaderMaterial
 
 	if ghost_sprite and ghost_sprite.material is ShaderMaterial:
 		ghost_material = ghost_sprite.material as ShaderMaterial
+		ghost_material.set_shader_parameter("is_ghost", true)
 
-	var field_spr = $HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer/Tuft1 as Sprite2D
+	var field_spr = find_child("Tuft1", true, false) as Sprite2D
 	if field_spr and field_spr.material is ShaderMaterial:
 		field_material = field_spr.material as ShaderMaterial
 
 func _sync_parameters() -> void:
+	if not is_inside_tree():
+		return
 	_init_materials()
 
 	var mats = [lab_material, field_material]
@@ -175,6 +186,7 @@ func _sync_parameters() -> void:
 			mat.set_shader_parameter("horizontal_shear", horizontal_shear)
 			mat.set_shader_parameter("base_rotation_deg", base_rotation_deg)
 			mat.set_shader_parameter("bend_exponent", bend_exponent)
+			mat.set_shader_parameter("snap_to_integer_pixel", snap_to_integer_pixel)
 			mat.set_shader_parameter("resample_bilinear", resample_bilinear)
 
 			mat.set_shader_parameter("live_wind_mode", live_wind_mode)

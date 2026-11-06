@@ -25,12 +25,14 @@ shader = ExtResource("1_labshader")
 shader_parameter/top_width_scale = 1.0
 shader_parameter/height_scale = 1.0
 shader_parameter/horizontal_shear = 0.0
+shader_parameter/base_rotation_deg = 0.0
 shader_parameter/bend_exponent = 1.8
-shader_parameter/resample_bilinear = true
+shader_parameter/snap_to_integer_pixel = true
+shader_parameter/resample_bilinear = false
 shader_parameter/is_ghost = true
 shader_parameter/ghost_alpha = 0.35
-shader_parameter/tuft_color = Color(1, 1, 1, 1)
-shader_parameter/tip_brightness = 0.0
+shader_parameter/tuft_color = Color(0.396, 0.596, 0.078, 1)
+shader_parameter/tip_brightness = 0.08
 shader_parameter/live_wind_mode = false
 shader_parameter/sim_wind_strength = 6.0
 shader_parameter/sim_wind_dir_y = 0.3
@@ -38,14 +40,16 @@ shader_parameter/sim_wind_speed = 2.5
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_deformed"]
 shader = ExtResource("1_labshader")
-shader_parameter/top_width_scale = 1.0
-shader_parameter/height_scale = 1.0
+shader_parameter/top_width_scale = 0.3989592359914347
+shader_parameter/height_scale = 1.1153550716504106
 shader_parameter/horizontal_shear = 0.0
+shader_parameter/base_rotation_deg = 0.0
 shader_parameter/bend_exponent = 1.8
+shader_parameter/snap_to_integer_pixel = true
 shader_parameter/resample_bilinear = true
 shader_parameter/is_ghost = false
 shader_parameter/ghost_alpha = 0.35
-shader_parameter/tuft_color = Color(0.396078, 0.596078, 0.078431, 1)
+shader_parameter/tuft_color = Color(0.396, 0.596, 0.078, 1)
 shader_parameter/tip_brightness = 0.08
 shader_parameter/live_wind_mode = false
 shader_parameter/sim_wind_strength = 6.0
@@ -81,6 +85,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("3_labscript")
+wind_tilt_angle_deg = -45.0
+top_width_scale = 0.3989592359914347
+height_scale = 1.1153550716504106
+resample_bilinear = true
 
 [node name="BG" type="Panel" parent="." unique_id=325033617]
 layout_mode = 1
@@ -343,19 +351,19 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.4, 1)
 theme_override_font_sizes/font_size = 13
-text = "📐 物理等距换算: 倾角 θ = +0.0° (30°俯角) | 理论屏幕高: 8.00 px | 顶宽: 4.00 px"
+text = "📐 物理等距换算: 倾角 θ = -45.0° (30°俯角) | 理论屏幕高: 8.92 px | 顶宽: 1.60 px"
 
 [node name="StatTop" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=2004624834]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 13
-text = "顶边宽度: 4.0 px (原宽 4px | 缩放: 100% | +0.0 px)"
+text = "顶边宽度: 1.6 px (原宽 4px | 缩放: 40% | -2.4 px)"
 
 [node name="StatHeight" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=461119631]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
 theme_override_font_sizes/font_size = 13
-text = "草身高度: 8.0 px (原高 8px | 缩放: 100% | 下压: -0.0 px)"
+text = "草身高度: 8.9 px (原高 8px | 缩放: 112% | 下压: --0.9 px)"
 
 [node name="StatHealth" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=1326625657]
 modulate = Color(0.4, 0.95, 0.4, 1)
@@ -416,7 +424,7 @@ text = "换算 perspective_expand:"
 [node name="Val" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowExpand" unique_id=869259449]
 layout_mode = 2
 theme_override_colors/font_color = Color(0.3, 1, 0.5, 1)
-text = "0.00"
+text = "1.14"
 
 [node name="RowSquash" type="HBoxContainer" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox" unique_id=1177660210]
 layout_mode = 2
