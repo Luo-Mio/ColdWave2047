@@ -33,11 +33,25 @@ const MASK_TO_ATLAS: Array[Vector2i] = [
 @export var surface_material: Material = preload("res://resources/materials/grass_surface.tres")
 
 @export_group("草皮噪波色斑与阅览")
-## 噪波阅览模式切换：0:正常渲染(遮罩+噪波上色) 1:纯黑白灰度噪波 2:阈值二值遮罩
-@export_enum("0: 正常游戏渲染 (遮罩+纯噪波上色)", "1: 纯噪波黑白灰度图", "2: 阈值二值遮罩") var debug_mode: int = 0:
+## 噪波阅览模式切换：0:正常渲染 1:纯黑白灰度噪波 2:阈值二值遮罩
+@export_enum("正常游戏渲染", "纯噪波黑白灰度图", "阈值二值遮罩") var debug_mode: int = 0:
 	set(v):
 		debug_mode = v
 		_sync_debug_mode()
+
+@export_group("风力热力图与气象阅览 (Wind Debug & Heatmap)")
+## 气象与阵风阅览模式：一键将主场景所有草皮与杂草切换为实时彩色热力图！
+## 红色/橙红 = 强阵风峰值（推挤小草最大的区域）；深海蓝 = 静风无力区；青/明黄 = 微风过渡
+@export_enum(
+	"正常游戏渲染 (草皮色斑 + 自然风动)",
+	"阵风彩色热力图 (红=强风推挤 / 蓝=静风区)",
+	"阵风黑白位移场 (白=强推位移 / 黑=回弹无风)",
+	"单噪波流向 A 灰度",
+	"单噪波流向 B 灰度 (+PI 偏移)"
+) var wind_debug_mode: int = 0:
+	set(v):
+		wind_debug_mode = v
+		_sync_wind_debug_mode()
 
 const DEFAULT_WEED_TEXTURE: Texture2D = preload("res://resources/surface/textre/grass.png")
 const DEFAULT_WEED_MATERIAL: Material = preload("res://resources/materials/grass_tuft.tres")
@@ -66,6 +80,7 @@ func _ready() -> void:
 	_setup_surface_layer()
 	_setup_foliage_container()
 	_sync_debug_mode()
+	_sync_wind_debug_mode()
 	rebuild_all_weeds()
 
 func _process(_delta: float) -> void:
@@ -80,10 +95,38 @@ func _process(_delta: float) -> void:
 			(weed_material as ShaderMaterial).set_shader_parameter("creature_pos", _player_node.global_position)
 
 func _sync_debug_mode() -> void:
+	if wind_debug_mode == 0:
+		if surface_material is ShaderMaterial:
+			(surface_material as ShaderMaterial).set_shader_parameter("debug_mode", debug_mode)
+		if surface_layer and surface_layer.material is ShaderMaterial:
+			(surface_layer.material as ShaderMaterial).set_shader_parameter("debug_mode", debug_mode)
+
+func _sync_wind_debug_mode() -> void:
+	# 映射到 grass_surface.gdshader 的 debug_mode
+	var surf_debug := 0
+	match wind_debug_mode:
+		1: surf_debug = 6 # 6: 预览混合阵风彩色热力带
+		2: surf_debug = 5 # 5: 预览混合阵风黑白波块
+		3: surf_debug = 3 # 3: 预览第一层风波 (Wave 1)
+		4: surf_debug = 4 # 4: 预览第二层风波 (Wave 2)
+		_: surf_debug = debug_mode
+
 	if surface_material is ShaderMaterial:
-		(surface_material as ShaderMaterial).set_shader_parameter("debug_mode", debug_mode)
+		(surface_material as ShaderMaterial).set_shader_parameter("debug_mode", surf_debug)
 	if surface_layer and surface_layer.material is ShaderMaterial:
-		(surface_layer.material as ShaderMaterial).set_shader_parameter("debug_mode", debug_mode)
+		(surface_layer.material as ShaderMaterial).set_shader_parameter("debug_mode", surf_debug)
+
+	# 映射到 grass_tuft.gdshader 的 debug_wind_mode
+	var tuft_debug := 0
+	match wind_debug_mode:
+		1: tuft_debug = 4 # 4: 合成阵风彩色热力图
+		2: tuft_debug = 3 # 3: 合成阵风黑白位移场
+		3: tuft_debug = 1 # 1: 噪波流向 A
+		4: tuft_debug = 2 # 2: 噪波流向 B
+		_: tuft_debug = 0
+
+	if weed_material is ShaderMaterial:
+		(weed_material as ShaderMaterial).set_shader_parameter("debug_wind_mode", tuft_debug)
 
 ## 配置双网格渲染图层
 func _setup_surface_layer() -> void:

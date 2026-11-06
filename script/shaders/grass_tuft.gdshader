@@ -31,16 +31,20 @@ uniform float perspective_expand : hint_range(0.0, 1.0, 0.05) = 0.35;
 uniform float height_squash : hint_range(0.0, 1.0, 0.05) = 0.25;
 // 主导风向：风在世界坐标系中的流动方向向量
 uniform vec2 wind_base_dir = vec2(1.0, 0.3);
+// 是否开启风向周期性偏摆 (像麦浪一样左右缓缓摇曳)
+uniform bool enable_wind_wander = true;
+// 最大偏转角度 (弧度，0.35 约 20 度)
+uniform float wind_wander_angle : hint_range(0.0, 1.57, 0.02) = 0.35;
+// 偏转摆动频率 (0.3 约 10~15 秒完成一个完整周期)
+uniform float wind_wander_speed : hint_range(0.0, 3.0, 0.05) = 0.30;
 
-group_uniforms Dual_Noise_Wind;
-// 第一层独立风力噪波贴图 (可在 resources/surface/wind/wind_noise_1.tres 中独立自由编辑)
-uniform sampler2D wind_noise_1 : repeat_enable, filter_linear;
-// 第二层独立风力噪波贴图 (可在 resources/surface/wind/wind_noise_2.tres 中独立自由编辑)
-uniform sampler2D wind_noise_2 : repeat_enable, filter_linear;
+group_uniforms Single_Noise_Wind;
+// 单一风力噪波贴图 (可在 resources/surface/wind/wind_noise.tres 中统一自由编辑)
+uniform sampler2D wind_noise : repeat_enable, filter_linear;
 
 // 风力噪波空间尺度 (控制阵风团块大小，数值越小阵风团块越大，推荐 0.001 ~ 0.004)
 uniform float wind_noise_scale : hint_range(0.0005, 0.02, 0.0005) = 0.002;
-// 两个噪波层的分叉夹角 (弧度，约 23 度，产生流体交错互扰感，打破单向平移)
+// 双向偏航开角 (弧度，约 23 度，产生相反偏航交叉流动)
 uniform float noise_diverge_angle : hint_range(0.0, 1.57, 0.02) = 0.40;
 // 阵风平衡阈值 (让平静时居中在 0，阵风波峰重叠时爆发强风)
 uniform float wind_noise_threshold : hint_range(-0.5, 0.5, 0.02) = 0.25;
@@ -83,6 +87,22 @@ vec2 rotate_vec2(vec2 v, float angle) {
 	float c = cos(angle);
 	float s = sin(angle);
 	return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+
+// 解析积分风力漂移向量 (平滑且永不随时间发散)
+vec2 calc_wind_drift(vec2 base_direction, float v_speed, float time_val, float wander_ang, float wander_spd, bool use_wander) {
+	vec2 fwd = normalize(base_direction);
+	float forward_dist = time_val * v_speed * 0.05;
+	float lateral_offset = 0.0;
+	if (use_wander && wander_spd > 0.001 && wander_ang > 0.001) {
+		float tan_a = tan(wander_ang);
+		// 结合主谐波与次级谐波 (2.13x)，打破呆板机械单摆，模拟自然界微风的不规则摆动
+		float wave1 = sin(time_val * wander_spd);
+		float wave2 = sin(time_val * wander_spd * 2.13) * 0.25;
+		lateral_offset = (v_speed * 0.05 * tan_a / wander_spd) * (wave1 + wave2 * 0.5);
+	}
+	vec2 side = vec2(-fwd.y, fwd.x);
+	return fwd * forward_dist + side * lateral_offset;
 }
 
 // 彩色热力图渐变映射 (从无风深海蓝到微风青绿，再到中风明黄与强风炽红)
@@ -139,20 +159,23 @@ void vertex() {
 			effective_time = floor((TIME - time_offset) * target_fps) / target_fps + time_offset;
 		}
 
-		// 双层草皮同源噪波分叉漂移与相乘调制 (像草皮色斑一样的天然气流团块)
+		// 单噪波反向双流交错采样 (流向 B 引入 PI 无理数速度与相位偏移)
 		vec2 iso_root = vec2(root_world.x * 0.8, root_world.y * 1.8);
 		vec2 dir_norm = normalize(wind_base_dir);
 		vec2 dir1 = rotate_vec2(dir_norm, noise_diverge_angle);
 		vec2 dir2 = rotate_vec2(dir_norm, -noise_diverge_angle);
 
-		vec2 drift1 = dir1 * (effective_time * wind_speed * 0.05);
-		vec2 drift2 = dir2 * (effective_time * (wind_speed * 0.89) * 0.05);
+		const float PI_VAL = 3.14159265359;
+		float speed2 = wind_speed * (PI_VAL * 0.25);
+
+		vec2 drift1 = calc_wind_drift(dir1, wind_speed, effective_time, wind_wander_angle, wind_wander_speed, enable_wind_wander);
+		vec2 drift2 = calc_wind_drift(dir2, speed2, effective_time, wind_wander_angle, wind_wander_speed, enable_wind_wander);
 
 		vec2 uv1 = (iso_root + noise_offset) * wind_noise_scale - drift1;
-		vec2 uv2 = (iso_root + noise_offset) * (wind_noise_scale * 0.85) - drift2;
+		vec2 uv2 = ((iso_root + noise_offset) * (wind_noise_scale * 1.18) + vec2(PI_VAL, PI_VAL * 0.5)) - drift2;
 
-		float s1 = textureLod(wind_noise_1, uv1, 0.0).r;
-		float s2 = textureLod(wind_noise_2, uv2, 0.0).r;
+		float s1 = textureLod(wind_noise, uv1, 0.0).r;
+		float s2 = textureLod(wind_noise, uv2, 0.0).r;
 
 		float gust = s1 * s2;
 		gust = clamp(gust + wind_noise_threshold, 0.0, 1.0);
@@ -163,7 +186,16 @@ void vertex() {
 		var_gust = gust;
 
 		if (!debug_freeze_sway || debug_wind_mode == 0) {
-			vec2 cur_wind = normalize(wind_base_dir) * (gust * wind_strength);
+			// 瞬时受力方向 (与解析积分漂移的瞬时导数严格吻合)
+			vec2 inst_dir = dir_norm;
+			if (enable_wind_wander && wind_wander_speed > 0.001 && wind_wander_angle > 0.001) {
+				vec2 side = vec2(-dir_norm.y, dir_norm.x);
+				float tan_a = tan(wind_wander_angle);
+				float vel_side = tan_a * (cos(effective_time * wind_wander_speed) + 0.266 * cos(effective_time * wind_wander_speed * 2.13));
+				inst_dir = normalize(dir_norm + side * vel_side);
+			}
+
+			vec2 cur_wind = inst_dir * (gust * wind_strength);
 
 			// 生物推挤叠加
 			vec2 to_creature = root_world - creature_pos;
@@ -189,6 +221,9 @@ void vertex() {
 
 			// 现象 4：纵向位移
 			VERTEX.y += force.y * 0.4;
+
+			// 像素艺术整数吸附：锁定顶点至整像素，彻底杜绝摄像机平滑移动时的亚像素光栅化高频抖动 (Subpixel Shimmer)
+			VERTEX = round(VERTEX);
 		}
 	}
 }
@@ -201,14 +236,17 @@ void fragment() {
 		vec2 dir1 = rotate_vec2(dir_norm, noise_diverge_angle);
 		vec2 dir2 = rotate_vec2(dir_norm, -noise_diverge_angle);
 
-		vec2 drift1 = dir1 * (TIME * wind_speed * 0.05);
-		vec2 drift2 = dir2 * (TIME * (wind_speed * 0.89) * 0.05);
+		const float PI_VAL = 3.14159265359;
+		float speed2 = wind_speed * (PI_VAL * 0.25);
+
+		vec2 drift1 = calc_wind_drift(dir1, wind_speed, TIME, wind_wander_angle, wind_wander_speed, enable_wind_wander);
+		vec2 drift2 = calc_wind_drift(dir2, speed2, TIME, wind_wander_angle, wind_wander_speed, enable_wind_wander);
 
 		vec2 p_uv1 = UV * 2.0 - drift1;
-		vec2 p_uv2 = (UV * 2.0 * 0.85) - drift2;
+		vec2 p_uv2 = (UV * 2.0 * 1.18 + vec2(PI_VAL, PI_VAL * 0.5)) - drift2;
 
-		float p_s1 = texture(wind_noise_1, p_uv1).r;
-		float p_s2 = texture(wind_noise_2, p_uv2).r;
+		float p_s1 = texture(wind_noise, p_uv1).r;
+		float p_s2 = texture(wind_noise, p_uv2).r;
 
 		float p_gust = clamp(p_s1 * p_s2 + wind_noise_threshold, 0.0, 1.0);
 		p_gust = (p_gust - 0.5) * 2.0;

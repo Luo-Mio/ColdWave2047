@@ -13,15 +13,19 @@ group_uniforms Debug_Preview;
 uniform int debug_mode : hint_enum("0: 正常游戏地表", "1: 地表噪波灰度", "2: 斑块阈值遮罩", "3: 预览第一层风波 (Wave 1)", "4: 预览第二层风波 (Wave 2)", "5: 预览混合阵风黑白波带", "6: 预览混合阵风彩色热力带") = 0;
 
 group_uniforms Wind_Sync;
-// 第一层独立风力噪波贴图 (可在 resources/surface/wind/wind_noise_1.tres 中独立自由编辑)
-uniform sampler2D wind_noise_1 : repeat_enable, filter_linear;
-// 第二层独立风力噪波贴图 (可在 resources/surface/wind/wind_noise_2.tres 中独立自由编辑)
-uniform sampler2D wind_noise_2 : repeat_enable, filter_linear;
+// 单一风力噪波贴图 (可在 resources/surface/wind/wind_noise.tres 中统一自由编辑)
+uniform sampler2D wind_noise : repeat_enable, filter_linear;
 
 // 风场主速度：控制风波在整张地图上行进掠过的快慢节奏 (需与 tuft 材质保持一致)
 uniform float wind_speed : hint_range(0.0, 10.0, 0.1) = 2.0;
 // 风场主导方向向量
 uniform vec2 wind_base_dir = vec2(1.0, 0.3);
+// 是否开启风向周期性偏摆 (像麦浪一样左右缓缓摇曳)
+uniform bool enable_wind_wander = true;
+// 最大偏转角度 (弧度，0.35 约 20 度)
+uniform float wind_wander_angle : hint_range(0.0, 1.57, 0.02) = 0.35;
+// 偏转摆动频率 (0.3 约 10~15 秒完成一个完整周期)
+uniform float wind_wander_speed : hint_range(0.0, 3.0, 0.05) = 0.30;
 // 风力噪波空间尺度 (控制阵风团块大小，数值越小阵风团块越大，类似草皮色斑 scale)
 uniform float wind_noise_scale : hint_range(0.0005, 0.02, 0.0005) = 0.002;
 // 两个噪波层的分叉夹角 (弧度，约 23 度，产生流体交错互扰感，打破单向平移)
@@ -58,6 +62,22 @@ vec2 rotate_vec2(vec2 v, float angle) {
 	float c = cos(angle);
 	float s = sin(angle);
 	return vec2(v.x * c - v.y * s, v.x * s + v.y * c);
+}
+
+// 解析积分风力漂移向量 (平滑且永不随时间发散)
+vec2 calc_wind_drift(vec2 base_direction, float v_speed, float time_val, float wander_ang, float wander_spd, bool use_wander) {
+	vec2 fwd = normalize(base_direction);
+	float forward_dist = time_val * v_speed * 0.05;
+	float lateral_offset = 0.0;
+	if (use_wander && wander_spd > 0.001 && wander_ang > 0.001) {
+		float tan_a = tan(wander_ang);
+		// 结合主谐波与次级谐波 (2.13x)，打破呆板机械单摆，模拟自然界微风的不规则摆动
+		float wave1 = sin(time_val * wander_spd);
+		float wave2 = sin(time_val * wander_spd * 2.13) * 0.25;
+		lateral_offset = (v_speed * 0.05 * tan_a / wander_spd) * (wave1 + wave2 * 0.5);
+	}
+	vec2 side = vec2(-fwd.y, fwd.x);
+	return fwd * forward_dist + side * lateral_offset;
 }
 
 // 彩色热力图渐变映射 (从无风深海蓝到微风青绿，再到中风明黄与强风炽红)
@@ -132,19 +152,22 @@ void fragment() {
 		// 2. 斑块阈值遮罩
 		COLOR = vec4(vec3(bright_factor), tex.a * COLOR.a);
 	} else if (debug_mode >= 3 && debug_mode <= 6) {
-		// 双层草皮同源噪波分叉漂移与相乘调制 (像草皮色斑一样的天然气流团块)
+		// 单噪波反向双流交错采样 (流向 B 引入 PI 无理数速度与相位偏移)
 		vec2 dir_norm = normalize(wind_base_dir);
 		vec2 dir1 = rotate_vec2(dir_norm, noise_diverge_angle);
 		vec2 dir2 = rotate_vec2(dir_norm, -noise_diverge_angle);
 
-		vec2 drift1 = dir1 * (TIME * wind_speed * 0.05);
-		vec2 drift2 = dir2 * (TIME * (wind_speed * 0.89) * 0.05);
+		const float PI_VAL = 3.14159265359;
+		float speed2 = wind_speed * (PI_VAL * 0.25);
+
+		vec2 drift1 = calc_wind_drift(dir1, wind_speed, TIME, wind_wander_angle, wind_wander_speed, enable_wind_wander);
+		vec2 drift2 = calc_wind_drift(dir2, speed2, TIME, wind_wander_angle, wind_wander_speed, enable_wind_wander);
 
 		vec2 uv1 = (iso_world + noise_offset) * wind_noise_scale - drift1;
-		vec2 uv2 = (iso_world + noise_offset) * (wind_noise_scale * 0.85) - drift2;
+		vec2 uv2 = ((iso_world + noise_offset) * (wind_noise_scale * 1.18) + vec2(PI_VAL, PI_VAL * 0.5)) - drift2;
 
-		float s1 = texture(wind_noise_1, uv1).r;
-		float s2 = texture(wind_noise_2, uv2).r;
+		float s1 = texture(wind_noise, uv1).r;
+		float s2 = texture(wind_noise, uv2).r;
 
 		float gust = s1 * s2;
 		gust = clamp(gust + wind_noise_threshold, 0.0, 1.0);

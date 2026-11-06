@@ -71,7 +71,7 @@ ground_layer = NodePath("../GroundLayer")
 script = ExtResource("12_surfmgr")
 surface_layer = NodePath("../SurfaceLayer")
 ground_layer = NodePath("../GroundLayer")
-weed_density = 0.6
+weed_density = 0.7
 
 [node name="BuildManager" type="Node" parent="." unique_id=2009993754 node_paths=PackedStringArray("selector", "entities_container", "ground_layer", "air_wall_manager", "vision_shadow_manager", "surf_manager") groups=["build_manager"]]
 script = ExtResource("5_builder")

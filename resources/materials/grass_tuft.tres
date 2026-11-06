@@ -1,8 +1,7 @@
-[gd_resource type="ShaderMaterial" load_steps=6 format=3 uid="uid://d1tuftmat001"]
+[gd_resource type="ShaderMaterial" format=3 uid="uid://d1tuftmat001"]
 
 [ext_resource type="Shader" uid="uid://djknedopkjr2p" path="res://script/shaders/grass_tuft.gdshader" id="1_tuftshader"]
-[ext_resource type="Texture2D" uid="uid://windnoise1res001" path="res://resources/surface/wind/wind_noise_1.tres" id="2_wn1"]
-[ext_resource type="Texture2D" uid="uid://windnoise2res002" path="res://resources/surface/wind/wind_noise_2.tres" id="3_wn2"]
+[ext_resource type="Texture2D" uid="uid://vk3ecar4bg6k" path="res://resources/surface/wind/wind_noise.tres" id="2_wn_main"]
 
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_bpfac"]
 noise_type = 4
@@ -29,21 +28,23 @@ invert = true
 
 [resource]
 shader = ExtResource("1_tuftshader")
-shader_parameter/debug_wind_mode = 0
+shader_parameter/debug_wind_mode = 4
 shader_parameter/debug_freeze_sway = false
 shader_parameter/animation_fps = 3
 shader_parameter/enable_staggered_offset = true
 shader_parameter/enable_wind = true
-shader_parameter/wind_speed = 2.0
+shader_parameter/wind_speed = 1.0
 shader_parameter/wind_strength = 3.0
 shader_parameter/perspective_expand = 0.35
 shader_parameter/height_squash = 0.25
-shader_parameter/wind_base_dir = Vector2(1, 0.3)
-shader_parameter/wind_noise_1 = ExtResource("2_wn1")
-shader_parameter/wind_noise_2 = ExtResource("3_wn2")
+shader_parameter/wind_base_dir = Vector2(0, -1)
+shader_parameter/enable_wind_wander = true
+shader_parameter/wind_wander_angle = 0.3490658503988659
+shader_parameter/wind_wander_speed = 0.3
+shader_parameter/wind_noise = ExtResource("2_wn_main")
 shader_parameter/wind_noise_scale = 0.002
-shader_parameter/noise_diverge_angle = 0.4
-shader_parameter/wind_noise_threshold = 0.25
+shader_parameter/noise_diverge_angle = 0.4014257279586958
+shader_parameter/wind_noise_threshold = 0.09999999999999998
 shader_parameter/creature_pos = Vector2(-9999, -9999)
 shader_parameter/creature_push_radius = 24.0
 shader_parameter/creature_push_strength = 4.0
