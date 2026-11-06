@@ -72,10 +72,13 @@ const MASK_TEXTURE_PATH: String = "res://resources/surface/GreenGrass/grass_out.
 		random_color_ratio = v
 		_sync_random_color_ratio()
 
+const FoliageInteractionManagerScript = preload("res://script/systems/foliage_interaction_manager.gd")
+
 var foliage_container: Node2D = null
 var weeds_by_dual_cell: Dictionary = {}
 var _player_node: Node2D = null
 var _mask_image: Image = null
+var interaction_manager: Node = null
 
 func _init() -> void:
 	instance = self
@@ -84,21 +87,34 @@ func _ready() -> void:
 	instance = self
 	_setup_surface_layer()
 	_setup_foliage_container()
+	_setup_interaction_manager()
 	_sync_debug_mode()
 	_sync_wind_debug_mode()
 	_sync_random_color_ratio()
 	rebuild_all_weeds()
 
+func _setup_interaction_manager() -> void:
+	if Engine.is_editor_hint():
+		return
+	interaction_manager = find_child("FoliageInteractionManager", true, false)
+	if interaction_manager == null:
+		interaction_manager = FoliageInteractionManagerScript.new()
+		interaction_manager.name = "FoliageInteractionManager"
+		interaction_manager.set("weed_material", weed_material)
+		interaction_manager.set("surface_material", surface_material)
+		add_child(interaction_manager)
+
 func _process(_delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
-	if weed_material is ShaderMaterial:
-		if _player_node == null or not is_instance_valid(_player_node):
-			var root := get_parent()
-			if root:
-				_player_node = root.find_child("main_chara", true, false) as Node2D
-		if _player_node and is_instance_valid(_player_node):
-			(weed_material as ShaderMaterial).set_shader_parameter("creature_pos", _player_node.global_position)
+	if interaction_manager == null or not interaction_manager.enabled:
+		if weed_material is ShaderMaterial:
+			if _player_node == null or not is_instance_valid(_player_node):
+				var root := get_parent()
+				if root:
+					_player_node = root.find_child("main_chara", true, false) as Node2D
+			if _player_node and is_instance_valid(_player_node):
+				(weed_material as ShaderMaterial).set_shader_parameter("creature_pos", _player_node.global_position)
 
 func _sync_debug_mode() -> void:
 	if wind_debug_mode == 0:

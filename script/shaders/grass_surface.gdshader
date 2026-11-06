@@ -12,6 +12,14 @@ group_uniforms Debug_Preview;
 // 6: 预览混合阵风彩色热力带 (蓝=静风区, 绿/黄=微风, 橙红=强阵风带，全图宏观俯瞰风带宽度与流速)
 uniform int debug_mode : hint_enum("0: 正常游戏地表", "1: 地表噪波灰度", "2: 斑块阈值遮罩", "3: 预览第一层风波 (Wave 1)", "4: 预览第二层风波 (Wave 2)", "5: 预览混合阵风黑白波带", "6: 预览混合阵风彩色热力带") = 0;
 
+group_uniforms Dynamic_Interaction_Map;
+// 是否启用多生物动态交互图 (方案 B)
+uniform bool enable_interaction_map = true;
+// 动态交互图纹理 (由 FoliageInteractionManager 提供)
+uniform sampler2D interaction_tex : filter_linear, repeat_disable;
+// 动态交互图在世界空间的范围矩形 (xy = 左上角, zw = 宽高)
+uniform vec4 interaction_bounds = vec4(0.0, 0.0, 1.0, 1.0);
+
 group_uniforms Wind_Sync;
 // 单一风力噪波贴图 (可在 resources/surface/wind/wind_noise.tres 中统一自由编辑)
 uniform sampler2D wind_noise : repeat_enable, filter_linear;
@@ -142,6 +150,18 @@ void fragment() {
 		// 单阈值二段式
 		bright_factor = (softness <= 0.001) ? step(threshold_bright, n) : smoothstep(threshold_bright - softness, threshold_bright + softness, n);
 		grass_color = mix(color_mid.rgb, color_light.rgb, bright_factor);
+	}
+
+	// 动态交互图采样 (被生物踩踏处草皮轻微加深，留下 2:1 椭圆脚印与小径雏形)
+	if (enable_interaction_map) {
+		vec2 inter_uv = (base_pos - interaction_bounds.xy) / interaction_bounds.zw;
+		if (inter_uv.x >= 0.0 && inter_uv.x <= 1.0 && inter_uv.y >= 0.0 && inter_uv.y <= 1.0) {
+			vec4 inter_data = texture(interaction_tex, inter_uv);
+			float trample_fact = inter_data.b;
+			if (trample_fact > 0.01) {
+				grass_color = mix(grass_color, color_dark.rgb, trample_fact * 0.35);
+			}
+		}
 	}
 
 	// 调试模式分支输出

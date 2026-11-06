@@ -51,8 +51,16 @@ uniform float noise_diverge_angle : hint_range(0.0, 1.57, 0.02) = 0.40;
 // 阵风平衡阈值 (让平静时居中在 0，阵风波峰重叠时爆发强风)
 uniform float wind_noise_threshold : hint_range(-0.5, 0.5, 0.02) = 0.25;
 
+group_uniforms Dynamic_Interaction_Map;
+// 是否启用多生物动态交互图 (方案 B)
+uniform bool enable_interaction_map = true;
+// 动态交互图纹理 (由 FoliageInteractionManager 提供)
+uniform sampler2D interaction_tex : filter_linear, repeat_disable;
+// 动态交互图在世界空间的范围矩形 (xy = 左上角, zw = 宽高)
+uniform vec4 interaction_bounds = vec4(0.0, 0.0, 1.0, 1.0);
+
 group_uniforms Creature_Interaction;
-// 触碰交互的生物/玩家世界坐标
+// 触碰交互的生物/玩家世界坐标 (当未开启交互图时的后备单点参数)
 uniform vec2 creature_pos = vec2(-9999.0, -9999.0);
 // 生物推挤影响半径 (像素)
 uniform float creature_push_radius : hint_range(0.0, 100.0, 1.0) = 24.0;
@@ -230,12 +238,25 @@ void vertex() {
 			vec2 cur_wind = inst_dir * (gust * wind_strength);
 
 			// 生物推挤叠加 (使用 static_root 保证推挤受力稳定无颤动)
-			vec2 to_creature = static_root - creature_pos;
-			float dist = length(to_creature);
-			if (dist < creature_push_radius && dist > 0.001) {
-				float push_fact = (1.0 - dist / creature_push_radius);
-				vec2 push_dir = normalize(to_creature);
-				cur_wind += push_dir * (push_fact * creature_push_strength);
+			if (enable_interaction_map) {
+				vec2 inter_uv = (static_root - interaction_bounds.xy) / interaction_bounds.zw;
+				if (inter_uv.x >= 0.0 && inter_uv.x <= 1.0 && inter_uv.y >= 0.0 && inter_uv.y <= 1.0) {
+					vec4 inter_data = textureLod(interaction_tex, inter_uv, 0.0);
+					if (inter_data.b > 0.01) {
+						vec2 push_dir = (inter_data.rg - vec2(0.5)) * 2.0;
+						float push_fact = inter_data.b;
+						cur_wind += push_dir * (push_fact * creature_push_strength);
+					}
+				}
+			} else {
+				// 后备单点推挤 (2:1 等距椭圆透视校正)
+				vec2 to_creature = static_root - creature_pos;
+				float iso_dist = length(vec2(to_creature.x, to_creature.y * 2.0));
+				if (iso_dist < creature_push_radius && iso_dist > 0.001) {
+					float push_fact = smoothstep(creature_push_radius, 0.0, iso_dist);
+					vec2 push_dir = normalize(vec2(to_creature.x, to_creature.y * 2.0));
+					cur_wind += push_dir * (push_fact * creature_push_strength);
+				}
 			}
 
 			// 计算实例级形变参数 (与实验工具 weed_distortion_lab 100% 对齐)
