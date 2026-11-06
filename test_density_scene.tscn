@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://dws1d2rvhr7sm"]
+
+[ext_resource type="PackedScene" uid="uid://2aq44fbulxju" path="res://scene/main.tscn" id="1_main"]
+[ext_resource type="Script" path="res://test_density_scale.gd" id="2_density"]
+
+[node name="TestDensityScene" type="Node2D"]
+script = ExtResource("2_density")
+
+[node name="main" parent="." instance=ExtResource("1_main")]
+

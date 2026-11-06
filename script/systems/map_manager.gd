@@ -235,6 +235,8 @@ func load_map(path: String = "") -> bool:
 				continue
 			if child == _preview_container:
 				continue
+			if child.is_in_group("foliage") or child.name == "FoliageContainer":
+				continue
 			child.queue_free()
 
 		# 实例化所有已记录物体

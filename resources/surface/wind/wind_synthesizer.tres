@@ -1,0 +1,17 @@
+[gd_resource type="ShaderMaterial" load_steps=4 format=3 uid="uid://windsynmat001"]
+
+[ext_resource type="Shader" path="res://script/shaders/wind_synthesizer.gdshader" id="1_synshader"]
+[ext_resource type="Texture2D" uid="uid://windnoise1res001" path="res://resources/surface/wind/wind_noise_1.tres" id="2_wn1"]
+[ext_resource type="Texture2D" uid="uid://windnoise2res002" path="res://resources/surface/wind/wind_noise_2.tres" id="3_wn2"]
+
+[resource]
+shader = ExtResource("1_synshader")
+shader_parameter/display_mode = 1
+shader_parameter/noise_1 = ExtResource("2_wn1")
+shader_parameter/noise_2 = ExtResource("3_wn2")
+shader_parameter/wind_speed = 2.0
+shader_parameter/wind_base_dir = Vector2(1, 0.3)
+shader_parameter/noise_diverge_angle = 0.4
+shader_parameter/wind_noise_scale = 1.0
+shader_parameter/wind_noise_threshold = 0.25
+

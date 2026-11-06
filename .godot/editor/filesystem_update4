@@ -1,0 +1,6 @@
+res://scene/main.tscn
+res://resources/surface/GreenGrass/grass_tileset.tres
+res://script/shaders/grass_surface.gdshader
+res://resources/materials/grass_surface.tres
+res://script/shaders/grass_tuft.gdshader
+res://resources/materials/grass_tuft.tres

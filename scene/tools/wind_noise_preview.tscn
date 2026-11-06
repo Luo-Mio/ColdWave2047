@@ -1,0 +1,174 @@
+[gd_scene load_steps=9 format=3 uid="uid://windpreviewtool001"]
+
+[ext_resource type="Shader" path="res://script/shaders/wind_synthesizer.gdshader" id="1_synshader"]
+[ext_resource type="Texture2D" uid="uid://windnoise1res001" path="res://resources/surface/wind/wind_noise_1.tres" id="2_wn1"]
+[ext_resource type="Texture2D" uid="uid://windnoise2res002" path="res://resources/surface/wind/wind_noise_2.tres" id="3_wn2"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_card1"]
+shader = ExtResource("1_synshader")
+shader_parameter/display_mode = 2
+shader_parameter/noise_1 = ExtResource("2_wn1")
+shader_parameter/noise_2 = ExtResource("3_wn2")
+shader_parameter/wind_speed = 2.0
+shader_parameter/wind_base_dir = Vector2(1, 0.3)
+shader_parameter/noise_diverge_angle = 0.4
+shader_parameter/wind_noise_scale = 1.0
+shader_parameter/wind_noise_threshold = 0.25
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_card2"]
+shader = ExtResource("1_synshader")
+shader_parameter/display_mode = 3
+shader_parameter/noise_1 = ExtResource("2_wn1")
+shader_parameter/noise_2 = ExtResource("3_wn2")
+shader_parameter/wind_speed = 2.0
+shader_parameter/wind_base_dir = Vector2(1, 0.3)
+shader_parameter/noise_diverge_angle = 0.4
+shader_parameter/wind_noise_scale = 1.0
+shader_parameter/wind_noise_threshold = 0.25
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_card3"]
+shader = ExtResource("1_synshader")
+shader_parameter/display_mode = 1
+shader_parameter/noise_1 = ExtResource("2_wn1")
+shader_parameter/noise_2 = ExtResource("3_wn2")
+shader_parameter/wind_speed = 2.0
+shader_parameter/wind_base_dir = Vector2(1, 0.3)
+shader_parameter/noise_diverge_angle = 0.4
+shader_parameter/wind_noise_scale = 1.0
+shader_parameter/wind_noise_threshold = 0.25
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_card4"]
+shader = ExtResource("1_synshader")
+shader_parameter/display_mode = 0
+shader_parameter/noise_1 = ExtResource("2_wn1")
+shader_parameter/noise_2 = ExtResource("3_wn2")
+shader_parameter/wind_speed = 2.0
+shader_parameter/wind_base_dir = Vector2(1, 0.3)
+shader_parameter/noise_diverge_angle = 0.4
+shader_parameter/wind_noise_scale = 1.0
+shader_parameter/wind_noise_threshold = 0.25
+
+[node name="WindNoiseVisualizer" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.08, 0.12, 0.18, 1)
+
+[node name="Title" type="Label" parent="."]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 30.0
+offset_right = 800.0
+offset_bottom = 80.0
+theme_override_font_sizes/font_size = 24
+text = "双风噪波合成监视台 (Dual-Noise Wind Synthesizer Studio)"
+
+[node name="Subtitle" type="Label" parent="."]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 70.0
+offset_right = 900.0
+offset_bottom = 100.0
+theme_override_colors/font_color = Color(0.65, 0.75, 0.85, 1)
+theme_override_font_sizes/font_size = 14
+text = "左边两张为独立风力噪波源 (可单独在资源面板编辑 FastNoiseLite)；右边两张为实时合成阵风场"
+
+[node name="CardsContainer" type="HBoxContainer" parent="."]
+layout_mode = 0
+offset_left = 40.0
+offset_top = 120.0
+offset_right = 1240.0
+offset_bottom = 440.0
+theme_override_constants/separation = 24
+
+[node name="Card1" type="VBoxContainer" parent="CardsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="CardsContainer/Card1"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "1. 独立噪波源 A (主风向)"
+
+[node name="Sub" type="Label" parent="CardsContainer/Card1"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 12
+text = "res://.../wind_noise_1.tres"
+
+[node name="ViewportRect" type="ColorRect" parent="CardsContainer/Card1"]
+material = SubResource("ShaderMaterial_card1")
+custom_minimum_size = Vector2(260, 260)
+layout_mode = 2
+
+[node name="Card2" type="VBoxContainer" parent="CardsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="CardsContainer/Card2"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "2. 独立噪波源 B (交叉干扰)"
+
+[node name="Sub" type="Label" parent="CardsContainer/Card2"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 12
+text = "res://.../wind_noise_2.tres"
+
+[node name="ViewportRect" type="ColorRect" parent="CardsContainer/Card2"]
+material = SubResource("ShaderMaterial_card2")
+custom_minimum_size = Vector2(260, 260)
+layout_mode = 2
+
+[node name="Card3" type="VBoxContainer" parent="CardsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="CardsContainer/Card3"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "3. 合成阵风 (彩色热力图)"
+
+[node name="Sub" type="Label" parent="CardsContainer/Card3"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 12
+text = "A * B 双流交错相乘气团"
+
+[node name="ViewportRect" type="ColorRect" parent="CardsContainer/Card3"]
+material = SubResource("ShaderMaterial_card3")
+custom_minimum_size = Vector2(260, 260)
+layout_mode = 2
+
+[node name="Card4" type="VBoxContainer" parent="CardsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Label" type="Label" parent="CardsContainer/Card4"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "4. 合成阵风 (黑白位移场)"
+
+[node name="Sub" type="Label" parent="CardsContainer/Card4"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.5, 0.65, 0.75, 1)
+theme_override_font_sizes/font_size = 12
+text = "输入给杂草的真实位移权重"
+
+[node name="ViewportRect" type="ColorRect" parent="CardsContainer/Card4"]
+material = SubResource("ShaderMaterial_card4")
+custom_minimum_size = Vector2(260, 260)
+layout_mode = 2
+

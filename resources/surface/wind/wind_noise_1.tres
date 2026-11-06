@@ -1,0 +1,19 @@
+[gd_resource type="NoiseTexture2D" load_steps=2 format=3 uid="uid://windnoise1res001"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_wn1"]
+seed = 1001
+frequency = 0.015
+fractal_type = 2
+fractal_octaves = 3
+fractal_lacunarity = 2.0
+fractal_gain = 0.5
+domain_warp_enabled = true
+domain_warp_amplitude = 12.0
+domain_warp_frequency = 0.02
+
+[resource]
+width = 512
+height = 512
+seamless = true
+noise = SubResource("FastNoiseLite_wn1")
+
