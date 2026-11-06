@@ -28,7 +28,7 @@ invert = true
 
 [resource]
 shader = ExtResource("1_5lhap")
-shader_parameter/debug_mode = 6
+shader_parameter/debug_mode = 0
 shader_parameter/wind_noise = ExtResource("2_wn_main")
 shader_parameter/wind_speed = 1.0
 shader_parameter/wind_base_dir = Vector2(0, -1)

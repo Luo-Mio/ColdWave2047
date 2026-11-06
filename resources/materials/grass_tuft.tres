@@ -28,9 +28,9 @@ invert = true
 
 [resource]
 shader = ExtResource("1_tuftshader")
-shader_parameter/debug_wind_mode = 4
+shader_parameter/debug_wind_mode = 0
 shader_parameter/debug_freeze_sway = false
-shader_parameter/animation_fps = 3
+shader_parameter/animation_fps = 5
 shader_parameter/enable_staggered_offset = true
 shader_parameter/enable_wind = true
 shader_parameter/wind_speed = 1.0
@@ -57,3 +57,4 @@ shader_parameter/color_light = Color(0.396078, 0.596078, 0.078431, 1)
 shader_parameter/color_mid = Color(0.321569, 0.552941, 0.07451, 1)
 shader_parameter/color_dark = Color(0.262745, 0.52549, 0, 1)
 shader_parameter/tip_brightness = 0.08
+shader_parameter/random_color_ratio = 0.05

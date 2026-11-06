@@ -66,6 +66,11 @@ const MASK_TEXTURE_PATH: String = "res://resources/surface/GreenGrass/grass_out.
 	set(v):
 		weed_density = v
 		rebuild_all_weeds()
+## 随机颜色杂草比例 (0.0 为完全遵从地表颜色，0.2 为 20% 杂草从噪波三阶池随机抽选)
+@export_range(0.0, 1.0, 0.05) var random_color_ratio: float = 0.2:
+	set(v):
+		random_color_ratio = v
+		_sync_random_color_ratio()
 
 var foliage_container: Node2D = null
 var weeds_by_dual_cell: Dictionary = {}
@@ -81,6 +86,7 @@ func _ready() -> void:
 	_setup_foliage_container()
 	_sync_debug_mode()
 	_sync_wind_debug_mode()
+	_sync_random_color_ratio()
 	rebuild_all_weeds()
 
 func _process(_delta: float) -> void:
@@ -127,6 +133,10 @@ func _sync_wind_debug_mode() -> void:
 
 	if weed_material is ShaderMaterial:
 		(weed_material as ShaderMaterial).set_shader_parameter("debug_wind_mode", tuft_debug)
+
+func _sync_random_color_ratio() -> void:
+	if weed_material is ShaderMaterial:
+		(weed_material as ShaderMaterial).set_shader_parameter("random_color_ratio", random_color_ratio)
 
 ## 配置双网格渲染图层
 func _setup_surface_layer() -> void:

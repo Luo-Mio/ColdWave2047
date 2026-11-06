@@ -76,6 +76,8 @@ uniform vec4 color_mid : source_color = vec4(0.322, 0.553, 0.075, 1.0);
 uniform vec4 color_dark : source_color = vec4(0.263, 0.525, 0.000, 1.0);
 // 草尖高光微调 (默认 0.0 严格等于地表原色，微量增加凸显立体感)
 uniform float tip_brightness : hint_range(0.0, 0.3, 0.01) = 0.0;
+// 随机杂色比例：让部分杂草从噪波三阶颜色池 (浅绿/中绿/深绿) 中随机挑选，增强点缀层次感 (0.2 代表 20%)
+uniform float random_color_ratio : hint_range(0.0, 1.0, 0.01) = 0.20;
 
 varying vec3 tuft_color;
 varying float var_wave1;
@@ -136,12 +138,30 @@ void vertex() {
 	// 顶点着色器中使用 textureLod 确保跨 GPU 驱动通用稳定性
 	float n = textureLod(noise_tex, sample_uv, 0.0).r;
 
-	// 确定小草颜色 (完全对应地表噪波三阶色块)
+	// 确定小草基础颜色 (完全对应地表噪波三阶色块)
 	vec3 c = color_mid.rgb;
 	if (n >= threshold_bright) {
 		c = color_light.rgb;
 	} else if (n <= threshold_dark) {
 		c = color_dark.rgb;
+	}
+
+	// 局部杂草随机色：允许指定比例的杂草从噪波颜色池 (浅绿/中绿/深绿) 中随机挑选
+	if (random_color_ratio > 0.001) {
+		vec2 rnd = fract(sin(vec2(
+			dot(static_root, vec2(127.1, 311.7)),
+			dot(static_root, vec2(269.5, 183.3))
+		)) * 43758.5453);
+
+		if (rnd.x < random_color_ratio) {
+			if (rnd.y < 0.3333) {
+				c = color_light.rgb;
+			} else if (rnd.y < 0.6667) {
+				c = color_mid.rgb;
+			} else {
+				c = color_dark.rgb;
+			}
+		}
 	}
 	tuft_color = c;
 
