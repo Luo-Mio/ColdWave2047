@@ -58,6 +58,8 @@ uniform bool enable_interaction_map = true;
 uniform sampler2D interaction_tex : filter_linear, repeat_disable;
 // 动态交互图在世界空间的范围矩形 (xy = 左上角, zw = 宽高)
 uniform vec4 interaction_bounds = vec4(0.0, 0.0, 1.0, 1.0);
+// 踩踏受压变暗幅度 (0.0=不变暗, 0.40=变暗 40%，受压倒伏时变暗，随弹性恢复变亮复原)
+uniform float trample_darken_amount : hint_range(0.0, 1.0, 0.05) = 0.40;
 
 group_uniforms Creature_Interaction;
 // 触碰交互的生物/玩家世界坐标 (当未开启交互图时的后备单点参数)
@@ -98,6 +100,7 @@ varying float var_rot_deg;
 varying float var_shear;
 varying float var_h_scale;
 varying float var_w_scale;
+varying float var_trample;
 
 // 向量旋转辅助函数 (用于双层噪波分叉流向)
 vec2 rotate_vec2(vec2 v, float angle) {
@@ -184,6 +187,7 @@ void vertex() {
 	float shear = 0.0;
 	float h_scale = 1.0;
 	float w_scale = 1.0;
+	float trample_push = 0.0;
 
 	if (enable_wind) {
 		// 时间离散化 (支持 5 / 10 / 12 / 15 / 30 FPS 抽帧，并按每颗草的世界坐标错开跳帧时机)
@@ -246,6 +250,7 @@ void vertex() {
 						vec2 push_dir = (inter_data.rg - vec2(0.5)) * 2.0;
 						float push_fact = inter_data.b;
 						cur_wind += push_dir * (push_fact * creature_push_strength);
+						trample_push = push_fact;
 					}
 				}
 			} else {
@@ -256,6 +261,7 @@ void vertex() {
 					float push_fact = smoothstep(creature_push_radius, 0.0, iso_dist);
 					vec2 push_dir = normalize(vec2(to_creature.x, to_creature.y * 2.0));
 					cur_wind += push_dir * (push_fact * creature_push_strength);
+					trample_push = push_fact;
 				}
 			}
 
@@ -273,6 +279,7 @@ void vertex() {
 	var_shear = shear;
 	var_h_scale = h_scale;
 	var_w_scale = w_scale;
+	var_trample = trample_push;
 
 	// 统一均匀外扩四边形边界，为片元级完整像素反向重采样提供充裕空间，杜绝三角形斜切残像素
 	VERTEX.x *= 6.0;
@@ -368,6 +375,12 @@ void fragment() {
 		} else {
 			if (tip_brightness > 0.0) {
 				final_color += vec3(tip_brightness * (1.0 - v));
+			}
+
+			// 踩踏受压变暗：草被压倒时受光面积减小/受阴影遮蔽而变暗，随弹性延迟恢复平滑变亮复原！
+			if (trample_darken_amount > 0.001 && var_trample > 0.001) {
+				float darken = clamp(var_trample * trample_darken_amount, 0.0, 0.85);
+				final_color *= (1.0 - darken);
 			}
 		}
 

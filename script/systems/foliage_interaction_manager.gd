@@ -9,8 +9,11 @@ extends Node2D
 		enabled = v
 		_sync_enabled()
 
-## 踩踏衰减回弹时间 (秒)。角色或动物走过时留在草地上的脚印痕迹与草挺直回弹所需的时间
-@export_range(0.2, 5.0, 0.1) var trample_decay_time: float = 0.8
+## 踩踏压倒滞留时间 (秒)。草被踩扁后保持完全倒伏、不动的延迟时间 (例如 0.35 秒)
+@export_range(0.0, 2.0, 0.05) var trample_hold_time: float = 0.35
+
+## 挺直回弹恢复时间 (秒)。滞留结束后，草从倒伏缓慢挺直、逐渐变亮复原所需的时间 (例如 1.2 秒)
+@export_range(0.2, 5.0, 0.1) var trample_recover_time: float = 1.2
 
 ## 脚印盖章步长间隔 (像素)。角色走动多少像素盖下一个新的衰减足迹
 @export_range(2.0, 20.0, 1.0) var step_stamp_interval: float = 6.0
@@ -189,8 +192,9 @@ func _process(delta: float) -> void:
 			st.pos = last_p
 			st.size = c.get("foliage_push_size") if ("foliage_push_size" in c and c.foliage_push_size != Vector2.ZERO) else default_stamp_size
 			st.strength = c.get("foliage_push_strength") if ("foliage_push_strength" in c) else default_strength
-			st.life = trample_decay_time
-			st.max_life = trample_decay_time
+			var total_time := trample_hold_time + trample_recover_time
+			st.life = total_time
+			st.max_life = total_time
 			st.current_strength = st.strength
 			_stamps.append(st)
 			state["last_pos"] = cur_pos
@@ -203,9 +207,13 @@ func _process(delta: float) -> void:
 		if st.life <= 0.0:
 			_stamps.remove_at(idx)
 		else:
-			# 弹性回弹曲线：衰减末期快速挺直复原
-			var t := clampf(st.life / st.max_life, 0.0, 1.0)
-			st.current_strength = st.strength * (t * t * (3.0 - 2.0 * t))
+			if st.life >= trample_recover_time:
+				# 阶段一：滞留延迟阶段 (Hold Phase) —— 100% 保持完全倒伏与变暗
+				st.current_strength = st.strength
+			else:
+				# 阶段二：挺直回弹阶段 (Recover Phase) —— 从 1.0 缓慢滑落至 0.0，同时逐渐变亮复原
+				var t := clampf(st.life / trample_recover_time, 0.0, 1.0)
+				st.current_strength = st.strength * (t * t * (3.0 - 2.0 * t))
 		idx -= 1
 
 	# 清理已销毁生物的旧状态

@@ -71,7 +71,6 @@ ground_layer = NodePath("../GroundLayer")
 script = ExtResource("12_surfmgr")
 surface_layer = NodePath("../SurfaceLayer")
 ground_layer = NodePath("../GroundLayer")
-wind_debug_mode = 1
 weed_density = 0.7
 random_color_ratio = 0.05
 
