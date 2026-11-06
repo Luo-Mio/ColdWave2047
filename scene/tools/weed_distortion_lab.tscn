@@ -1,0 +1,450 @@
+[gd_scene format=3 uid="uid://b8q7kdlab001"]
+
+[ext_resource type="Shader" uid="uid://bq7wfakl40wo3" path="res://script/shaders/weed_distortion_lab.gdshader" id="1_labshader"]
+[ext_resource type="Texture2D" uid="uid://8f05hb8qblq0" path="res://resources/surface/textre/grass.png" id="2_grasstex"]
+[ext_resource type="Script" uid="uid://dt8ae0pe8p52r" path="res://script/tools/weed_distortion_lab.gd" id="3_labscript"]
+[ext_resource type="Script" uid="uid://bmd7pned2uh1i" path="res://script/tools/pixel_grid_overlay.gd" id="4_gridscript"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
+bg_color = Color(0.0823529, 0.101961, 0.137255, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card"]
+bg_color = Color(0.121569, 0.14902, 0.196078, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.207843, 0.25098, 0.321569, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ghost"]
+shader = ExtResource("1_labshader")
+shader_parameter/top_width_scale = 1.0
+shader_parameter/height_scale = 1.0
+shader_parameter/horizontal_shear = 0.0
+shader_parameter/bend_exponent = 1.8
+shader_parameter/resample_bilinear = true
+shader_parameter/is_ghost = true
+shader_parameter/ghost_alpha = 0.35
+shader_parameter/tuft_color = Color(1, 1, 1, 1)
+shader_parameter/tip_brightness = 0.0
+shader_parameter/live_wind_mode = false
+shader_parameter/sim_wind_strength = 6.0
+shader_parameter/sim_wind_dir_y = 0.3
+shader_parameter/sim_wind_speed = 2.5
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_deformed"]
+shader = ExtResource("1_labshader")
+shader_parameter/top_width_scale = 1.0
+shader_parameter/height_scale = 1.0
+shader_parameter/horizontal_shear = 0.0
+shader_parameter/bend_exponent = 1.8
+shader_parameter/resample_bilinear = true
+shader_parameter/is_ghost = false
+shader_parameter/ghost_alpha = 0.35
+shader_parameter/tuft_color = Color(0.396078, 0.596078, 0.078431, 1)
+shader_parameter/tip_brightness = 0.08
+shader_parameter/live_wind_mode = false
+shader_parameter/sim_wind_strength = 6.0
+shader_parameter/sim_wind_dir_y = 0.3
+shader_parameter/sim_wind_speed = 2.5
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_guide"]
+bg_color = Color(0.101961, 0.180392, 0.25098, 0.4)
+border_width_left = 2
+border_color = Color(0.2, 0.7, 1, 0.8)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_card_inner"]
+bg_color = Color(0.0666667, 0.0823529, 0.109804, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.180392, 0.219608, 0.282353, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="WeedDistortionLab" type="Control" unique_id=1532973278]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("3_labscript")
+
+[node name="BG" type="Panel" parent="." unique_id=325033617]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_bg")
+
+[node name="MainLayout" type="VBoxContainer" parent="." unique_id=1239554995]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="MarginContainer" parent="MainLayout" unique_id=298900669]
+layout_mode = 2
+theme_override_constants/margin_left = 28
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 28
+
+[node name="VBox" type="VBoxContainer" parent="MainLayout/Header" unique_id=26867141]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="MainLayout/Header/VBox" unique_id=231888997]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.95, 0.96, 0.98, 1)
+theme_override_font_sizes/font_size = 22
+text = "🌿 杂草伪透视与狂风形变实验室 (Weed Distortion Lab Studio)"
+
+[node name="Subtitle" type="Label" parent="MainLayout/Header/VBox" unique_id=1052025616]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.65, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+text = "选中本节点后在右侧【检查器】(Inspector) 面板中滑动滑块，实时观察顶边收扩、高度下压与四边形健康度"
+
+[node name="HBox" type="HBoxContainer" parent="." unique_id=1153449863]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 0.08
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 28.0
+offset_top = 10.0
+offset_right = -28.0
+offset_bottom = -20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="LeftPanel" type="VBoxContainer" parent="HBox" unique_id=712051039]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 1.3
+theme_override_constants/separation = 16
+
+[node name="VBoxPreview" type="VBoxContainer" parent="HBox/LeftPanel" unique_id=916247372]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="CardCloseup" type="PanelContainer" parent="HBox/LeftPanel/VBoxPreview" unique_id=1048335507]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Margin" type="MarginContainer" parent="HBox/LeftPanel/VBoxPreview/CardCloseup" unique_id=792022112]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+
+[node name="VBox" type="VBoxContainer" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin" unique_id=146223701]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CardTitle" type="Label" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox" unique_id=832138893]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "1. 单株 24x 像素级放大特写视窗 (24x Magnification Close-up)"
+
+[node name="StageArea" type="Control" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox" unique_id=1047974776]
+custom_minimum_size = Vector2(400, 380)
+clip_contents = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="StageBg" type="ColorRect" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox/StageArea" unique_id=1875237114]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.0666667, 0.0823529, 0.109804, 1)
+
+[node name="Stage" type="Node2D" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox/StageArea" unique_id=166992087]
+position = Vector2(504, 477.75)
+scale = Vector2(24, 24)
+
+[node name="PixelGrid" type="Node2D" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox/StageArea/Stage" unique_id=1331246887]
+script = ExtResource("4_gridscript")
+
+[node name="GhostSprite" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox/StageArea/Stage" unique_id=6825472]
+texture_filter = 1
+material = SubResource("ShaderMaterial_ghost")
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="DeformedSprite" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardCloseup/Margin/VBox/StageArea/Stage" unique_id=592420118]
+texture_filter = 1
+material = SubResource("ShaderMaterial_deformed")
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="CardField" type="PanelContainer" parent="HBox/LeftPanel/VBoxPreview" unique_id=1814034360]
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Margin" type="MarginContainer" parent="HBox/LeftPanel/VBoxPreview/CardField" unique_id=65025270]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin" unique_id=478749875]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CardTitle" type="Label" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox" unique_id=1618155841]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 14
+text = "2. 游戏原生 3x 缩放群落预览 (In-Game 3x Scale)"
+
+[node name="FieldContainer" type="Control" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox" unique_id=2086959629]
+custom_minimum_size = Vector2(0, 90)
+layout_mode = 2
+
+[node name="GroundBg" type="ColorRect" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=1765085327]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.24, 0.45, 0.08, 0.35)
+
+[node name="Tuft1" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=1321327604]
+material = SubResource("ShaderMaterial_deformed")
+position = Vector2(80, 60)
+scale = Vector2(3, 3)
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="Tuft2" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=1902570875]
+material = SubResource("ShaderMaterial_deformed")
+position = Vector2(160, 52)
+scale = Vector2(3, 3)
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="Tuft3" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=1836188581]
+material = SubResource("ShaderMaterial_deformed")
+position = Vector2(240, 68)
+scale = Vector2(3, 3)
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="Tuft4" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=945496825]
+material = SubResource("ShaderMaterial_deformed")
+position = Vector2(320, 56)
+scale = Vector2(3, 3)
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="Tuft5" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=1025090633]
+material = SubResource("ShaderMaterial_deformed")
+position = Vector2(400, 64)
+scale = Vector2(3, 3)
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="Tuft6" type="Sprite2D" parent="HBox/LeftPanel/VBoxPreview/CardField/Margin/VBox/FieldContainer" unique_id=1293816864]
+material = SubResource("ShaderMaterial_deformed")
+position = Vector2(480, 50)
+scale = Vector2(3, 3)
+texture = ExtResource("2_grasstex")
+offset = Vector2(0, -4)
+
+[node name="RightPanel" type="PanelContainer" parent="HBox" unique_id=92841678]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_styles/panel = SubResource("StyleBoxFlat_card")
+
+[node name="Margin" type="MarginContainer" parent="HBox/RightPanel" unique_id=1344407197]
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+
+[node name="VBox" type="VBoxContainer" parent="HBox/RightPanel/Margin" unique_id=1500863444]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="PanelGuide" type="PanelContainer" parent="HBox/RightPanel/Margin/VBox" unique_id=303868536]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_guide")
+
+[node name="Margin" type="MarginContainer" parent="HBox/RightPanel/Margin/VBox/PanelGuide" unique_id=581401249]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="LblGuide" type="Label" parent="HBox/RightPanel/Margin/VBox/PanelGuide/Margin" unique_id=764828724]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.75, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 13
+text = "👉 滑块已全部放置在【检查器】(Inspector) 面板中！
+请在左侧场景树中选中「WeedDistortionLab」根节点，在编辑器右侧检查器面板直接滑动即可实时预览形变！"
+autowrap_mode = 2
+
+[node name="SecStats" type="VBoxContainer" parent="HBox/RightPanel/Margin/VBox" unique_id=635548193]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats" unique_id=1113895683]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "📊 形变几何与健康诊断看板"
+
+[node name="CardStats" type="PanelContainer" parent="HBox/RightPanel/Margin/VBox/SecStats" unique_id=1800476544]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card_inner")
+
+[node name="Margin" type="MarginContainer" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats" unique_id=1143004949]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin" unique_id=1994174629]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="StatPhysics" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=1812228134]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "📐 物理等距换算: 倾角 θ = +0.0° (30°俯角) | 理论屏幕高: 8.00 px | 顶宽: 4.00 px"
+
+[node name="StatTop" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=2004624834]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 13
+text = "顶边宽度: 4.0 px (原宽 4px | 缩放: 100% | +0.0 px)"
+
+[node name="StatHeight" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=461119631]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.8, 0.9, 1, 1)
+theme_override_font_sizes/font_size = 13
+text = "草身高度: 8.0 px (原高 8px | 缩放: 100% | 下压: -0.0 px)"
+
+[node name="StatHealth" type="Label" parent="HBox/RightPanel/Margin/VBox/SecStats/CardStats/Margin/VBox" unique_id=1326625657]
+modulate = Color(0.4, 0.95, 0.4, 1)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.4, 0.95, 0.4, 1)
+theme_override_font_sizes/font_size = 13
+text = "✅ 自由重采样良好：连续曲率平滑，像素纹素无断裂，完美重采样！"
+autowrap_mode = 2
+
+[node name="SecExport" type="VBoxContainer" parent="HBox/RightPanel/Margin/VBox" unique_id=1934409221]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport" unique_id=1462914642]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 1, 1)
+theme_override_font_sizes/font_size = 15
+text = "💾 游戏材质参数换算与写入 (Export to Game)"
+
+[node name="VBoxCard" type="PanelContainer" parent="HBox/RightPanel/Margin/VBox/SecExport" unique_id=1661104375]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_card_inner")
+
+[node name="Margin" type="MarginContainer" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard" unique_id=1848546618]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 10
+
+[node name="VBox" type="VBoxContainer" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin" unique_id=353132505]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="RowStrength" type="HBoxContainer" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox" unique_id=722008833]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowStrength" unique_id=1896068516]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.85, 0.9, 1)
+text = "换算 wind_strength:"
+
+[node name="Val" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowStrength" unique_id=948093002]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.5, 1)
+text = "6.0 像素"
+
+[node name="RowExpand" type="HBoxContainer" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox" unique_id=587305008]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowExpand" unique_id=1170246698]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.85, 0.9, 1)
+text = "换算 perspective_expand:"
+
+[node name="Val" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowExpand" unique_id=869259449]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.5, 1)
+text = "0.00"
+
+[node name="RowSquash" type="HBoxContainer" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox" unique_id=1177660210]
+layout_mode = 2
+
+[node name="Name" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowSquash" unique_id=1695547602]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(0.8, 0.85, 0.9, 1)
+text = "换算 height_squash:"
+
+[node name="Val" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport/VBoxCard/Margin/VBox/RowSquash" unique_id=1950342517]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.3, 1, 0.5, 1)
+text = "0.00"
+
+[node name="BtnApplyToGame" type="Button" parent="HBox/RightPanel/Margin/VBox/SecExport" unique_id=1095949833]
+custom_minimum_size = Vector2(0, 38)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.1, 0.9, 0.4, 1)
+text = "🚀 一键应用并保存至草花材质 grass_tuft.tres"
+
+[node name="BtnResetDefault" type="Button" parent="HBox/RightPanel/Margin/VBox/SecExport" unique_id=702151294]
+layout_mode = 2
+text = "🔄 重置为默认零形变"
+
+[node name="LblStatus" type="Label" parent="HBox/RightPanel/Margin/VBox/SecExport" unique_id=2012159047]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.75, 0.8, 1)
+theme_override_font_sizes/font_size = 12
+text = "就绪。请在检查器中滑动滑块，随时点击上方按钮保存数据。"
+autowrap_mode = 2
