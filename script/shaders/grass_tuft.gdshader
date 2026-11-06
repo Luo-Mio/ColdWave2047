@@ -85,6 +85,11 @@ varying vec3 tuft_color;
 varying float var_wave1;
 varying float var_wave2;
 varying float var_gust;
+varying vec2 local_pos;
+varying float var_rot_deg;
+varying float var_shear;
+varying float var_h_scale;
+varying float var_w_scale;
 
 // 向量旋转辅助函数 (用于双层噪波分叉流向)
 vec2 rotate_vec2(vec2 v, float angle) {
@@ -167,10 +172,12 @@ void vertex() {
 	}
 	tuft_color = c;
 
-	// 弯曲权重：草根 (UV.y = 1.0) 不变形，草尖 (UV.y = 0.0) 形变最大
-	float t = pow(clamp(1.0 - UV.y, 0.0, 1.0), 1.4);
+	float rot_deg = 0.0;
+	float shear = 0.0;
+	float h_scale = 1.0;
+	float w_scale = 1.0;
 
-	if (enable_wind && t > 0.001) {
+	if (enable_wind) {
 		// 时间离散化 (支持 5 / 10 / 12 / 15 / 30 FPS 抽帧，并按每颗草的世界坐标错开跳帧时机)
 		float effective_time = TIME;
 		if (animation_fps > 0) {
@@ -231,35 +238,29 @@ void vertex() {
 				cur_wind += push_dir * (push_fact * creature_push_strength);
 			}
 
-			vec2 force = cur_wind * t;
+			// 计算实例级形变参数 (与实验工具 weed_distortion_lab 100% 对齐)
+			rot_deg = clamp(cur_wind.x * 6.0 * wind_rotation_strength, -45.0, 45.0);
+			shear = cur_wind.x * (1.0 - clamp(wind_rotation_strength * 0.4, 0.0, 0.7));
 
-			// 现象 0：绕底部中心 (0, 0) 渐进旋转倾倒 (草根 t=0 保持接地，草尖 t=1 旋转至 45°)
-			if (wind_rotation_strength > 0.001 && abs(force.x) > 0.001) {
-				float tilt_angle = clamp(force.x * 0.13 * wind_rotation_strength, -0.785398, 0.785398);
-				float cos_t = cos(tilt_angle);
-				float sin_t = sin(tilt_angle);
-				vec2 rot_v = vec2(VERTEX.x * cos_t - VERTEX.y * sin_t, VERTEX.x * sin_t + VERTEX.y * cos_t);
-				VERTEX = mix(VERTEX, rot_v, t);
-			}
-
-			// 现象 1：水平剪切平移 (补足柔韧弯曲剩余侧移)
-			VERTEX.x += force.x * (1.0 - clamp(wind_rotation_strength * 0.4, 0.0, 0.7));
-
-			// 现象 2：上下风 —— 近大远小梯形形变 (以精灵水平中心 UV.x = 0.5 为对称轴)
-			// force.y > 0 (风向下/靠近镜头) -> 顶端向两侧扩张 (倒梯形)
-			// force.y < 0 (风向上/远离镜头) -> 顶端向内收缩 (正梯形)
-			VERTEX.x += (UV.x - 0.5) * (force.y * perspective_expand);
-
-			// 现象 3：上下风 —— 透视压缩变矮 (Foreshortening)
-			VERTEX.y += abs(force.y) * height_squash;
-
-			// 现象 4：纵向位移
-			VERTEX.y += force.y * 0.4;
-
-			// 完整像素吸附：锁定顶点至世界整像素，彻底杜绝亚像素浮点抖动并形成规整的完整像素阶梯
-			VERTEX = round(VERTEX);
+			float h_loss = abs(cur_wind.y) * (height_squash * 0.12) + max(0.0, cur_wind.y * 0.08);
+			h_scale = clamp(1.0 - h_loss, 0.28, 1.2);
+			w_scale = clamp(1.0 + cur_wind.y * (perspective_expand * 0.15), 0.4, 2.0);
 		}
 	}
+
+	var_rot_deg = rot_deg;
+	var_shear = shear;
+	var_h_scale = h_scale;
+	var_w_scale = w_scale;
+
+	// 统一均匀外扩四边形边界，为片元级完整像素反向重采样提供充裕空间，杜绝三角形斜切残像素
+	VERTEX.x *= 6.0;
+	if (UV.y > 0.5) {
+		VERTEX.y += 8.0;
+	} else {
+		VERTEX.y *= 2.5;
+	}
+	local_pos = VERTEX;
 }
 
 void fragment() {
@@ -297,32 +298,59 @@ void fragment() {
 		}
 		COLOR = vec4(p_col, 1.0);
 	} else {
-		// 【正常游戏场景渲染】针对 4x8 像素真实小草精灵：
-		vec4 mask = texture(TEXTURE, UV);
+		// 【正常游戏场景渲染】完整像素反向重采样 (Pixel-Perfect Resampling)
+		vec2 sample_pos = floor(local_pos) + vec2(0.5, 0.5);
+
+		// 1. 绕根部 (0, 0) 逆旋转采样坐标
+		float rot_rad = radians(var_rot_deg);
+		float cos_r = cos(rot_rad);
+		float sin_r = sin(rot_rad);
+		vec2 p = vec2(sample_pos.x * cos_r + sample_pos.y * sin_r, -sample_pos.x * sin_r + sample_pos.y * cos_r);
+
+		// 2. 高度范围检查 (超出当前有效高度直接整像素剔除)
+		float y_up = -p.y;
+		float cur_total_h = 8.0 * var_h_scale;
+		if (y_up < 0.0 || y_up > cur_total_h) {
+			discard;
+		}
+
+		// 3. 归一化高度与中轴线抛物线弯曲
+		float h = clamp(y_up / cur_total_h, 0.0, 1.0);
+		float center_x = var_shear * pow(h, 1.8);
+		float cur_w = 4.0 * mix(1.0, var_w_scale, h);
+		float rel_x = p.x - center_x;
+		float u = (rel_x / cur_w) + 0.5;
+		float v = 1.0 - h;
+		if (u < 0.0 || u > 1.0) {
+			discard;
+		}
+
+		// 4. 原图 4x8 离散整像素采样
+		vec2 tex_size = vec2(4.0, 8.0);
+		vec2 orig_pixel = clamp(floor(vec2(u, v) * tex_size), vec2(0.0), tex_size - vec2(1.0));
+		vec2 snapped_uv = (orig_pixel + vec2(0.5)) / tex_size;
+		vec4 mask = texture(TEXTURE, snapped_uv);
 		if (mask.a < 0.5) {
 			discard;
 		}
-		vec3 final_color = tuft_color;
 
+		// 5. 确定颜色
+		vec3 final_color = tuft_color;
 		if (debug_wind_mode == 1) {
-			// 预览第一层风噪波灰度 (直接显示与草皮色斑同源的有机团块噪波)
 			final_color = vec3(var_wave1);
 		} else if (debug_wind_mode == 2) {
-			// 预览第二层风噪波灰度 (显示第二层斜向漂移的有机团块噪波)
 			final_color = vec3(var_wave2);
 		} else if (debug_wind_mode == 3) {
-			// 预览混合阵风黑白波块 (Wave 1 * Wave 2: 独立阵风气流团)
 			final_color = vec3(var_gust * 0.5 + 0.5);
 		} else if (debug_wind_mode == 4) {
-			// 预览混合阵风彩色热力带 (蓝=静风区, 绿/黄=微风, 橙红=强阵风团块)
 			final_color = heat_map(var_gust * 0.5 + 0.5);
 		} else {
 			if (tip_brightness > 0.0) {
-				final_color += vec3(tip_brightness * (1.0 - UV.y));
+				final_color += vec3(tip_brightness * (1.0 - v));
 			}
 		}
 
-		// 确保输出 100% 完整纯色像素，无半透明边缘杂色
+		// 6. 输出 100% 完整纯色像素，彻底消除游戏内一切残像素与半像素毛边！
 		COLOR = vec4(final_color, 1.0);
 	}
 }
