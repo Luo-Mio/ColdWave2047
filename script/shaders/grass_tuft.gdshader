@@ -124,8 +124,11 @@ void vertex() {
 	// 获取小草根部的全局世界坐标 (假设精灵锚点位于底部中心 (0, 0))
 	vec2 root_world = (MODEL_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xy;
 
-	// 吸附到整像素网格中心
-	vec2 base_pos = floor(root_world) + vec2(0.5, 0.5);
+	// 通过四舍五入吸附到绝对整像素，彻底消除摄像机平滑移动与亚像素光栅化带来的微弱浮点漂移 (±0.17px 抖动)
+	vec2 static_root = round(root_world);
+
+	// 采样点严格对应草根脚下的整像素中心 (+0.5, +0.5)
+	vec2 base_pos = static_root + vec2(0.5, 0.5);
 
 	// 2:1 等距世界坐标校正，并采样噪波确定当前像素的草皮颜色
 	vec2 iso_world = vec2(base_pos.x * 0.8, base_pos.y * 1.8);
@@ -152,15 +155,15 @@ void vertex() {
 			float target_fps = float(animation_fps);
 			float time_offset = 0.0;
 			if (enable_staggered_offset) {
-				// 利用草根唯一世界坐标生成 [0.0, 1.0) 的空间伪随机相位
-				float phase = fract(sin(dot(root_world, vec2(12.9898, 78.233))) * 43758.5453);
+				// 利用草根唯一绝对世界坐标生成 [0.0, 1.0) 的空间伪随机相位 (使用 static_root 保证运动时相位永不跳跃)
+				float phase = fract(sin(dot(static_root, vec2(12.9898, 78.233))) * 43758.5453);
 				time_offset = phase / target_fps;
 			}
 			effective_time = floor((TIME - time_offset) * target_fps) / target_fps + time_offset;
 		}
 
-		// 单噪波反向双流交错采样 (流向 B 引入 PI 无理数速度与相位偏移)
-		vec2 iso_root = vec2(root_world.x * 0.8, root_world.y * 1.8);
+		// 单噪波反向双流交错采样 (流向 B 引入 PI 无理数速度与相位偏移，基于 static_root 锁定稳定风场)
+		vec2 iso_root = vec2(static_root.x * 0.8, static_root.y * 1.8);
 		vec2 dir_norm = normalize(wind_base_dir);
 		vec2 dir1 = rotate_vec2(dir_norm, noise_diverge_angle);
 		vec2 dir2 = rotate_vec2(dir_norm, -noise_diverge_angle);
@@ -197,8 +200,8 @@ void vertex() {
 
 			vec2 cur_wind = inst_dir * (gust * wind_strength);
 
-			// 生物推挤叠加
-			vec2 to_creature = root_world - creature_pos;
+			// 生物推挤叠加 (使用 static_root 保证推挤受力稳定无颤动)
+			vec2 to_creature = static_root - creature_pos;
 			float dist = length(to_creature);
 			if (dist < creature_push_radius && dist > 0.001) {
 				float push_fact = (1.0 - dist / creature_push_radius);

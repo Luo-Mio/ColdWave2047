@@ -1,5 +1,5 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1793987213
+::res://::1793988187
 map_data.json::JSON::-1::1793848782::0::1::::<><><>0<>0<><>::
 test_capture_studio_scene.tscn::PackedScene::8665392326930485824::1793975219::0::1::::<><><>0<>0<><>::uid://dnt04u0odb4oa::::res://scene/tools/wind_noise_preview.tscn<>res://test_capture_studio.gd
 test_density_scene.tscn::PackedScene::8742160855239067336::1793911476::0::1::::<><><>0<>0<><>::uid://2aq44fbulxju::::res://scene/main.tscn<>res://test_density_scale.gd
@@ -17,8 +17,8 @@ W.png::CompressedTexture2D::5712734153148549940::1792284033::1793117166::1::::<>
 ::res://resources/item/tool/::1792138412
 ::res://resources/materials/::1793986856
 canopy_xray.tres::ShaderMaterial::3038968884349368731::1793237551::0::1::::<><><>0<>0<><>::uid://c6vfx5dvd4k6l::::res://script/shaders/xray.gdshader
-grass_surface.tres::ShaderMaterial::7633432903057015375::1793986832::0::1::::<><><>0<>0<><>::uid://dpyugrfglpvlp::::res://script/shaders/grass_surface.gdshader<>uid://vk3ecar4bg6k::::res://resources/surface/wind/wind_noise.tres
-grass_tuft.tres::ShaderMaterial::265429983774348328::1793986856::0::1::::<><><>0<>0<><>::uid://djknedopkjr2p::::res://script/shaders/grass_tuft.gdshader<>uid://vk3ecar4bg6k::::res://resources/surface/wind/wind_noise.tres
+grass_surface.tres::ShaderMaterial::7633432903057015375::1793988458::0::1::::<><><>0<>0<><>::uid://dpyugrfglpvlp::::res://script/shaders/grass_surface.gdshader<>uid://vk3ecar4bg6k::::res://resources/surface/wind/wind_noise.tres
+grass_tuft.tres::ShaderMaterial::265429983774348328::1793988454::0::1::::<><><>0<>0<><>::uid://djknedopkjr2p::::res://script/shaders/grass_tuft.gdshader<>uid://vk3ecar4bg6k::::res://resources/surface/wind/wind_noise.tres
 vision_shadow.tres::ShaderMaterial::4150311349970650108::1793266157::0::1::::<><><>0<>0<><>::uid://d1ustqy2hkx8s::::res://script/shaders/vision_shadow.gdshader
 ::res://resources/model/::1793207222
 ::res://resources/object/::1793207295
@@ -90,7 +90,7 @@ tree_entity.gd::GDScript::2997148675921459845::1793834105::0::1::::TreeEntity<>S
 main_chara.gd::GDScript::460154573828702121::1793822637::0::1::::MainChara<>CharacterBody2D<><>0<>1<><>::
 ::res://script/shaders/::1793986492
 grass_surface.gdshader::Shader::8262865727274883201::1793986492::0::1::::<><><>0<>0<><>::
-grass_tuft.gdshader::Shader::7812402065336357297::1793987281::0::1::::<><><>0<>0<><>::
+grass_tuft.gdshader::Shader::7812402065336357297::1793988435::0::1::::<><><>0<>0<><>::
 vision_shadow.gdshader::Shader::9026587255388769904::1793266157::0::1::::<><><>0<>0<><>::
 wind_synthesizer.gdshader::Shader::4971785843909540669::1793986492::0::1::::<><><>0<>0<><>::
 xray.gdshader::Shader::6992393692518329161::1793834875::0::1::::<><><>0<>0<><>::
@@ -100,11 +100,11 @@ build_manager.gd::GDScript::2367823134754182677::1793835814::0::1::::BuildManage
 iso_grid_drawer.gd::GDScript::3497052452267649491::1793209624::0::1::::IsoGridDrawer<>RefCounted<><>0<>0<><>::
 map_manager.gd::GDScript::8733041159769087632::1793910060::0::1::::MapManager<>Node<><>0<>1<><>::
 selector.gd::GDScript::6029191783966115130::1793836172::0::1::::Selector<>Node2D<><>0<>0<><>::
-surf_manager.gd::GDScript::7100777321415423937::1793986472::0::1::::SurfManager<>Node<><>0<>1<><>::
+surf_manager.gd::GDScript::7100777321415423937::1793988448::0::1::::SurfManager<>Node<><>0<>1<><>::
 vision_shadow_manager.gd::GDScript::1396692680156130496::1793824231::0::1::::VisionShadowManager<>CanvasGroup<><>0<>0<><>::
-::res://script/tools/::1793987171
-test_matrix.gd::GDScript::7665280961618874013::1793987064::0::1::::<>SceneTree<><>0<>0<><>::
-test_sh_cam.gd::GDScript::6172026304484122571::1793987074::0::1::::<>SceneTree<><>0<>0<><>::
+::res://script/tools/::1793988149
+test_matrix.gd::GDScript::7665280961618874013::1793987315::0::1::::<>SceneTree<><>0<>0<><>::
+test_sh_cam.gd::GDScript::6172026304484122571::1793987315::0::1::::<>SceneTree<><>0<>0<><>::
 wind_noise_preview.gd::GDScript::6114733453110135006::1793985580::0::1::::<>Control<><>0<>1<><>::
 ::res://script/ui/::1793301477
 creative_menu.gd::GDScript::1178348335670178761::1793469312::0::1::::CreativeMenuUI<>CanvasLayer<><>0<>0<><>::

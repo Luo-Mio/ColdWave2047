@@ -7,3 +7,4 @@ res://script/shaders/grass_tuft.gdshader
 res://resources/materials/grass_tuft.tres
 res://script/shaders/wind_synthesizer.gdshader
 res://scene/tools/wind_noise_preview.tscn
+res://script/systems/surf_manager.gd

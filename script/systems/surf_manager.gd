@@ -325,8 +325,8 @@ func update_weeds_for_dual_cell(dual_cell: Vector2i) -> void:
 			if (float(h_prob % 1000) / 1000.0) >= eff_density:
 				continue
 
-			# 6. 严格对齐整像素中心 (+0.5, +0.5)
-			var snapped_pos := Vector2(raw_world_x + 0.5, raw_world_y + 0.5)
+			# 6. 严格对齐整像素网格 (使用纯整数坐标，彻底消除引擎对齐在 0.5 临界点处的亚像素翻转)
+			var snapped_pos := Vector2(raw_world_x, raw_world_y)
 
 			var sp := Sprite2D.new()
 			sp.texture = eff_texture
