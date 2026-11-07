@@ -1,8 +1,7 @@
-res://script/shaders/grass_tuft.gdshader
 res://scene/main.tscn
 res://resources/surface/GreenGrass/grass_tileset.tres
 res://script/shaders/grass_surface.gdshader
 res://resources/surface/wind/wind_noise.tres
-res://resources/materials/grass_surface.tres
-res://resources/materials/grass_tuft.tres
+res://resources/surface/ground_noise.tres
+res://script/shaders/grass_tuft.gdshader
 res://script/shaders/wind_synthesizer.gdshader

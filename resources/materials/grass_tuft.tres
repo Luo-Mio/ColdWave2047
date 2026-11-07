@@ -2,29 +2,7 @@
 
 [ext_resource type="Shader" uid="uid://djknedopkjr2p" path="res://script/shaders/grass_tuft.gdshader" id="1_tuftshader"]
 [ext_resource type="Texture2D" uid="uid://vk3ecar4bg6k" path="res://resources/surface/wind/wind_noise.tres" id="2_wn_main"]
-
-[sub_resource type="FastNoiseLite" id="FastNoiseLite_bpfac"]
-noise_type = 4
-seed = 48945
-frequency = 0.0166
-fractal_type = 2
-fractal_octaves = 3
-fractal_lacunarity = 5.185
-fractal_gain = 0.29
-fractal_ping_pong_strength = 2.095
-domain_warp_enabled = true
-domain_warp_type = 1
-domain_warp_amplitude = 18.655
-domain_warp_frequency = 0.31
-domain_warp_fractal_type = 0
-domain_warp_fractal_octaves = 3
-domain_warp_fractal_gain = 0.27
-
-[sub_resource type="NoiseTexture2D" id="NoiseTexture2D_1wc1w"]
-height = 768
-noise = SubResource("FastNoiseLite_bpfac")
-seamless = true
-invert = true
+[ext_resource type="Texture2D" uid="uid://bhk27enhx6n22" path="res://resources/surface/ground_noise.tres" id="3_gn_main"]
 
 [resource]
 shader = ExtResource("1_tuftshader")
@@ -55,11 +33,11 @@ shader_parameter/creature_push_strength = 4.0
 shader_parameter/hframes = 4
 shader_parameter/vframes = 1
 shader_parameter/enable_macro_hue = true
-shader_parameter/macro_noise_scale = Vector2(0.0004, 0.0008)
-shader_parameter/macro_hue_range = 0.04
-shader_parameter/hue_quantize_steps = 32.0
+shader_parameter/macro_noise_scale = 0.0004
+shader_parameter/macro_hue_steps = 2
+shader_parameter/quantize_hue = true
 shader_parameter/sv_quantize_steps = 32.0
-shader_parameter/noise_tex = SubResource("NoiseTexture2D_1wc1w")
+shader_parameter/noise_tex = ExtResource("3_gn_main")
 shader_parameter/noise_scale = Vector2(0.003, 0.003)
 shader_parameter/noise_offset = Vector2(0, 0)
 shader_parameter/threshold_bright = 0.485
@@ -67,5 +45,5 @@ shader_parameter/threshold_dark = 0.154
 shader_parameter/color_light = Color(0.380392, 0.560784, 0.298039, 1)
 shader_parameter/color_mid = Color(0.278431, 0.447059, 0.219608, 1)
 shader_parameter/color_dark = Color(0.207843, 0.341176, 0.14902, 1)
-shader_parameter/tip_brightness = 0.08
-shader_parameter/random_color_ratio = 0.05
+shader_parameter/tip_brightness = 0.12
+shader_parameter/random_color_ratio = 0.1

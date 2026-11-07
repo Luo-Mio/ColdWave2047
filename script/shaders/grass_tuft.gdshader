@@ -77,9 +77,13 @@ uniform int vframes : hint_range(1, 16, 1) = 1;
 group_uniforms Macro_Hue_Quantization;
 // 宏观大尺度色相噪波与色盘降采样系统 (与 grass_surface.gdshader 共享)
 uniform bool enable_macro_hue = true;
-uniform vec2 macro_noise_scale = vec2(0.0004, 0.0008);
-uniform float macro_hue_range : hint_range(0.0, 0.15, 0.005) = 0.04;
-uniform float hue_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
+// 大尺度世界空间缩放 (数值越小色相大区越广阔，内部自动按 2:1 等距视角校正 Y 轴；推荐 0.0001 ~ 0.0008)
+uniform float macro_noise_scale : hint_range(0.00005, 0.003, 0.00005) = 0.0004;
+// 宏观色相离散跨越阶数 (0=关闭偏转, 1=±1阶微调, 2=±2阶自然推荐, 3=±3阶鲜明, 4=±4阶跨季大区)
+uniform int macro_hue_steps : hint_range(0, 4, 1) = 2;
+// 是否启用 32 阶色相环圆盘离散阶梯 (勾选为经典像素色盘分阶，取消勾选为无级平滑过渡)
+uniform bool quantize_hue = true;
+// 饱和度与明度降采样阶数 (32x32 阶色板网格)
 uniform float sv_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
 
 group_uniforms Ground_Color;
@@ -99,8 +103,8 @@ uniform vec4 color_light : source_color = vec4(0.380, 0.561, 0.298, 1.0);
 uniform vec4 color_mid : source_color = vec4(0.278, 0.447, 0.220, 1.0);
 // 深绿阴影颜色配置 (#355726)
 uniform vec4 color_dark : source_color = vec4(0.208, 0.341, 0.149, 1.0);
-// 草尖高光微调 (默认 0.0 严格等于地表原色，微量增加凸显立体感)
-uniform float tip_brightness : hint_range(0.0, 0.3, 0.01) = 0.0;
+// 草尖高光微调 (默认 0.10，草根扎根融合，草尖迎光立体提亮；设为 0.0 则与地表完全等色)
+uniform float tip_brightness : hint_range(0.0, 0.3, 0.01) = 0.10;
 // 随机杂色比例：让部分杂草从噪波三阶颜色池 (浅绿/中绿/深绿) 中随机挑选，增强点缀层次感 (0.2 代表 20%)
 uniform float random_color_ratio : hint_range(0.0, 1.0, 0.01) = 0.20;
 
@@ -171,16 +175,28 @@ vec3 hsv2rgb(vec3 c) {
 }
 
 // 宏观色相偏移与 HSV 色盘阶梯降采样 (色相 32 阶圆环 + 32x32 阶色板)
-vec3 apply_macro_hue_quantization(vec3 rgb_color, float macro_noise_val, bool enable_macro, float hue_range, float h_steps, float sv_steps) {
-	if (!enable_macro) {
+vec3 apply_macro_hue_quantization(vec3 rgb_color, float macro_noise_val, bool enable_macro, int hue_step_range, bool use_quantize, float sv_steps) {
+	if (!enable_macro || hue_step_range <= 0) {
 		return rgb_color;
 	}
 	vec3 hsv = rgb2hsv(rgb_color);
-	float delta_h = (macro_noise_val - 0.5) * 2.0 * hue_range;
-	float new_h = fract(hsv.x + delta_h);
-	if (h_steps > 1.0) {
-		new_h = round(new_h * h_steps) / h_steps;
+
+	// 对噪波进行动态范围拉伸 (FastNoiseLite 常见值集中在 0.25~0.75，拉伸使各阶大区分布更均匀饱满)
+	float n_centered = clamp((macro_noise_val - 0.5) / 0.35, -1.0, 1.0);
+
+	float new_h;
+	if (use_quantize) {
+		// 离散色阶跨步：以基准色在 32 阶色相环上的整数阶为锚点，按噪波偏转 [-hue_step_range, +hue_step_range] 阶
+		int base_step = int(round(hsv.x * 32.0));
+		int step_offset = int(round(n_centered * float(hue_step_range)));
+		new_h = mod(float(base_step + step_offset) + 32.0, 32.0) / 32.0;
+	} else {
+		// 连续平滑渐变
+		float delta_h = n_centered * (float(hue_step_range) / 32.0);
+		new_h = fract(hsv.x + delta_h);
 	}
+
+	// 32x32 阶饱和度与明度色盘量化 (保证相同色阶上的 S/V 阶梯完全一致)
 	float new_s = hsv.y;
 	float new_v = hsv.z;
 	if (sv_steps > 1.0) {
@@ -232,11 +248,22 @@ void vertex() {
 		}
 	}
 
+	float macro_n = 0.5;
 	// 宏观大尺度色相偏移与 HSV 色盘量化 (与 grass_surface.gdshader 共享算法)
 	if (enable_macro_hue) {
-		vec2 macro_sample_uv = (iso_world + noise_offset) * macro_noise_scale;
-		float macro_n = textureLod(noise_tex, macro_sample_uv, 0.0).r;
-		c = apply_macro_hue_quantization(c, macro_n, true, macro_hue_range, hue_quantize_steps, sv_quantize_steps);
+		vec2 macro_scale = vec2(macro_noise_scale, macro_noise_scale * 2.0);
+		vec2 macro_sample_uv = (iso_world + noise_offset) * macro_scale;
+		macro_n = textureLod(noise_tex, macro_sample_uv, 0.0).r;
+		c = apply_macro_hue_quantization(c, macro_n, true, macro_hue_steps, quantize_hue, sv_quantize_steps);
+	}
+	if (debug_wind_mode == 7) {
+		float n_centered = clamp((macro_n - 0.5) / 0.35, -1.0, 1.0);
+		int base_step = int(round(rgb2hsv(color_mid.rgb).x * 32.0));
+		int step_offset = int(round(n_centered * float(macro_hue_steps)));
+		float zone_h = mod(float(base_step + step_offset) + 32.0, 32.0) / 32.0;
+		c = hsv2rgb(vec3(zone_h, 0.85, 0.95));
+	} else if (debug_wind_mode == 8) {
+		c = vec3(macro_n);
 	}
 	tuft_color = c;
 
@@ -446,9 +473,13 @@ void fragment() {
 			final_color = vec3(var_gust * 0.5 + 0.5);
 		} else if (debug_wind_mode == 4) {
 			final_color = heat_map(var_gust * 0.5 + 0.5);
+		} else if (debug_wind_mode == 7 || debug_wind_mode == 8) {
+			final_color = tuft_color;
 		} else {
 			if (tip_brightness > 0.0) {
-				final_color += vec3(tip_brightness * (1.0 - v));
+				// 草尖迎光高光：草根 (v=1.0) 处保持 100% 原色扎根，草尖 (v=0.0) 乘法提亮保持饱满绿意
+				float tip_factor = clamp(1.0 - v, 0.0, 1.0);
+				final_color *= (1.0 + tip_brightness * pow(tip_factor, 1.2));
 			}
 
 			// 踩踏受压变暗：草被压倒时受光面积减小/受阴影遮蔽而变暗，随弹性延迟恢复平滑变亮复原！

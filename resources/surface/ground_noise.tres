@@ -1,0 +1,24 @@
+[gd_resource type="NoiseTexture2D" format=3 uid="uid://bhk27enhx6n22"]
+
+[sub_resource type="FastNoiseLite" id="FastNoiseLite_gn"]
+noise_type = 4
+seed = 48945
+frequency = 0.0144
+fractal_type = 2
+fractal_octaves = 3
+fractal_lacunarity = 5.185
+fractal_gain = 0.29
+fractal_ping_pong_strength = 2.095
+domain_warp_enabled = true
+domain_warp_type = 1
+domain_warp_amplitude = 18.655
+domain_warp_frequency = 0.31
+domain_warp_fractal_type = 0
+domain_warp_fractal_octaves = 3
+domain_warp_fractal_gain = 0.27
+
+[resource]
+height = 768
+noise = SubResource("FastNoiseLite_gn")
+seamless = true
+invert = true

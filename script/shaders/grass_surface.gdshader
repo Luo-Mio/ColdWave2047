@@ -10,7 +10,9 @@ group_uniforms Debug_Preview;
 // 4: 预览第二层风波灰度 (Wave 2: 黑=-1, 白=+1，直观查看侧向干扰风带)
 // 5: 预览混合阵风黑白波带 (Wave 1 * Wave 2: 黑=无风/反向, 白=强阵风峰值)
 // 6: 预览混合阵风彩色热力带 (蓝=静风区, 绿/黄=微风, 橙红=强阵风带，全图宏观俯瞰风带宽度与流速)
-uniform int debug_mode : hint_enum("0: 正常游戏地表", "1: 地表噪波灰度", "2: 斑块阈值遮罩", "3: 预览第一层风波 (Wave 1)", "4: 预览第二层风波 (Wave 2)", "5: 预览混合阵风黑白波带", "6: 预览混合阵风彩色热力带") = 0;
+// 7: 宏观色相大区预览 (Macro Hue Zones: 清晰高对比彩色直观阅览各大色相区疆界，拖动缩放滑块一目了然)
+// 8: 宏观噪波原始灰度 (Macro Noise Raw: 查看大尺度噪波原貌)
+uniform int debug_mode : hint_enum("0: 正常游戏地表", "1: 地表噪波灰度", "2: 斑块阈值遮罩", "3: 预览第一层风波 (Wave 1)", "4: 预览第二层风波 (Wave 2)", "5: 预览混合阵风黑白波带", "6: 预览混合阵风彩色热力带", "7: 宏观色相大区预览 (Hue Zones)", "8: 宏观噪波原始灰度") = 0;
 
 group_uniforms Dynamic_Interaction_Map;
 // 是否启用多生物动态交互图 (方案 B)
@@ -62,12 +64,12 @@ group_uniforms Macro_Hue_Quantization;
 // 宏观大尺度色相噪波与色盘降采样系统 (Dual-scale Noise & Quantized HSV Palette)
 // 大尺度噪波在宏观大片草地上缓慢改变色相 (偏暖黄绿或偏冷墨绿)，微观色斑控制明暗 (S/V)，实现全图色调丰富且对比度极致恒定
 uniform bool enable_macro_hue = true;
-// 大尺度世界空间缩放 (默认比微观色斑大 8~10 倍，跨越数百像素产生连绵大色区)
-uniform vec2 macro_noise_scale = vec2(0.0004, 0.0008);
-// 宏观色相偏移幅度 (0.04 约为 ±14.4 度色相偏转，既丰富自然又绝不失真)
-uniform float macro_hue_range : hint_range(0.0, 0.15, 0.005) = 0.04;
-// 色相降采样阶数 (32 阶色相环圆盘)
-uniform float hue_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
+// 大尺度世界空间缩放 (数值越小色相大区越广阔，内部自动按 2:1 等距视角校正 Y 轴；推荐 0.0001 ~ 0.0008)
+uniform float macro_noise_scale : hint_range(0.00005, 0.003, 0.00005) = 0.0004;
+// 宏观色相离散跨越阶数 (0=关闭偏转, 1=±1阶微调, 2=±2阶自然推荐, 3=±3阶鲜明, 4=±4阶跨季大区)
+uniform int macro_hue_steps : hint_range(0, 4, 1) = 2;
+// 是否启用 32 阶色相环圆盘离散阶梯 (勾选为经典像素色盘分阶，取消勾选为无级平滑过渡)
+uniform bool quantize_hue = true;
 // 饱和度与明度降采样阶数 (32x32 阶色板网格)
 uniform float sv_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
 
@@ -76,6 +78,8 @@ group_uniforms Colors;
 uniform vec4 color_light : source_color = vec4(0.380, 0.561, 0.298, 1.0); // 浅绿 #618f4c
 uniform vec4 color_mid : source_color = vec4(0.278, 0.447, 0.220, 1.0);   // 中绿 #477238 (标准基准色)
 uniform vec4 color_dark : source_color = vec4(0.208, 0.341, 0.149, 1.0);  // 深绿 #355726
+// 草皮整体压暗幅度：使平铺地面成为稍暗的稳重底衬，凸显垂直杂草的立体剪影 (推荐 0.10 ~ 0.18，设为 0 则不压暗)
+uniform float surface_darken : hint_range(0.0, 0.4, 0.01) = 0.12;
 
 varying vec2 world_pos;
 
@@ -134,19 +138,28 @@ vec3 hsv2rgb(vec3 c) {
 }
 
 // 宏观色相偏移与 HSV 色盘阶梯降采样 (色相 32 阶圆环 + 32x32 阶色板)
-vec3 apply_macro_hue_quantization(vec3 rgb_color, float macro_noise_val, bool enable_macro, float hue_range, float h_steps, float sv_steps) {
-	if (!enable_macro) {
+vec3 apply_macro_hue_quantization(vec3 rgb_color, float macro_noise_val, bool enable_macro, int hue_step_range, bool use_quantize, float sv_steps) {
+	if (!enable_macro || hue_step_range <= 0) {
 		return rgb_color;
 	}
 	vec3 hsv = rgb2hsv(rgb_color);
-	// 宏观低频色相漂移：由大尺度噪波驱动 [-hue_range, +hue_range]
-	float delta_h = (macro_noise_val - 0.5) * 2.0 * hue_range;
-	float new_h = fract(hsv.x + delta_h);
-	// 32 阶色相环量化
-	if (h_steps > 1.0) {
-		new_h = round(new_h * h_steps) / h_steps;
+
+	// 对噪波进行动态范围拉伸 (FastNoiseLite 常见值集中在 0.25~0.75，拉伸使各阶大区分布更均匀饱满)
+	float n_centered = clamp((macro_noise_val - 0.5) / 0.35, -1.0, 1.0);
+
+	float new_h;
+	if (use_quantize) {
+		// 离散色阶跨步：以基准色在 32 阶色相环上的整数阶为锚点，按噪波偏转 [-hue_step_range, +hue_step_range] 阶
+		int base_step = int(round(hsv.x * 32.0));
+		int step_offset = int(round(n_centered * float(hue_step_range)));
+		new_h = mod(float(base_step + step_offset) + 32.0, 32.0) / 32.0;
+	} else {
+		// 连续平滑渐变
+		float delta_h = n_centered * (float(hue_step_range) / 32.0);
+		new_h = fract(hsv.x + delta_h);
 	}
-	// 32x32 阶饱和度与明度色盘量化
+
+	// 32x32 阶饱和度与明度色盘量化 (保证相同色阶上的 S/V 阶梯完全一致)
 	float new_s = hsv.y;
 	float new_v = hsv.z;
 	if (sv_steps > 1.0) {
@@ -172,10 +185,10 @@ void fragment() {
 		base_pos = (floor(world_pos / pixel_size) + 0.5) * pixel_size;
 	}
 
-	// 检查器缩略图预览适配：若 world_pos 接近原点 (检查器虚拟四边形)，则使用 UV 展开完整视窗
-	bool is_inspector_preview = (abs(world_pos.x) < 0.01 && abs(world_pos.y) < 0.01);
+	// 检查器缩略图预览适配：若为检查器材质缩略图 (TEXTURE_PIXEL_SIZE.x > 0.5)，则直接使用 UV 展开
+	bool is_inspector_preview = (TEXTURE_PIXEL_SIZE.x > 0.5);
 	vec2 iso_world = is_inspector_preview ? (UV * 1000.0) : vec2(base_pos.x * 0.8, base_pos.y * 1.8);
-	vec2 sample_uv = (iso_world + noise_offset) * noise_scale;
+	vec2 sample_uv = is_inspector_preview ? (UV * 3.0) : ((iso_world + noise_offset) * noise_scale);
 
 	float n = texture(noise_tex, sample_uv).r;
 
@@ -217,11 +230,13 @@ void fragment() {
 		}
 	}
 
+	float macro_n = 0.5;
 	// 宏观大尺度色相偏移与 HSV 色盘量化 (32 阶色相环 + 32x32 阶明度/饱和度色板)
 	if (enable_macro_hue) {
-		vec2 macro_sample_uv = (iso_world + noise_offset) * macro_noise_scale;
-		float macro_n = texture(noise_tex, macro_sample_uv).r;
-		grass_color = apply_macro_hue_quantization(grass_color, macro_n, true, macro_hue_range, hue_quantize_steps, sv_quantize_steps);
+		vec2 macro_scale = vec2(macro_noise_scale, macro_noise_scale * 2.0);
+		vec2 macro_sample_uv = is_inspector_preview ? (UV * (macro_noise_scale * 5000.0)) : ((iso_world + noise_offset) * macro_scale);
+		macro_n = texture(noise_tex, macro_sample_uv).r;
+		grass_color = apply_macro_hue_quantization(grass_color, macro_n, true, macro_hue_steps, quantize_hue, sv_quantize_steps);
 	}
 
 	// 调试模式分支输出
@@ -266,9 +281,21 @@ void fragment() {
 			// 6. 预览混合阵风彩色热力带 (蓝=静风区, 绿/黄=微风, 橙红=强阵风团块)
 			COLOR = vec4(heat_map(gust * 0.5 + 0.5), tex.a * COLOR.a);
 		}
+	} else if (debug_mode == 7) {
+		// 7. 宏观色相大区预览：以高对比纯色清晰标出每个色相大区范围，拖动缩放滑块时一览无余！
+		float n_centered = clamp((macro_n - 0.5) / 0.35, -1.0, 1.0);
+		int base_step = int(round(rgb2hsv(color_mid.rgb).x * 32.0));
+		int step_offset = int(round(n_centered * float(macro_hue_steps)));
+		float zone_h = mod(float(base_step + step_offset) + 32.0, 32.0) / 32.0;
+		vec3 zone_rgb = hsv2rgb(vec3(zone_h, 0.85, 0.95));
+		COLOR = vec4(zone_rgb, tex.a * COLOR.a);
+	} else if (debug_mode == 8) {
+		// 8. 宏观噪波原始灰度图 (查看大尺度噪波原貌)
+		COLOR = vec4(vec3(macro_n), tex.a * COLOR.a);
 	} else {
-		// 0. 正常模式：纯遮罩 + 纯噪波上色 (tex.a 决定几何形状与边缘剪影，grass_color 赋色)
-		COLOR = vec4(grass_color, tex.a * COLOR.a);
+		// 0. 正常模式：纯遮罩 + 纯噪波上色，并应用草皮基底压暗，作为衬托小草的稳重底色
+		vec3 final_surf = grass_color * (1.0 - surface_darken);
+		COLOR = vec4(final_surf, tex.a * COLOR.a);
 	}
 }
 

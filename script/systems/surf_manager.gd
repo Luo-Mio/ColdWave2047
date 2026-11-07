@@ -33,11 +33,49 @@ const MASK_TO_ATLAS: Array[Vector2i] = [
 @export var surface_material: Material = preload("res://resources/materials/grass_surface.tres")
 
 @export_group("草皮噪波色斑与阅览")
-## 噪波阅览模式切换：0:正常渲染 1:纯黑白灰度噪波 2:阈值二值遮罩
-@export_enum("正常游戏渲染", "纯噪波黑白灰度图", "阈值二值遮罩") var debug_mode: int = 0:
+## 噪波阅览模式切换：0:正常渲染 1:纯黑白灰度噪波 2:阈值二值遮罩 3:宏观色相大区预览 4:宏观噪波原始灰度
+@export_enum("正常游戏渲染", "纯噪波黑白灰度图", "阈值二值遮罩", "宏观色相大区预览 (彩色大区)", "宏观噪波原始灰度") var debug_mode: int = 0:
 	set(v):
 		debug_mode = v
-		_sync_debug_mode()
+		_sync_all_debug_modes()
+
+@export_group("宏观色相大区 (Macro Hue)")
+## 是否启用大尺度色相噪波 (宏观跨区域色相缓慢偏暖偏冷)
+@export var enable_macro_hue: bool = true:
+	set(v):
+		enable_macro_hue = v
+		_sync_macro_hue()
+
+## 宏观色相大区缩放尺度 (数值越小色相大区越广阔无垠，数值越大色相大区越细碎，推荐 0.0001 ~ 0.0008)
+@export_range(0.00005, 0.003, 0.00005) var macro_noise_scale: float = 0.0004:
+	set(v):
+		macro_noise_scale = v
+		_sync_macro_hue()
+
+## 宏观色相离散跨越阶数 (0=关闭偏转, 1=±1阶微调, 2=±2阶自然推荐, 3=±3阶鲜明, 4=±4阶跨季大区)
+@export_range(0, 4, 1) var macro_hue_steps: int = 2:
+	set(v):
+		macro_hue_steps = v
+		_sync_macro_hue()
+
+## 是否启用 32 阶色相环圆盘离散阶梯 (勾选为经典像素色盘分阶，取消勾选为无级平滑过渡)
+@export var quantize_hue: bool = true:
+	set(v):
+		quantize_hue = v
+		_sync_macro_hue()
+
+@export_group("地表与植被光影立体感 (Contrast & Lighting)")
+## 草皮整体压暗幅度 (0.0~0.4)：使平铺地面成为稍暗的稳重底衬，凸显垂直杂草的立体轮廓 (推荐 0.10 ~ 0.18)
+@export_range(0.0, 0.4, 0.01) var surface_darken: float = 0.12:
+	set(v):
+		surface_darken = v
+		_sync_contrast_lighting()
+
+## 杂草草尖迎光高光 (0.0~0.3)：草根与地表完全融合，草尖向上迎光提亮，勾勒像素画轮廓 (推荐 0.08 ~ 0.15)
+@export_range(0.0, 0.3, 0.01) var tip_brightness: float = 0.12:
+	set(v):
+		tip_brightness = v
+		_sync_contrast_lighting()
 
 @export_group("风力热力图与气象阅览 (Wind Debug & Heatmap)")
 ## 气象与阵风阅览模式：一键将主场景所有草皮与杂草切换为实时彩色热力图！
@@ -51,7 +89,7 @@ const MASK_TO_ATLAS: Array[Vector2i] = [
 ) var wind_debug_mode: int = 0:
 	set(v):
 		wind_debug_mode = v
-		_sync_wind_debug_mode()
+		_sync_all_debug_modes()
 
 const DEFAULT_WEED_TEXTURE: Texture2D = preload("res://resources/surface/textre/grass.png")
 const DEFAULT_WEED_MATERIAL: Material = preload("res://resources/materials/grass_tuft.tres")
@@ -94,9 +132,24 @@ func _ready() -> void:
 	_setup_surface_layer()
 	_setup_foliage_container()
 	_setup_interaction_manager()
-	_sync_debug_mode()
-	_sync_wind_debug_mode()
+	if surface_material is ShaderMaterial:
+		var sm := surface_material as ShaderMaterial
+		if sm.get_shader_parameter("macro_noise_scale") != null:
+			macro_noise_scale = float(sm.get_shader_parameter("macro_noise_scale"))
+		if sm.get_shader_parameter("macro_hue_steps") != null:
+			macro_hue_steps = int(sm.get_shader_parameter("macro_hue_steps"))
+		if sm.get_shader_parameter("quantize_hue") != null:
+			quantize_hue = bool(sm.get_shader_parameter("quantize_hue"))
+		if sm.get_shader_parameter("surface_darken") != null:
+			surface_darken = float(sm.get_shader_parameter("surface_darken"))
+	if weed_material is ShaderMaterial:
+		var wm := weed_material as ShaderMaterial
+		if wm.get_shader_parameter("tip_brightness") != null:
+			tip_brightness = float(wm.get_shader_parameter("tip_brightness"))
+	_sync_all_debug_modes()
 	_sync_random_color_ratio()
+	_sync_macro_hue()
+	_sync_contrast_lighting()
 	rebuild_all_weeds()
 
 func _setup_interaction_manager() -> void:
@@ -122,43 +175,78 @@ func _process(_delta: float) -> void:
 			if _player_node and is_instance_valid(_player_node):
 				(weed_material as ShaderMaterial).set_shader_parameter("creature_pos", _player_node.global_position)
 
-func _sync_debug_mode() -> void:
-	if wind_debug_mode == 0:
-		if surface_material is ShaderMaterial:
-			(surface_material as ShaderMaterial).set_shader_parameter("debug_mode", debug_mode)
-		if surface_layer and surface_layer.material is ShaderMaterial:
-			(surface_layer.material as ShaderMaterial).set_shader_parameter("debug_mode", debug_mode)
-
-func _sync_wind_debug_mode() -> void:
-	# 映射到 grass_surface.gdshader 的 debug_mode
+func _sync_all_debug_modes() -> void:
 	var surf_debug := 0
-	match wind_debug_mode:
-		1: surf_debug = 6 # 6: 预览混合阵风彩色热力带
-		2: surf_debug = 5 # 5: 预览混合阵风黑白波块
-		3: surf_debug = 3 # 3: 预览第一层风波 (Wave 1)
-		4: surf_debug = 4 # 4: 预览第二层风波 (Wave 2)
-		_: surf_debug = debug_mode
-
-	if surface_material is ShaderMaterial:
-		(surface_material as ShaderMaterial).set_shader_parameter("debug_mode", surf_debug)
-	if surface_layer and surface_layer.material is ShaderMaterial:
-		(surface_layer.material as ShaderMaterial).set_shader_parameter("debug_mode", surf_debug)
-
-	# 映射到 grass_tuft.gdshader 的 debug_wind_mode
 	var tuft_debug := 0
-	match wind_debug_mode:
-		1: tuft_debug = 4 # 4: 合成阵风彩色热力图
-		2: tuft_debug = 3 # 3: 合成阵风黑白位移场
-		3: tuft_debug = 1 # 1: 噪波流向 A
-		4: tuft_debug = 2 # 2: 噪波流向 B
-		_: tuft_debug = 0
+
+	if wind_debug_mode > 0:
+		match wind_debug_mode:
+			1: # 彩色热力图
+				surf_debug = 6
+				tuft_debug = 4
+			2: # 阵风黑白位移场
+				surf_debug = 5
+				tuft_debug = 3
+			3: # 流向 A
+				surf_debug = 3
+				tuft_debug = 1
+			4: # 流向 B
+				surf_debug = 4
+				tuft_debug = 2
+	else:
+		match debug_mode:
+			1: # 纯微观噪波灰度
+				surf_debug = 1
+				tuft_debug = 0
+			2: # 斑块阈值遮罩
+				surf_debug = 2
+				tuft_debug = 0
+			3: # 宏观色相大区预览 (彩色大区)
+				surf_debug = 7
+				tuft_debug = 7
+			4: # 宏观噪波原始灰度
+				surf_debug = 8
+				tuft_debug = 8
+			_:
+				surf_debug = 0
+				tuft_debug = 0
+
+	var surf_mats: Array[Material] = [surface_material]
+	if surface_layer and surface_layer.material:
+		surf_mats.append(surface_layer.material)
+	for m in surf_mats:
+		if m is ShaderMaterial:
+			(m as ShaderMaterial).set_shader_parameter("debug_mode", surf_debug)
 
 	if weed_material is ShaderMaterial:
 		(weed_material as ShaderMaterial).set_shader_parameter("debug_wind_mode", tuft_debug)
 
+func _sync_macro_hue() -> void:
+	var mats: Array[Material] = [surface_material, weed_material]
+	if surface_layer and surface_layer.material:
+		mats.append(surface_layer.material)
+	for m in mats:
+		if m is ShaderMaterial:
+			var sm := m as ShaderMaterial
+			sm.set_shader_parameter("enable_macro_hue", enable_macro_hue)
+			sm.set_shader_parameter("macro_noise_scale", macro_noise_scale)
+			sm.set_shader_parameter("macro_hue_steps", macro_hue_steps)
+			sm.set_shader_parameter("quantize_hue", quantize_hue)
+
 func _sync_random_color_ratio() -> void:
 	if weed_material is ShaderMaterial:
 		(weed_material as ShaderMaterial).set_shader_parameter("random_color_ratio", random_color_ratio)
+
+func _sync_contrast_lighting() -> void:
+	var surf_mats: Array[Material] = [surface_material]
+	if surface_layer and surface_layer.material:
+		surf_mats.append(surface_layer.material)
+	for m in surf_mats:
+		if m is ShaderMaterial:
+			(m as ShaderMaterial).set_shader_parameter("surface_darken", surface_darken)
+
+	if weed_material is ShaderMaterial:
+		(weed_material as ShaderMaterial).set_shader_parameter("tip_brightness", tip_brightness)
 
 ## 配置双网格渲染图层
 func _setup_surface_layer() -> void:
