@@ -5,3 +5,4 @@ res://resources/surface/wind/wind_noise.tres
 res://resources/surface/ground_noise.tres
 res://script/shaders/grass_tuft.gdshader
 res://script/shaders/wind_synthesizer.gdshader
+res://script/systems/surf_manager.gd

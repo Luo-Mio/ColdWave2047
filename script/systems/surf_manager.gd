@@ -97,14 +97,28 @@ const MASK_TEXTURE_PATH: String = "res://resources/surface/GreenGrass/grass_out.
 
 @export_group("杂草点缀 (Weed Foliage)")
 @export var enable_weeds: bool = true
-@export var weed_texture: Texture2D = DEFAULT_WEED_TEXTURE
+@export var weed_texture: Texture2D = DEFAULT_WEED_TEXTURE:
+	set(v):
+		weed_texture = v
+		rebuild_all_weeds()
 @export var weed_material: Material = DEFAULT_WEED_MATERIAL
-## 图集横向帧数 (当前 12x6 图集内含 4 帧 3x6 小草)
-@export var weed_hframes: int = 4
-## 图集纵向帧数
-@export var weed_vframes: int = 1
-## 帧生成概率权重 (按权重挑选不同形态的小草，若为空则均匀分布)
-@export var weed_frame_weights: Array[float] = [0.35, 0.30, 0.20, 0.15]
+## 图集横向帧数 (当前 12x6 图集内含 4 帧 3x6 小草；扩充更多差分时直接修改此数值)
+@export var weed_hframes: int = 4:
+	set(v):
+		weed_hframes = v
+		_sync_weed_frames()
+		rebuild_all_weeds()
+## 图集纵向帧数 (始终为 1 保持单排)
+@export var weed_vframes: int = 1:
+	set(v):
+		weed_vframes = v
+		_sync_weed_frames()
+		rebuild_all_weeds()
+## 帧生成概率权重 (按顺序对应每一帧的生成比重，支持任意相对权重，例如 [40, 30, 20, 10])
+@export var weed_frame_weights: Array[float] = [0.35, 0.30, 0.20, 0.15]:
+	set(v):
+		weed_frame_weights = v
+		rebuild_all_weeds()
 ## 归一化杂草密度 (0.0 为完全无草，1.0 为极致饱满草浪)
 @export_range(0.0, 1.0, 0.02) var weed_density: float = 0.5:
 	set(v):
@@ -150,6 +164,7 @@ func _ready() -> void:
 	_sync_random_color_ratio()
 	_sync_macro_hue()
 	_sync_contrast_lighting()
+	_sync_weed_frames()
 	rebuild_all_weeds()
 
 func _setup_interaction_manager() -> void:
@@ -247,6 +262,12 @@ func _sync_contrast_lighting() -> void:
 
 	if weed_material is ShaderMaterial:
 		(weed_material as ShaderMaterial).set_shader_parameter("tip_brightness", tip_brightness)
+
+func _sync_weed_frames() -> void:
+	if weed_material is ShaderMaterial:
+		var sm := weed_material as ShaderMaterial
+		sm.set_shader_parameter("hframes", weed_hframes)
+		sm.set_shader_parameter("vframes", weed_vframes)
 
 ## 配置双网格渲染图层
 func _setup_surface_layer() -> void:

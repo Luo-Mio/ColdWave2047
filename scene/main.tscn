@@ -74,6 +74,8 @@ ground_layer = NodePath("../GroundLayer")
 macro_noise_scale = 0.0003
 surface_darken = 0.05
 tip_brightness = 0.3
+weed_hframes = 8
+weed_frame_weights = Array[float]([1.5, 1.5, 1.5, 1.5, 1.5, 1.5, 0.03, 0.02])
 weed_density = 0.6
 random_color_ratio = 0.1
 
