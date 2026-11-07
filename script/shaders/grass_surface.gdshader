@@ -58,10 +58,24 @@ group_uniforms Pixel_Snap;
 uniform bool snap_to_pixel_grid = true;                        // 是否将噪波色斑吸附到游戏像素网格
 uniform float pixel_size : hint_range(1.0, 8.0, 1.0) = 1.0;    // 像素块大小 (1.0 代表 1:1 游戏原生像素纹素)
 
+group_uniforms Macro_Hue_Quantization;
+// 宏观大尺度色相噪波与色盘降采样系统 (Dual-scale Noise & Quantized HSV Palette)
+// 大尺度噪波在宏观大片草地上缓慢改变色相 (偏暖黄绿或偏冷墨绿)，微观色斑控制明暗 (S/V)，实现全图色调丰富且对比度极致恒定
+uniform bool enable_macro_hue = true;
+// 大尺度世界空间缩放 (默认比微观色斑大 8~10 倍，跨越数百像素产生连绵大色区)
+uniform vec2 macro_noise_scale = vec2(0.0004, 0.0008);
+// 宏观色相偏移幅度 (0.04 约为 ±14.4 度色相偏转，既丰富自然又绝不失真)
+uniform float macro_hue_range : hint_range(0.0, 0.15, 0.005) = 0.04;
+// 色相降采样阶数 (32 阶色相环圆盘)
+uniform float hue_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
+// 饱和度与明度降采样阶数 (32x32 阶色板网格)
+uniform float sv_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
+
 group_uniforms Colors;
-uniform vec4 color_light : source_color = vec4(0.365, 0.522, 0.082, 1.0); // 浅绿 #5d8515
-uniform vec4 color_mid : source_color = vec4(0.306, 0.486, 0.078, 1.0);   // 中绿 #4e7c14
-uniform vec4 color_dark : source_color = vec4(0.255, 0.467, 0.000, 1.0);  // 深绿 #417700
+// 基准草皮颜色三段式 (基准中绿设为 #477238)
+uniform vec4 color_light : source_color = vec4(0.380, 0.561, 0.298, 1.0); // 浅绿 #618f4c
+uniform vec4 color_mid : source_color = vec4(0.278, 0.447, 0.220, 1.0);   // 中绿 #477238 (标准基准色)
+uniform vec4 color_dark : source_color = vec4(0.208, 0.341, 0.149, 1.0);  // 深绿 #355726
 
 varying vec2 world_pos;
 
@@ -101,6 +115,45 @@ vec3 heat_map(float v) {
 	} else {
 		return mix(c3, c4, (v - 0.66) / 0.34);
 	}
+}
+
+// RGB <=> HSV 色彩空间转换
+vec3 rgb2hsv(vec3 c) {
+	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+	float d = q.x - min(q.w, q.y);
+	float e = 1.0e-10;
+	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+	vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+// 宏观色相偏移与 HSV 色盘阶梯降采样 (色相 32 阶圆环 + 32x32 阶色板)
+vec3 apply_macro_hue_quantization(vec3 rgb_color, float macro_noise_val, bool enable_macro, float hue_range, float h_steps, float sv_steps) {
+	if (!enable_macro) {
+		return rgb_color;
+	}
+	vec3 hsv = rgb2hsv(rgb_color);
+	// 宏观低频色相漂移：由大尺度噪波驱动 [-hue_range, +hue_range]
+	float delta_h = (macro_noise_val - 0.5) * 2.0 * hue_range;
+	float new_h = fract(hsv.x + delta_h);
+	// 32 阶色相环量化
+	if (h_steps > 1.0) {
+		new_h = round(new_h * h_steps) / h_steps;
+	}
+	// 32x32 阶饱和度与明度色盘量化
+	float new_s = hsv.y;
+	float new_v = hsv.z;
+	if (sv_steps > 1.0) {
+		new_s = round(new_s * sv_steps) / sv_steps;
+		new_v = round(new_v * sv_steps) / sv_steps;
+	}
+	return hsv2rgb(vec3(new_h, new_s, new_v));
 }
 
 void vertex() {
@@ -162,6 +215,13 @@ void fragment() {
 				grass_color = mix(grass_color, color_dark.rgb, trample_fact * 0.35);
 			}
 		}
+	}
+
+	// 宏观大尺度色相偏移与 HSV 色盘量化 (32 阶色相环 + 32x32 阶明度/饱和度色板)
+	if (enable_macro_hue) {
+		vec2 macro_sample_uv = (iso_world + noise_offset) * macro_noise_scale;
+		float macro_n = texture(noise_tex, macro_sample_uv).r;
+		grass_color = apply_macro_hue_quantization(grass_color, macro_n, true, macro_hue_range, hue_quantize_steps, sv_quantize_steps);
 	}
 
 	// 调试模式分支输出

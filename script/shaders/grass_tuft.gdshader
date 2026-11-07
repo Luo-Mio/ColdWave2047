@@ -69,6 +69,19 @@ uniform float creature_push_radius : hint_range(0.0, 100.0, 1.0) = 24.0;
 // 生物推挤强力位移 (像素)
 uniform float creature_push_strength : hint_range(0.0, 20.0, 0.5) = 5.0;
 
+group_uniforms Sprite_Sheet;
+// 精灵图集切片划分 (当前为 12x6 图集，内含 4 帧 3x6 小草变体)
+uniform int hframes : hint_range(1, 16, 1) = 4;
+uniform int vframes : hint_range(1, 16, 1) = 1;
+
+group_uniforms Macro_Hue_Quantization;
+// 宏观大尺度色相噪波与色盘降采样系统 (与 grass_surface.gdshader 共享)
+uniform bool enable_macro_hue = true;
+uniform vec2 macro_noise_scale = vec2(0.0004, 0.0008);
+uniform float macro_hue_range : hint_range(0.0, 0.15, 0.005) = 0.04;
+uniform float hue_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
+uniform float sv_quantize_steps : hint_range(8.0, 64.0, 1.0) = 32.0;
+
 group_uniforms Ground_Color;
 // 世界地表噪波贴图 (与 grass_surface.gdshader 共享，实现精准的颜色融合)
 uniform sampler2D noise_tex : repeat_enable, filter_linear;
@@ -80,12 +93,12 @@ uniform vec2 noise_offset = vec2(0.0, 0.0);
 uniform float threshold_bright : hint_range(0.0, 1.0, 0.005) = 0.485;
 // 深绿暗色斑块阈值
 uniform float threshold_dark : hint_range(0.0, 1.0, 0.005) = 0.154;
-// 浅绿颜色配置 (#5d8515)
-uniform vec4 color_light : source_color = vec4(0.396, 0.596, 0.078, 1.0);
-// 中绿基准颜色配置 (#4e7c14)
-uniform vec4 color_mid : source_color = vec4(0.322, 0.553, 0.075, 1.0);
-// 深绿阴影颜色配置 (#417700)
-uniform vec4 color_dark : source_color = vec4(0.263, 0.525, 0.000, 1.0);
+// 浅绿颜色配置 (#618f4c)
+uniform vec4 color_light : source_color = vec4(0.380, 0.561, 0.298, 1.0);
+// 中绿基准颜色配置 (#477238 标准基准色)
+uniform vec4 color_mid : source_color = vec4(0.278, 0.447, 0.220, 1.0);
+// 深绿阴影颜色配置 (#355726)
+uniform vec4 color_dark : source_color = vec4(0.208, 0.341, 0.149, 1.0);
 // 草尖高光微调 (默认 0.0 严格等于地表原色，微量增加凸显立体感)
 uniform float tip_brightness : hint_range(0.0, 0.3, 0.01) = 0.0;
 // 随机杂色比例：让部分杂草从噪波三阶颜色池 (浅绿/中绿/深绿) 中随机挑选，增强点缀层次感 (0.2 代表 20%)
@@ -101,6 +114,7 @@ varying float var_shear;
 varying float var_h_scale;
 varying float var_w_scale;
 varying float var_trample;
+varying flat int var_frame_idx;
 
 // 向量旋转辅助函数 (用于双层噪波分叉流向)
 vec2 rotate_vec2(vec2 v, float angle) {
@@ -138,6 +152,42 @@ vec3 heat_map(float v) {
 	} else {
 		return mix(c3, c4, (v - 0.66) / 0.34);
 	}
+}
+
+// RGB <=> HSV 色彩空间转换
+vec3 rgb2hsv(vec3 c) {
+	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+	float d = q.x - min(q.w, q.y);
+	float e = 1.0e-10;
+	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+vec3 hsv2rgb(vec3 c) {
+	vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+}
+
+// 宏观色相偏移与 HSV 色盘阶梯降采样 (色相 32 阶圆环 + 32x32 阶色板)
+vec3 apply_macro_hue_quantization(vec3 rgb_color, float macro_noise_val, bool enable_macro, float hue_range, float h_steps, float sv_steps) {
+	if (!enable_macro) {
+		return rgb_color;
+	}
+	vec3 hsv = rgb2hsv(rgb_color);
+	float delta_h = (macro_noise_val - 0.5) * 2.0 * hue_range;
+	float new_h = fract(hsv.x + delta_h);
+	if (h_steps > 1.0) {
+		new_h = round(new_h * h_steps) / h_steps;
+	}
+	float new_s = hsv.y;
+	float new_v = hsv.z;
+	if (sv_steps > 1.0) {
+		new_s = round(new_s * sv_steps) / sv_steps;
+		new_v = round(new_v * sv_steps) / sv_steps;
+	}
+	return hsv2rgb(vec3(new_h, new_s, new_v));
 }
 
 void vertex() {
@@ -180,6 +230,13 @@ void vertex() {
 				c = color_dark.rgb;
 			}
 		}
+	}
+
+	// 宏观大尺度色相偏移与 HSV 色盘量化 (与 grass_surface.gdshader 共享算法)
+	if (enable_macro_hue) {
+		vec2 macro_sample_uv = (iso_world + noise_offset) * macro_noise_scale;
+		float macro_n = textureLod(noise_tex, macro_sample_uv, 0.0).r;
+		c = apply_macro_hue_quantization(c, macro_n, true, macro_hue_range, hue_quantize_steps, sv_quantize_steps);
 	}
 	tuft_color = c;
 
@@ -281,10 +338,18 @@ void vertex() {
 	var_w_scale = w_scale;
 	var_trample = trample_push;
 
+	// 计算中心 UV.x 以精准提取所属帧索引 (彻底消除左顶点与右顶点因三角形插值产生的漂移与切片撕裂)
+	float center_uv_x = (VERTEX.x > 0.0) ? (UV.x - 0.5 / float(hframes)) : (UV.x + 0.5 / float(hframes));
+	int frame_idx = int(floor(center_uv_x * float(hframes) + 0.001));
+	var_frame_idx = clamp(frame_idx, 0, hframes - 1);
+
 	// 统一均匀外扩四边形边界，为片元级完整像素反向重采样提供充裕空间，杜绝三角形斜切残像素
-	VERTEX.x *= 6.0;
+	vec2 total_tex_size = round(1.0 / TEXTURE_PIXEL_SIZE);
+	vec2 frame_size = vec2(total_tex_size.x / float(hframes), total_tex_size.y / float(vframes));
+
+	VERTEX.x *= 4.0;
 	if (UV.y > 0.5) {
-		VERTEX.y += 8.0;
+		VERTEX.y += frame_size.y;
 	} else {
 		VERTEX.y *= 2.5;
 	}
@@ -293,8 +358,8 @@ void vertex() {
 
 void fragment() {
 	// 【检查器缩略图预览窗口适配】
-	// 当在 Godot 检查器材质面板顶部预览 (贴图非 4x8 小草精灵图) 时，直接在整个四边形上展开 2D 噪波与热力图，方便直观预览
-	if (TEXTURE_PIXEL_SIZE.x < 0.20) {
+	// 当在 Godot 检查器材质面板顶部预览 (贴图尺寸大于 128px 或异常小纹素) 时，直接在整个四边形上展开 2D 噪波与热力图，方便直观预览
+	if (TEXTURE_PIXEL_SIZE.x < 0.01) {
 		vec2 dir_norm = normalize(wind_base_dir);
 		vec2 dir1 = rotate_vec2(dir_norm, noise_diverge_angle);
 		vec2 dir2 = rotate_vec2(dir_norm, -noise_diverge_angle);
@@ -326,8 +391,14 @@ void fragment() {
 		}
 		COLOR = vec4(p_col, 1.0);
 	} else {
-		// 【正常游戏场景渲染】完整像素反向重采样 (Pixel-Perfect Resampling)
-		vec2 sample_pos = floor(local_pos) + vec2(0.5, 0.5);
+		// 动态单帧尺寸 (例如 12x6 图集在 hframes=4, vframes=1 时单帧为 3x6)
+		vec2 total_tex_size = round(1.0 / TEXTURE_PIXEL_SIZE);
+		vec2 frame_size = vec2(total_tex_size.x / float(hframes), total_tex_size.y / float(vframes));
+
+		// 像素化整网格对齐：奇数宽度 (如 3px) 对齐到整像素 [-1, 0, +1]，偶数宽度 (如 4px) 对齐到半像素 [-1.5, -0.5, +0.5, +1.5]
+		float sample_x = (mod(frame_size.x, 2.0) > 0.5) ? floor(local_pos.x + 0.5) : (floor(local_pos.x) + 0.5);
+		float sample_y = floor(local_pos.y) + 0.5;
+		vec2 sample_pos = vec2(sample_x, sample_y);
 
 		// 1. 绕根部 (0, 0) 逆旋转采样坐标
 		float rot_rad = radians(var_rot_deg);
@@ -337,7 +408,7 @@ void fragment() {
 
 		// 2. 高度范围检查 (超出当前有效高度直接整像素剔除)
 		float y_up = -p.y;
-		float cur_total_h = 8.0 * var_h_scale;
+		float cur_total_h = frame_size.y * var_h_scale;
 		if (y_up < 0.0 || y_up > cur_total_h) {
 			discard;
 		}
@@ -345,7 +416,7 @@ void fragment() {
 		// 3. 归一化高度与中轴线抛物线弯曲
 		float h = clamp(y_up / cur_total_h, 0.0, 1.0);
 		float center_x = var_shear * pow(h, 1.8);
-		float cur_w = 4.0 * mix(1.0, var_w_scale, h);
+		float cur_w = frame_size.x * mix(1.0, var_w_scale, h);
 		float rel_x = p.x - center_x;
 		float u = (rel_x / cur_w) + 0.5;
 		float v = 1.0 - h;
@@ -353,17 +424,20 @@ void fragment() {
 			discard;
 		}
 
-		// 4. 原图 4x8 离散整像素采样
-		vec2 tex_size = vec2(4.0, 8.0);
-		vec2 orig_pixel = clamp(floor(vec2(u, v) * tex_size), vec2(0.0), tex_size - vec2(1.0));
-		vec2 snapped_uv = (orig_pixel + vec2(0.5)) / tex_size;
+		// 4. 原图离散整像素采样 (精确定位到所属图集帧的对应像素)
+		vec2 orig_pixel = clamp(floor(vec2(u, v) * frame_size), vec2(0.0), frame_size - vec2(1.0));
+		vec2 sheet_pixel = vec2(float(var_frame_idx) * frame_size.x + orig_pixel.x, orig_pixel.y);
+		vec2 snapped_uv = (sheet_pixel + vec2(0.5)) * TEXTURE_PIXEL_SIZE;
 		vec4 mask = texture(TEXTURE, snapped_uv);
 		if (mask.a < 0.5) {
 			discard;
 		}
 
-		// 5. 确定颜色
-		vec3 final_color = tuft_color;
+		// 5. 确定颜色：以基准中绿为锚点进行色彩乘法调色
+		// 这样精灵图自带的标准绿色 (#477238) 能 100% 严丝合缝匹配草皮，花瓣/异色点缀则自然随草皮光影明暗！
+		vec3 tint = tuft_color / max(color_mid.rgb, vec3(0.001));
+		vec3 final_color = clamp(mask.rgb * tint, 0.0, 1.0);
+
 		if (debug_wind_mode == 1) {
 			final_color = vec3(var_wave1);
 		} else if (debug_wind_mode == 2) {

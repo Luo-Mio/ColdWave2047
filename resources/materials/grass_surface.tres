@@ -6,7 +6,7 @@
 [sub_resource type="FastNoiseLite" id="FastNoiseLite_bpfac"]
 noise_type = 4
 seed = 48945
-frequency = 0.0166
+frequency = 0.0003
 fractal_type = 2
 fractal_octaves = 3
 fractal_lacunarity = 5.185
@@ -48,6 +48,11 @@ shader_parameter/threshold_dark = 0.154000007315
 shader_parameter/softness = 0.0
 shader_parameter/snap_to_pixel_grid = true
 shader_parameter/pixel_size = 1.0
-shader_parameter/color_light = Color(0.39607844, 0.59607846, 0.078431375, 1)
-shader_parameter/color_mid = Color(0.32156864, 0.5529412, 0.07450981, 1)
-shader_parameter/color_dark = Color(0.2627451, 0.5254902, 0, 1)
+shader_parameter/enable_macro_hue = true
+shader_parameter/macro_noise_scale = Vector2(0.0004, 0.0008)
+shader_parameter/macro_hue_range = 0.04
+shader_parameter/hue_quantize_steps = 32.0
+shader_parameter/sv_quantize_steps = 32.0
+shader_parameter/color_light = Color(0.380392, 0.560784, 0.298039, 1)
+shader_parameter/color_mid = Color(0.278431, 0.447059, 0.219608, 1)
+shader_parameter/color_dark = Color(0.207843, 0.341176, 0.14902, 1)

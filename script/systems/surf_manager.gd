@@ -61,6 +61,12 @@ const MASK_TEXTURE_PATH: String = "res://resources/surface/GreenGrass/grass_out.
 @export var enable_weeds: bool = true
 @export var weed_texture: Texture2D = DEFAULT_WEED_TEXTURE
 @export var weed_material: Material = DEFAULT_WEED_MATERIAL
+## 图集横向帧数 (当前 12x6 图集内含 4 帧 3x6 小草)
+@export var weed_hframes: int = 4
+## 图集纵向帧数
+@export var weed_vframes: int = 1
+## 帧生成概率权重 (按权重挑选不同形态的小草，若为空则均匀分布)
+@export var weed_frame_weights: Array[float] = [0.35, 0.30, 0.20, 0.15]
 ## 归一化杂草密度 (0.0 为完全无草，1.0 为极致饱满草浪)
 @export_range(0.0, 1.0, 0.02) var weed_density: float = 0.5:
 	set(v):
@@ -310,8 +316,8 @@ func update_weeds_for_dual_cell(dual_cell: Vector2i) -> void:
 
 	var eff_texture := weed_texture if weed_texture != null else DEFAULT_WEED_TEXTURE
 	var eff_material := weed_material if weed_material != null else DEFAULT_WEED_MATERIAL
-	var tex_h: float = float(eff_texture.get_height()) if eff_texture != null else 8.0
-	var weed_bottom_offset := Vector2(0.0, -tex_h * 0.5)
+	var frame_h: float = float(eff_texture.get_height()) / float(maxi(1, weed_vframes)) if eff_texture != null else 6.0
+	var weed_bottom_offset := Vector2(0.0, -frame_h * 0.5)
 
 	# 微网格抖动步长 (X 方向 3 像素，Y 方向 2 像素，匹配 2:1 等距透视比例)
 	# 保证每一个像素都有平等概率成为候选点，同时维持最佳的像素间距与视觉层次
@@ -357,6 +363,11 @@ func update_weeds_for_dual_cell(dual_cell: Vector2i) -> void:
 			var sp := Sprite2D.new()
 			sp.texture = eff_texture
 			sp.material = eff_material
+			sp.hframes = weed_hframes
+			sp.vframes = weed_vframes
+			var total_frames := weed_hframes * weed_vframes
+			var h_frame_seed: int = _hash_point(int(raw_world_x), int(raw_world_y), 777)
+			sp.frame = _pick_weighted_frame(h_frame_seed, weed_frame_weights, total_frames)
 			sp.centered = true
 			sp.offset = weed_bottom_offset
 			sp.position = snapped_pos
@@ -365,6 +376,25 @@ func update_weeds_for_dual_cell(dual_cell: Vector2i) -> void:
 
 	if not list.is_empty():
 		weeds_by_dual_cell[dual_cell] = list
+
+## 加权挑选图集帧 (基于种子伪随机哈希与概率累积分布)
+func _pick_weighted_frame(seed_val: int, weights: Array[float], count: int) -> int:
+	if count <= 1:
+		return 0
+	if weights.is_empty():
+		return seed_val % count
+	var total_w := 0.0
+	for w in weights:
+		total_w += maxf(0.0, w)
+	if total_w <= 0.0001:
+		return seed_val % count
+	var roll := (float(seed_val % 10000) / 10000.0) * total_w
+	var accum := 0.0
+	for i in range(min(weights.size(), count)):
+		accum += maxf(0.0, weights[i])
+		if roll <= accum:
+			return i
+	return 0
 
 ## 清除单个双网格切片上的杂草
 func clear_weeds_for_dual_cell(dual_cell: Vector2i) -> void:
